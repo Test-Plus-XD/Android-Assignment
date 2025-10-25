@@ -1,0 +1,40 @@
+{
+  "restaurants": [
+    {
+      "Name_EN": "VEGGIE KINGDOM",
+      "Name_TC": "緻素坊",
+      "Address_EN": "THE WHOLE OF THE FOURTH FLOOR, KYOTO PLAZA, 491-499 LOCKHART ROAD, CAUSEWAY BAY, HONG KONG",
+      "Address_TC": "香港銅鑼灣駱克道491至499號京都廣場4樓全層",
+      "District_EN": "Wan Chai",
+      "District_TC": "灣仔區",
+      "Latitude": 22.2807534,
+      "Longitude": 114.1830013,
+      "Keyword_EN": ["veggie"],
+      "Keyword_TC": []
+    },
+    {
+      "Name_EN": "Miu's Veggie",
+      "Name_TC": "妙善",
+      "Address_EN": "SHOP 106-107, 1/F, SITE 8, WHAMPOA GARDEN, HUNG HOM, KOWLOON",
+      "Address_TC": "九龍紅磡黃埔花園第8期1樓106-107號舖",
+      "District_EN": "Kowloon City",
+      "District_TC": "九龍城區",
+      "Latitude": 22.3037908,
+      "Longitude": 114.1892659,
+      "Keyword_EN": ["veggie"],
+      "Keyword_TC": []
+    },
+    {
+      "Name_EN": "Soo Good Luen Wo Vegan Restaurant",
+      "Name_TC": "好素聯和純素餐廳",
+      "Address_EN": "SHOP A, G/F, TAI CHEONG HOUSE, 55 WO TAI STREET, LUEN WO HUI, FANLING, NEW TERRITORIES",
+      "Address_TC": "新界粉嶺聯和墟和泰街55號泰昌樓地下A鋪",
+      "District_EN": "North",
+      "District_TC": "北區",
+      "Latitude": 22.5002132,
+      "Longitude": 114.1425894,
+      "Keyword_EN": ["vegan"],
+      "Keyword_TC": ["純素", "素餐"]
+    }
+  ]
+}
