@@ -252,7 +252,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                         child: ListTile(
                           // Leading must be a sized widget; use SizedBox to constrain the image.
                           leading: SizedBox(
-                            width: 72,
+                            width: 84,
                             height: 72,
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8), // Rounded corners for thumbnail.
