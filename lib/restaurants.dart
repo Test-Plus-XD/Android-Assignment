@@ -1,4 +1,3 @@
-// File: lib/restaurants.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -6,7 +5,7 @@ import 'models.dart';
 import 'restaurant_detail.dart';
 
 // Restaurants page with client-side search, district filter and Veggie/Vegan toggles.
-// Note: District list is hardcoded for fastest client performance.
+// District list is hardcoded for fastest client performance.
 
 class RestaurantsPage extends StatefulWidget {
   final bool isTraditionalChinese;
@@ -17,8 +16,11 @@ class RestaurantsPage extends StatefulWidget {
 }
 
 class _RestaurantsPageState extends State<RestaurantsPage> {
-  // Text controller for name search.
+  // Text controller for name search (kept in AppBar elsewhere).
   final TextEditingController searchController = TextEditingController();
+
+  // Scroll controller to detect scroll direction for hiding the filter row.
+  final ScrollController listScrollController = ScrollController();
 
   // Cached restaurants loaded from the large JSON file.
   late Future<List<Restaurant>> restaurantsFuture;
@@ -28,10 +30,15 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
   bool filterVeggie = false; // Veggie (齋)
   bool filterVegan = false; // Vegan (純素)
 
+  // Show/hide state for the filter row.
+  bool showFilterRow = true;
+  double lastScrollOffset = 0.0;
+  final double scrollThreshold = 6.0; // Small deadzone to avoid jitter.
+
   // Hardcoded district list for fastest client-side operation.
   // First entry 'All' represents no district filter.
   final List<Map<String, String>> districtList = [
-    {'en': 'All', 'tc': '全部'},
+    {'en': 'All districts', 'tc': '全部地區'},
     {'en': 'Islands', 'tc': '離島'},
     {'en': 'Kwai Tsing', 'tc': '葵青'},
     {'en': 'North', 'tc': '北區'},
@@ -57,11 +64,16 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     super.initState();
     // Load the large data file containing all restaurants.
     restaurantsFuture = loadAllRestaurants();
+
+    // Attach scroll listener to show/hide filter row on scroll direction.
+    listScrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     searchController.dispose();
+    listScrollController.removeListener(_onScroll);
+    listScrollController.dispose();
     super.dispose();
   }
 
@@ -73,6 +85,27 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     final Map<String, dynamic> jsonMap = json.decode(jsonString) as Map<String, dynamic>;
     final List<dynamic> restaurantList = jsonMap['restaurants'] as List<dynamic>;
     return restaurantList.map((e) => Restaurant.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // Scroll listener to detect up/down scrolling.
+  void _onScroll() {
+    final double offset = listScrollController.offset;
+    final double delta = offset - lastScrollOffset;
+
+    // If user scrolled down (positive delta) beyond threshold, hide filters.
+    if (delta > scrollThreshold && showFilterRow) {
+      setState(() {
+        showFilterRow = false;
+      });
+    } else if (delta < -scrollThreshold && !showFilterRow) {
+      // If user scrolled up (negative delta) beyond threshold, show filters.
+      setState(() {
+        showFilterRow = true;
+      });
+    }
+
+    // Update last offset (clamped to avoid overflow).
+    lastScrollOffset = offset;
   }
 
   // Apply client-side filters to the loaded list.
@@ -148,48 +181,72 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
 
   // Helper to build Veggie/Vegan toggle buttons.
   Widget buildDietFilters() {
-    // Use ToggleButtons-like UI but with ElevatedButton for clearer selected state.
+    // Use compact ElevatedButtons for clearer selected state.
     return Row(
       children: [
-        Expanded(
+        SizedBox(
+          height: 40,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               elevation: filterVeggie ? 4 : 0,
               backgroundColor: filterVeggie ? Colors.green.shade700 : null,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
             onPressed: () {
               setState(() {
                 filterVeggie = !filterVeggie;
               });
             },
-            child: Text(widget.isTraditionalChinese ? '齋 (Veggie)' : 'Veggie'),
+            child: Text(widget.isTraditionalChinese ? '齋' : 'Veggie'),
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
+        SizedBox(
+          height: 40,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               elevation: filterVegan ? 4 : 0,
               backgroundColor: filterVegan ? Colors.green.shade700 : null,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
             onPressed: () {
               setState(() {
                 filterVegan = !filterVegan;
               });
             },
-            child: Text(widget.isTraditionalChinese ? '純素 (Vegan)' : 'Vegan'),
+            child: Text(widget.isTraditionalChinese ? '純素' : 'Vegan'),
           ),
         ),
       ],
     );
   }
 
+  // Combined filter row as a single widget: dropdown + diet buttons in one row.
+  Widget buildFilterRow() {
+    return Material(
+      // Use Material so elevation and background follow theme naturally.
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            // District dropdown takes remaining space.
+            Expanded(child: buildDistrictDropdown()),
+            const SizedBox(width: 12),
+            // Diet buttons.
+            buildDietFilters(),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Replace the simple title with a search + filters bar.
+    // Replace the simple title with a search + filters bar controlled elsewhere.
     return Scaffold(
+      // Keep search TextField in AppBar to reduce vertical clutter.
       appBar: AppBar(
-        // AppBar shows a compact search field; keep label localised.
         title: TextField(
           controller: searchController,
           decoration: InputDecoration(
@@ -210,17 +267,15 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
 
             return Column(
               children: [
-                // Filters area: district dropdown and diet buttons.
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Column(
-                    children: [
-                      // District dropdown.
-                      buildDistrictDropdown(),
-                      const SizedBox(height: 8),
-                      // Diet filter buttons.
-                      buildDietFilters(),
-                    ],
+                // Animated filter row that slides up/down based on scroll direction.
+                AnimatedSlide(
+                  offset: showFilterRow ? Offset.zero : const Offset(0, -1),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: AnimatedOpacity(
+                    opacity: showFilterRow ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    child: buildFilterRow(),
                   ),
                 ),
 
@@ -239,41 +294,56 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                   ),
                 ),
 
-                // Expanded list of results.
+                // Expanded list of results with horizontal padding outside each card.
                 Expanded(
                   child: filtered.isEmpty
                       ? Center(child: Text(widget.isTraditionalChinese ? '沒有找到餐廳' : 'No restaurants found'))
                       : ListView.builder(
+                    controller: listScrollController,
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final restaurant = filtered[index];
                       final String displayName = widget.isTraditionalChinese ? restaurant.nameTc : restaurant.nameEn;
-                      return Card(
-                        child: ListTile(
-                          // Leading must be a sized widget; use SizedBox to constrain the image.
-                          leading: SizedBox(
-                            width: 84,
-                            height: 72,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8), // Rounded corners for thumbnail.
-                              child: Image.asset(
-                                restaurant.image,
-                                fit: BoxFit.cover, // Fill thumbnail while preserving aspect ratio.
-                                // Do not set width/height to infinity here; bounding is provided by SizedBox.
+
+                      // Each card has horizontal padding so cards don't touch screen edges.
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: Card(
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          clipBehavior: Clip.hardEdge,
+                          child: ListTile(
+                            // Reduce the default ListTile padding so thumbnail can touch inner border.
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            // Leading width explicit so layout is stable.
+                            minLeadingWidth: 84,
+                            horizontalTitleGap: 8,
+                            // Leading thumbnail constrained by SizedBox.
+                            leading: SizedBox(
+                              width: 84,
+                              height: 72,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.asset(
+                                  restaurant.image,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                ),
                               ),
                             ),
+                            title: Text(displayName),
+                            subtitle: Text(widget.isTraditionalChinese ? restaurant.districtTc : restaurant.districtEn),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RestaurantDetailPage(restaurant: restaurant, isTraditionalChinese: widget.isTraditionalChinese),
+                                ),
+                              );
+                            },
                           ),
-                          title: Text(displayName),
-                          subtitle: Text(widget.isTraditionalChinese ? restaurant.districtTc : restaurant.districtEn),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => RestaurantDetailPage(restaurant: restaurant, isTraditionalChinese: widget.isTraditionalChinese),
-                              ),
-                            );
-                          },
                         ),
                       );
                     },
