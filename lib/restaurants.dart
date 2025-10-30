@@ -16,29 +16,21 @@ class RestaurantsPage extends StatefulWidget {
 }
 
 class _RestaurantsPageState extends State<RestaurantsPage> {
-  // Text controller for name search (kept in AppBar elsewhere).
+  // Text controller for name search.
   final TextEditingController searchController = TextEditingController();
-
-  // Scroll controller to detect scroll direction for hiding the filter row.
-  final ScrollController listScrollController = ScrollController();
 
   // Cached restaurants loaded from the large JSON file.
   late Future<List<Restaurant>> restaurantsFuture;
 
   // UI filter state.
-  String selectedDistrict = 'All';
+  String selectedDistrict = 'All Districts';
   bool filterVeggie = false; // Veggie (齋)
   bool filterVegan = false; // Vegan (純素)
-
-  // Show/hide state for the filter row.
-  bool showFilterRow = true;
-  double lastScrollOffset = 0.0;
-  final double scrollThreshold = 6.0; // Small deadzone to avoid jitter.
 
   // Hardcoded district list for fastest client-side operation.
   // First entry 'All' represents no district filter.
   final List<Map<String, String>> districtList = [
-    {'en': 'All districts', 'tc': '全部地區'},
+    {'en': 'All Districts', 'tc': '所有地區'}, // The one and only "All"
     {'en': 'Islands', 'tc': '離島'},
     {'en': 'Kwai Tsing', 'tc': '葵青'},
     {'en': 'North', 'tc': '北區'},
@@ -52,8 +44,8 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     {'en': 'Kwun Tong', 'tc': '觀塘'},
     {'en': 'Sham Shui Po', 'tc': '深水埗'},
     {'en': 'Wong Tai Sin', 'tc': '黃大仙'},
-    {'en': 'Yau Tsim Mong', 'tc': '油尖旺區'},
-    {'en': 'Central/Western', 'tc': '中西區'},
+    {'en': 'Yau Tsim Mong', 'tc': '油尖旺'},
+    {'en': 'Central and Western', 'tc': '中西區'},
     {'en': 'Eastern', 'tc': '東區'},
     {'en': 'Southern', 'tc': '南區'},
     {'en': 'Wan Chai', 'tc': '灣仔'},
@@ -64,87 +56,48 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     super.initState();
     // Load the large data file containing all restaurants.
     restaurantsFuture = loadAllRestaurants();
-
-    // Attach scroll listener to show/hide filter row on scroll direction.
-    listScrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
     searchController.dispose();
-    listScrollController.removeListener(_onScroll);
-    listScrollController.dispose();
     super.dispose();
   }
 
   // Load restaurants from the larger JSON file in assets.
   Future<List<Restaurant>> loadAllRestaurants() async {
-    // Load JSON from assets. File should be declared in pubspec.yaml:
-    // assets/vegetarian_restaurants_hk.json
     final String jsonString = await rootBundle.loadString('assets/vegetarian_restaurants_hk.json');
     final Map<String, dynamic> jsonMap = json.decode(jsonString) as Map<String, dynamic>;
     final List<dynamic> restaurantList = jsonMap['restaurants'] as List<dynamic>;
     return restaurantList.map((e) => Restaurant.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  // Scroll listener to detect up/down scrolling.
-  void _onScroll() {
-    final double offset = listScrollController.offset;
-    final double delta = offset - lastScrollOffset;
-
-    // If user scrolled down (positive delta) beyond threshold, hide filters.
-    if (delta > scrollThreshold && showFilterRow) {
-      setState(() {
-        showFilterRow = false;
-      });
-    } else if (delta < -scrollThreshold && !showFilterRow) {
-      // If user scrolled up (negative delta) beyond threshold, show filters.
-      setState(() {
-        showFilterRow = true;
-      });
-    }
-
-    // Update last offset (clamped to avoid overflow).
-    lastScrollOffset = offset;
-  }
-
   // Apply client-side filters to the loaded list.
   List<Restaurant> applyFilters(List<Restaurant> sourceList) {
     final String query = searchController.text.trim().toLowerCase();
 
-    bool Function(Restaurant) dietMatches = (restaurant) {
-      // If neither filter selected, allow all diets.
+    bool dietMatches(Restaurant restaurant) {
       if (!filterVeggie && !filterVegan) return true;
-
       final List<String> keywordLower = [
         ...restaurant.keywordEn.map((k) => k.toLowerCase()),
         ...restaurant.keywordTc.map((k) => k.toLowerCase())
       ];
-
-      // Check veggie keywords (looking for 'veggie' or '齋').
       final bool hasVeggie = keywordLower.any((k) => k.contains('veggie') || k.contains('齋'));
-
-      // Check vegan keywords (looking for 'vegan' or '純素').
       final bool hasVegan = keywordLower.any((k) => k.contains('vegan') || k.contains('純素'));
-
-      // If both toggles on, accept if either matches.
       if (filterVeggie && filterVegan) return hasVeggie || hasVegan;
       if (filterVeggie) return hasVeggie;
       return hasVegan;
-    };
+    }
 
     return sourceList.where((restaurant) {
-      // District filter.
-      if (selectedDistrict != 'All') {
-        if (restaurant.districtEn != selectedDistrict && restaurant.districtTc != selectedDistrict) {
+      if (selectedDistrict != 'All Districts') {
+        if (restaurant.districtEn != selectedDistrict) {
           return false;
         }
       }
 
-      // Diet filter.
       if (!dietMatches(restaurant)) return false;
 
-      // Text search: match against English and Traditional Chinese names and addresses.
       if (query.isNotEmpty) {
         final String nameEn = restaurant.nameEn.toLowerCase();
         final String nameTc = restaurant.nameTc.toLowerCase();
@@ -152,7 +105,6 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
         final String addressTc = restaurant.addressTc.toLowerCase();
         return nameEn.contains(query) || nameTc.contains(query) || addressEn.contains(query) || addressTc.contains(query);
       }
-
       return true;
     }).toList();
   }
@@ -170,6 +122,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
       value: selectedDistrict,
       items: items,
       isExpanded: true,
+      underline: Container(), // Hide default underline to avoid double borders
       onChanged: (val) {
         if (val == null) return;
         setState(() {
@@ -181,7 +134,6 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
 
   // Helper to build Veggie/Vegan toggle buttons.
   Widget buildDietFilters() {
-    // Use compact ElevatedButtons for clearer selected state.
     return Row(
       children: [
         SizedBox(
@@ -189,14 +141,10 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               elevation: filterVeggie ? 4 : 0,
-              backgroundColor: filterVeggie ? Colors.green.shade700 : null,
+              backgroundColor: filterVeggie ? Colors.green.shade300 : null,
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
-            onPressed: () {
-              setState(() {
-                filterVeggie = !filterVeggie;
-              });
-            },
+            onPressed: () => setState(() => filterVeggie = !filterVeggie),
             child: Text(widget.isTraditionalChinese ? '齋' : 'Veggie'),
           ),
         ),
@@ -206,14 +154,10 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               elevation: filterVegan ? 4 : 0,
-              backgroundColor: filterVegan ? Colors.green.shade700 : null,
+              backgroundColor: filterVegan ? Colors.green.shade300 : null,
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
-            onPressed: () {
-              setState(() {
-                filterVegan = !filterVegan;
-              });
-            },
+            onPressed: () => setState(() => filterVegan = !filterVegan),
             child: Text(widget.isTraditionalChinese ? '純素' : 'Vegan'),
           ),
         ),
@@ -221,21 +165,29 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     );
   }
 
-  // Combined filter row as a single widget: dropdown + diet buttons in one row.
-  Widget buildFilterRow() {
-    return Material(
-      // Use Material so elevation and background follow theme naturally.
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            // District dropdown takes remaining space.
-            Expanded(child: buildDistrictDropdown()),
-            const SizedBox(width: 12),
-            // Diet buttons.
-            buildDietFilters(),
-          ],
+  // Combined filter row as a single widget.
+  // **NEW: This is now a PreferredSizeWidget to be used in AppBar.bottom**
+  PreferredSizeWidget buildFilterRow() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(56.0),
+      child: Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Colors.green.shade300, width: 1.0),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(child: buildDistrictDropdown()),
+                const SizedBox(width: 12),
+                buildDietFilters(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -243,21 +195,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Replace the simple title with a search + filters bar controlled elsewhere.
     return Scaffold(
-      // Keep search TextField in AppBar to reduce vertical clutter.
-      appBar: AppBar(
-        title: TextField(
-          controller: searchController,
-          decoration: InputDecoration(
-            hintText: widget.isTraditionalChinese ? '搜尋名稱或地址' : 'Search name or address',
-            border: InputBorder.none,
-            hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6)),
-          ),
-          textInputAction: TextInputAction.search,
-          onChanged: (_) => setState(() {}), // Rebuild to apply search live.
-        ),
-      ),
       body: FutureBuilder<List<Restaurant>>(
         future: restaurantsFuture,
         builder: (context, snapshot) {
@@ -265,76 +203,67 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
             final List<Restaurant> allRestaurants = snapshot.data!;
             final List<Restaurant> filtered = applyFilters(allRestaurants);
 
-            return Column(
-              children: [
-                // Animated filter row that slides up/down based on scroll direction.
-                AnimatedSlide(
-                  offset: showFilterRow ? Offset.zero : const Offset(0, -1),
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: AnimatedOpacity(
-                    opacity: showFilterRow ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    child: buildFilterRow(),
+            // **REFACTORED: Use CustomScrollView for advanced scrolling effects**
+            return CustomScrollView(
+              slivers: [
+                // The AppBar that will hide and show on scroll
+                SliverAppBar(
+                  title: TextField(
+                    controller: searchController,
+                    decoration: InputDecoration(
+                      hintText: widget.isTraditionalChinese ? '搜尋名稱或地址' : 'Search name or address',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6)),
+                    ),
+                    textInputAction: TextInputAction.search,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  pinned: false,  // The app bar will not stay at the top
+                  floating: true, // It will become visible as soon as you scroll up
+                  snap: true,     // It will snap into place (fully visible or fully hidden)
+                  // Place the filter row in the AppBar's bottom property
+                  bottom: buildFilterRow(),
+                ),
+
+                // Info row showing number of results, now as a Sliver
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                    child: Text(
+                      widget.isTraditionalChinese
+                          ? '顯示 ${filtered.length} 個餐廳 (共 ${allRestaurants.length})'
+                          : 'Showing ${filtered.length} restaurants (total ${allRestaurants.length})',
+                      style: const TextStyle(fontSize: 14),
+                    ),
                   ),
                 ),
 
-                // Info row showing number of results.
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Row(
-                    children: [
-                      Text(
-                        widget.isTraditionalChinese
-                            ? '顯示 ${filtered.length} 個餐廳 (共 ${allRestaurants.length})'
-                            : 'Showing ${filtered.length} restaurants (total ${allRestaurants.length})',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Expanded list of results with horizontal padding outside each card.
-                Expanded(
-                  child: filtered.isEmpty
-                      ? Center(child: Text(widget.isTraditionalChinese ? '沒有找到餐廳' : 'No restaurants found'))
-                      : ListView.builder(
-                    controller: listScrollController,
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) {
+                // The list of restaurants, now as a SliverList
+                filtered.isEmpty
+                    ? SliverFillRemaining(
+                  child: Center(child: Text(widget.isTraditionalChinese ? '沒有找到餐廳' : 'No restaurants found')),
+                )
+                    : SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) {
                       final restaurant = filtered[index];
                       final String displayName = widget.isTraditionalChinese ? restaurant.nameTc : restaurant.nameEn;
+                      final String displayAddress = widget.isTraditionalChinese ? restaurant.addressTc : restaurant.addressEn;
+                      final List<String> keywords = widget.isTraditionalChinese ? restaurant.keywordTc : restaurant.keywordEn;
+                      final String keywordsText = keywords.join(', ');
+                      final Color textColor = Theme.of(context).colorScheme.onSurface; // Primary text color from theme
+                      final Color secondaryTextColor = textColor.withOpacity(0.8); // Slightly transparent for secondary text
+                      final Color gradientBaseColor = Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface;
 
-                      // Each card has horizontal padding so cards don't touch screen edges.
+                      // Define a subtle shadow for the text to improve readability over images.
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         child: Card(
+                          // The card now uses the color defined in main.dart's CardTheme
                           margin: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          // The shape and clipBehavior are correctly inherited from the theme
                           clipBehavior: Clip.hardEdge,
-                          child: ListTile(
-                            // Reduce the default ListTile padding so thumbnail can touch inner border.
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            // Leading width explicit so layout is stable.
-                            minLeadingWidth: 84,
-                            horizontalTitleGap: 8,
-                            // Leading thumbnail constrained by SizedBox.
-                            leading: SizedBox(
-                              width: 84,
-                              height: 72,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.asset(
-                                  restaurant.image,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                ),
-                              ),
-                            ),
-                            title: Text(displayName),
-                            subtitle: Text(widget.isTraditionalChinese ? restaurant.districtTc : restaurant.districtEn),
-                            trailing: const Icon(Icons.chevron_right),
+                          child: InkWell(
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -343,10 +272,74 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                                 ),
                               );
                             },
+                            child: Ink.image(
+                              height: 150,
+                              image: AssetImage(restaurant.image),
+                              fit: BoxFit.cover,
+                              child: Container(
+                                // Add the new gradient overlay from the bottom up to 30%.
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      gradientBaseColor.withOpacity(0.9), // Opaque at the very bottom
+                                      gradientBaseColor.withOpacity(0.7), // Semi-transparent
+                                      Colors.transparent, // Fully transparent
+                                    ],
+                                    stops: const [0.0, 0.3, 0.5], // Gradient ends at 50% height
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // 3. Use RichText with theme-based colors.
+                                      RichText(
+                                        text: TextSpan(
+                                          style: TextStyle(
+                                            color: textColor, // Use main text color from theme
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          children: [
+                                            TextSpan(text: displayName),
+                                            TextSpan(
+                                              text: ' ⚪ $keywordsText',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: secondaryTextColor, // Use slightly fainter color
+                                                fontWeight: FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      // 4. Use theme-based color for the address.
+                                      Text(
+                                        displayAddress,
+                                        style: TextStyle(
+                                          color: secondaryTextColor, // Use secondary text color
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       );
-                    },
+                        },
+                    childCount: filtered.length,
                   ),
                 ),
               ],

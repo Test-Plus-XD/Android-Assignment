@@ -32,11 +32,18 @@ class _PourRiceAppState extends State<PourRiceApp> {
   bool isTraditionalChinese = false;
   // Indicate preferences loaded.
   bool prefsLoaded = false;
+  bool isLoggedIn = false;
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
+  }
+
+  void _loginSuccess() {
+    setState(() {
+      isLoggedIn = true;
+    });
   }
 
   // Load persisted preferences asynchronously.
@@ -76,26 +83,140 @@ class _PourRiceAppState extends State<PourRiceApp> {
       return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
     }
 
+    // ---------- Subtle green accents ----------
+    // Light-mode subtle green tint for header/nav (very soft).
+    const Color lightHeaderTint = Color(0xFFEFF7EF); // very light green background tint
+    const Color lightAccent = Color(0xFF2E7D32); // main green for icons and highlights (Green 700)
+    const Color lightInnerTint = Color(0xFFF1FBF3); // cards and surfaces with a touch of green
+
+    // Dark-mode subtle green tint for header/nav (dimmed).
+    const Color darkHeaderTint = Color(0xFF083016); // dim green header in dark mode
+    const Color darkAccent = Color(0xFF66BB6A); // lighter green accent in dark mode
+    const Color darkInnerTint = Color(0xFF0C2416); // dark card surface with green hint
+
+    // ---------- Light theme (Material 3) with explicit colours ----------
+    final ThemeData lightTheme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      // Build a color scheme but keep the primary subtle so it doesn't dominate.
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: lightAccent,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: lightAccent,
+        secondary: lightAccent,
+        surface: lightInnerTint,
+        background: Colors.white,
+        onPrimary: Colors.white,
+        onSurface: Colors.black87,
+        onBackground: Colors.black87,
+      ),
+      // AppBar uses a very light green tint as background with green icons.
+      appBarTheme: const AppBarTheme(
+        backgroundColor: lightHeaderTint,
+        foregroundColor: lightAccent,
+        elevation: 1,
+        centerTitle: false,
+      ),
+      // Bottom navigation bar uses same subtle header tint and green icons when selected.
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: lightHeaderTint,
+        selectedItemColor: lightAccent,
+        unselectedItemColor: Colors.black54,
+        showUnselectedLabels: true,
+      ),
+      // Revert drawer styling to default (do not override background).
+      drawerTheme: const DrawerThemeData(),
+      // Card theme uses a very faint green surface rather than outline borders.
+      cardTheme: const CardThemeData(
+        color: lightInnerTint,
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+        margin: EdgeInsets.zero,
+      ),
+      // Icon theme uses accent green so icons appear in green rather than outlines.
+      iconTheme: const IconThemeData(color: lightAccent),
+      // Elevated button uses green fill.
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: lightAccent,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+      // Text button uses subtle green for interactive labels.
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: lightAccent)),
+      // Floating action button matches accent.
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(backgroundColor: lightAccent),
+    );
+
+    // ---------- Dark theme (Material 3) with explicit colours ----------
+    final ThemeData darkTheme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(seedColor: darkAccent, brightness: Brightness.dark).copyWith(
+        primary: darkAccent,
+        secondary: darkAccent,
+        surface: darkInnerTint,
+        background: const Color(0xFF070B08),
+        onPrimary: Colors.white,
+        onSurface: Colors.white70,
+        onBackground: Colors.white70,
+      ),
+      // AppBar uses dim green header tint and white text/icons.
+      appBarTheme: AppBarTheme(
+        backgroundColor: darkHeaderTint,
+        foregroundColor: Colors.white,
+        elevation: 1,
+        centerTitle: false,
+      ),
+      // Bottom navigation uses dim header tint and light icons.
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: darkHeaderTint,
+        selectedItemColor: Colors.white,
+        unselectedItemColor: Colors.white70,
+        showUnselectedLabels: true,
+      ),
+      // Revert drawer styling to default dark surface.
+      drawerTheme: const DrawerThemeData(),
+      // Card surface uses a dark green-tinted surface, not just outline.
+      cardTheme: const CardThemeData(
+        color: darkInnerTint,
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+        margin: EdgeInsets.zero,
+      ),
+      // Icons use the dark accent tint where appropriate.
+      iconTheme: const IconThemeData(color: darkAccent),
+      // Buttons in dark mode use slightly deeper green.
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: darkAccent,
+          foregroundColor: Colors.black87,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: darkAccent)),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(backgroundColor: darkAccent),
+    );
+
     return MaterialApp(
       title: 'PourRice',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        primarySwatch: Colors.green,
-        appBarTheme: const AppBarTheme(elevation: 2),
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.green,
-        appBarTheme: const AppBarTheme(elevation: 2),
-      ),
+      theme: lightTheme,
+      darkTheme: darkTheme,
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: MainShell(
-        isDarkMode: isDarkMode,
-        isTraditionalChinese: isTraditionalChinese,
-        onThemeChanged: _toggleTheme,
-        onLanguageChanged: _toggleLanguage,
-      ),
+      home: isLoggedIn
+          ? MainShell(
+              isDarkMode: isDarkMode,
+              isTraditionalChinese: isTraditionalChinese,
+              onThemeChanged: _toggleTheme,
+              onLanguageChanged: _toggleLanguage,
+            )
+          : LoginPage(
+              onLoginSuccess: _loginSuccess,
+              isTraditionalChinese: isTraditionalChinese,
+            ),
     );
   }
 }
