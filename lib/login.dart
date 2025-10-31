@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class LoginPage extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
+  final ValueChanged<bool> onLoginStateChanged;
   final bool isTraditionalChinese;
 
   const LoginPage({
-    required this.onLoginSuccess,
+    required this.onLoginStateChanged,
     required this.isTraditionalChinese,
     super.key,
   });
@@ -33,7 +33,7 @@ class _LoginPageState extends State<LoginPage> {
     );
 
     if (user != null) {
-      widget.onLoginSuccess();
+      widget.onLoginStateChanged(true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -57,7 +57,7 @@ class _LoginPageState extends State<LoginPage> {
     users.add(newUser);
     print('Updated user list (mock): ${json.encode(users)}');
 
-    widget.onLoginSuccess();
+    widget.onLoginStateChanged(true);
   }
 
   @override
@@ -108,9 +108,9 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 16.0),
             ElevatedButton.icon(
               onPressed: () {
-                widget.onLoginSuccess();
+                widget.onLoginStateChanged(true);
               },
-              icon: Image.asset('assets/google_logo.png', height: 24.0),
+              icon: Image.asset('assets/images/Google.png', height: 24.0),
               label: Text(isTc ? '使用 Google 登入' : 'Sign in with Google'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,

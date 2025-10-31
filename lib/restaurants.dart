@@ -229,11 +229,14 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-                    child: Text(
-                      widget.isTraditionalChinese
-                          ? '顯示 ${filtered.length} 個餐廳 (共 ${allRestaurants.length})'
-                          : 'Showing ${filtered.length} restaurants (total ${allRestaurants.length})',
-                      style: const TextStyle(fontSize: 14),
+                    child: Visibility(
+                      visible: filtered.isNotEmpty,
+                      child: Text(
+                        widget.isTraditionalChinese
+                            ? '顯示 ${filtered.length} 個餐廳 (共 ${allRestaurants.length})'
+                            : 'Showing ${filtered.length} restaurants (total ${allRestaurants.length})',
+                        style: const TextStyle(fontSize: 14),
+                      ),
                     ),
                   ),
                 ),

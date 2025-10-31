@@ -40,9 +40,9 @@ class _PourRiceAppState extends State<PourRiceApp> {
     _loadPreferences();
   }
 
-  void _loginSuccess() {
+  void _onLoginStateChanged(bool loggedIn) {
     setState(() {
-      isLoggedIn = true;
+      isLoggedIn = loggedIn;
     });
   }
 
@@ -212,9 +212,11 @@ class _PourRiceAppState extends State<PourRiceApp> {
               isTraditionalChinese: isTraditionalChinese,
               onThemeChanged: _toggleTheme,
               onLanguageChanged: _toggleLanguage,
+              isLoggedIn: isLoggedIn,
+              onLoginStateChanged: _onLoginStateChanged,
             )
           : LoginPage(
-              onLoginSuccess: _loginSuccess,
+              onLoginStateChanged: _onLoginStateChanged,
               isTraditionalChinese: isTraditionalChinese,
             ),
     );
@@ -225,14 +227,18 @@ class _PourRiceAppState extends State<PourRiceApp> {
 class MainShell extends StatefulWidget {
   final bool isDarkMode;
   final bool isTraditionalChinese;
+  final bool isLoggedIn;
   final ValueChanged<bool> onThemeChanged;
   final ValueChanged<bool> onLanguageChanged;
+  final ValueChanged<bool> onLoginStateChanged;
 
   const MainShell({
     required this.isDarkMode,
     required this.isTraditionalChinese,
     required this.onThemeChanged,
     required this.onLanguageChanged,
+    required this.isLoggedIn,
+    required this.onLoginStateChanged,
     super.key,
   });
 
@@ -252,7 +258,7 @@ class _MainShellState extends State<MainShell> {
     pages = [
       FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
       RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
-      const AccountPage(),
+      AccountPage(onLoginStateChanged: widget.onLoginStateChanged),
     ];
   }
 
@@ -287,6 +293,8 @@ class _MainShellState extends State<MainShell> {
         isDarkMode: widget.isDarkMode,
         onThemeChanged: widget.onThemeChanged,
         onLanguageChanged: widget.onLanguageChanged,
+        onLoginStateChanged: widget.onLoginStateChanged,
+        isLoggedIn: widget.isLoggedIn,
       ),
       body: IndexedStack(index: currentIndex, children: pages),
       bottomNavigationBar: BottomNavigationBar(

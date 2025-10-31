@@ -9,12 +9,16 @@ class AppNavDrawer extends StatelessWidget {
   final bool isDarkMode;
   final ValueChanged<bool> onThemeChanged;
   final ValueChanged<bool> onLanguageChanged;
+  final ValueChanged<bool> onLoginStateChanged;
+  final bool isLoggedIn;
 
   const AppNavDrawer({
     required this.isTraditionalChinese,
     required this.isDarkMode,
     required this.onThemeChanged,
     required this.onLanguageChanged,
+    required this.onLoginStateChanged,
+    required this.isLoggedIn,
     super.key,
   });
 
@@ -24,6 +28,7 @@ class AppNavDrawer extends StatelessWidget {
     final String allLabel = isTraditionalChinese ? '所有餐廳' : 'All Restaurants';
     final String accountLabel = isTraditionalChinese ? '我的帳戶' : 'My Account';
     final String loginLabel = isTraditionalChinese ? '登入 / 註冊' : 'Login / Register';
+    final String logoutLabel = isTraditionalChinese ? '登出' : 'Logout';
     final String themeLabel = isTraditionalChinese ? '深色模式' : 'Dark theme';
     final String languageLabel = isTraditionalChinese ? 'EN|TC' : '英|繁';
 
@@ -56,12 +61,21 @@ class AppNavDrawer extends StatelessWidget {
           }),
           ListTile(leading: const Icon(Icons.account_circle), title: Text(accountLabel), onTap: () {
             Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountPage()));
+            Navigator.push(context, MaterialPageRoute(builder: (_) => AccountPage(onLoginStateChanged: onLoginStateChanged)));
           }),
-          ListTile(leading: const Icon(Icons.login), title: Text(loginLabel), onTap: () {
-            Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginPage()));
-          }),
+          if (isLoggedIn)
+            ListTile(leading: const Icon(Icons.logout), title: Text(logoutLabel), onTap: () => onLoginStateChanged(false))
+          else
+            ListTile(leading: const Icon(Icons.login), title: Text(loginLabel), onTap: () {
+              Navigator.pop(context);
+              // Correct code
+              Navigator.push(context, MaterialPageRoute(builder: (_) => LoginPage(
+                onLoginStateChanged: onLoginStateChanged,
+                isTraditionalChinese: isTraditionalChinese,
+              ),
+              ),
+              );
+            }),
           const Spacer(),
           // Theme toggle persisted by root via callback.
           SwitchListTile(value: isDarkMode, title: Text(themeLabel), secondary: const Icon(Icons.brightness_6), onChanged: onThemeChanged),
