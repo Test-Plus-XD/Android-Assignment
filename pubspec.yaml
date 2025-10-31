@@ -55,6 +55,7 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
+    - assets/sample_users.json
     - assets/sample_restaurants.json
     - assets/vegetarian_restaurants_hk.json
     - assets/images/App-Light.png

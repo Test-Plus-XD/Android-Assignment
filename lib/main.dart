@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home.dart';
 import 'restaurants.dart';
@@ -98,45 +97,45 @@ class _PourRiceAppState extends State<PourRiceApp> {
     final ThemeData lightTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      // Build a color scheme but keep the primary subtle so it doesn't dominate.
+      // Set scaffold background to pure white for the app body.
+      scaffoldBackgroundColor: Colors.white,
+      // Ensure general canvas/drawers/dialogs are white as well.
+      canvasColor: Colors.white,
       colorScheme: ColorScheme.fromSeed(
         seedColor: lightAccent,
         brightness: Brightness.light,
       ).copyWith(
         primary: lightAccent,
         secondary: lightAccent,
+        // Keep surface (cards) as your faint green tint.
         surface: lightInnerTint,
+        // Force background slot to pure white so widgets that use colorScheme.background are white.
         background: Colors.white,
         onPrimary: Colors.white,
         onSurface: Colors.black87,
         onBackground: Colors.black87,
       ),
-      // AppBar uses a very light green tint as background with green icons.
       appBarTheme: const AppBarTheme(
         backgroundColor: lightHeaderTint,
         foregroundColor: lightAccent,
         elevation: 1,
         centerTitle: false,
       ),
-      // Bottom navigation bar uses same subtle header tint and green icons when selected.
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: lightHeaderTint,
         selectedItemColor: lightAccent,
         unselectedItemColor: Colors.black54,
         showUnselectedLabels: true,
       ),
-      // Revert drawer styling to default (do not override background).
-      drawerTheme: const DrawerThemeData(),
-      // Card theme uses a very faint green surface rather than outline borders.
+      // Explicitly set drawer background so it doesn't inherit a non-white canvas.
+      drawerTheme: const DrawerThemeData(backgroundColor: Colors.white),
       cardTheme: const CardThemeData(
         color: lightInnerTint,
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
         margin: EdgeInsets.zero,
       ),
-      // Icon theme uses accent green so icons appear in green rather than outlines.
       iconTheme: const IconThemeData(color: lightAccent),
-      // Elevated button uses green fill.
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: lightAccent,
@@ -144,24 +143,21 @@ class _PourRiceAppState extends State<PourRiceApp> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
-      // Text button uses subtle green for interactive labels.
       textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: lightAccent)),
-      // Floating action button matches accent.
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(backgroundColor: lightAccent),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(backgroundColor: lightAccent), dialogTheme: DialogThemeData(backgroundColor: Colors.white),
     );
 
     // ---------- Dark theme (Material 3) with explicit colours ----------
     final ThemeData darkTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      scaffoldBackgroundColor: Colors.black87,
       colorScheme: ColorScheme.fromSeed(seedColor: darkAccent, brightness: Brightness.dark).copyWith(
         primary: darkAccent,
         secondary: darkAccent,
         surface: darkInnerTint,
-        background: const Color(0xFF070B08),
         onPrimary: Colors.white,
         onSurface: Colors.white70,
-        onBackground: Colors.white70,
       ),
       // AppBar uses dim green header tint and white text/icons.
       appBarTheme: AppBarTheme(
@@ -210,14 +206,17 @@ class _PourRiceAppState extends State<PourRiceApp> {
           ? MainShell(
               isDarkMode: isDarkMode,
               isTraditionalChinese: isTraditionalChinese,
+              isLoggedIn: isLoggedIn,
               onThemeChanged: _toggleTheme,
               onLanguageChanged: _toggleLanguage,
-              isLoggedIn: isLoggedIn,
               onLoginStateChanged: _onLoginStateChanged,
             )
           : LoginPage(
               onLoginStateChanged: _onLoginStateChanged,
               isTraditionalChinese: isTraditionalChinese,
+              isDarkMode: isDarkMode,
+              onThemeChanged: () => _toggleTheme(!isDarkMode),
+              onLanguageChanged: () => _toggleLanguage(!isTraditionalChinese),
             ),
     );
   }
@@ -258,19 +257,43 @@ class _MainShellState extends State<MainShell> {
     pages = [
       FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
       RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
-      AccountPage(onLoginStateChanged: widget.onLoginStateChanged),
+      AccountPage(
+          isLoggedIn: widget.isLoggedIn,
+          onLoginStateChanged: widget.onLoginStateChanged,
+          isDarkMode: widget.isDarkMode,
+          isTraditionalChinese: widget.isTraditionalChinese,
+          onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
+          onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
+      ),
     ];
   }
 
   @override
   void didUpdateWidget(covariant MainShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isTraditionalChinese != widget.isTraditionalChinese) {
+    if (oldWidget.isTraditionalChinese != widget.isTraditionalChinese ||
+        oldWidget.isDarkMode != widget.isDarkMode) {
       setState(() {
-        pages[0] = FrontPage(isTraditionalChinese: widget.isTraditionalChinese);
-        pages[1] = RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese);
+        pages = [
+          FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
+          RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
+          AccountPage(
+            isLoggedIn: widget.isLoggedIn,
+            onLoginStateChanged: widget.onLoginStateChanged,
+            isDarkMode: widget.isDarkMode,
+            isTraditionalChinese: widget.isTraditionalChinese,
+            onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
+            onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
+          ),
+        ];
       });
     }
+  }
+  void _onSelectItem(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+    Navigator.pop(context); // Close the drawer
   }
 
   // Switch bottom nav index.
@@ -295,6 +318,7 @@ class _MainShellState extends State<MainShell> {
         onLanguageChanged: widget.onLanguageChanged,
         onLoginStateChanged: widget.onLoginStateChanged,
         isLoggedIn: widget.isLoggedIn,
+        onSelectItem: _onSelectItem,
       ),
       body: IndexedStack(index: currentIndex, children: pages),
       bottomNavigationBar: BottomNavigationBar(

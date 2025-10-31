@@ -5,10 +5,16 @@ import 'package:flutter/services.dart';
 class LoginPage extends StatefulWidget {
   final ValueChanged<bool> onLoginStateChanged;
   final bool isTraditionalChinese;
+  final bool isDarkMode;
+  final VoidCallback onThemeChanged;
+  final VoidCallback onLanguageChanged;
 
   const LoginPage({
     required this.onLoginStateChanged,
     required this.isTraditionalChinese,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+    required this.onLanguageChanged,
     super.key,
   });
 
@@ -26,8 +32,8 @@ class _LoginPageState extends State<LoginPage> {
     final String data = await rootBundle.loadString('assets/sample_users.json');
     final List<dynamic> users = json.decode(data);
     final user = users.firstWhere(
-      (user) =>
-          user['email'] == _emailController.text &&
+          (user) =>
+      user['email'] == _emailController.text &&
           user['password'] == _passwordController.text,
       orElse: () => null,
     );
@@ -62,11 +68,9 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isTc = widget.isTraditionalChinese;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isRegister ? (isTc ? '註冊' : 'Register') : (isTc ? '登入' : 'Login')),
+        title: Text(_isRegister ? (widget.isTraditionalChinese ? '註冊' : 'Register') : (widget.isTraditionalChinese ? '登入' : 'Login')),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -78,7 +82,7 @@ class _LoginPageState extends State<LoginPage> {
               TextField(
                 controller: _usernameController,
                 decoration: InputDecoration(
-                  labelText: isTc ? '用戶名' : 'Username',
+                  labelText: widget.isTraditionalChinese ? '用戶名' : 'Username',
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -86,7 +90,7 @@ class _LoginPageState extends State<LoginPage> {
             TextField(
               controller: _emailController,
               decoration: InputDecoration(
-                labelText: isTc ? '電郵' : 'Email',
+                labelText: widget.isTraditionalChinese ? '電郵' : 'Email',
                 border: const OutlineInputBorder(),
               ),
               keyboardType: TextInputType.emailAddress,
@@ -95,7 +99,7 @@ class _LoginPageState extends State<LoginPage> {
             TextField(
               controller: _passwordController,
               decoration: InputDecoration(
-                labelText: isTc ? '密碼' : 'Password',
+                labelText: widget.isTraditionalChinese ? '密碼' : 'Password',
                 border: const OutlineInputBorder(),
               ),
               obscureText: true,
@@ -103,7 +107,7 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 24.0),
             ElevatedButton(
               onPressed: _isRegister ? _register : _login,
-              child: Text(_isRegister ? (isTc ? '註冊' : 'Register') : (isTc ? '登入' : 'Login')),
+              child: Text(_isRegister ? (widget.isTraditionalChinese ? '註冊' : 'Register') : (widget.isTraditionalChinese ? '登入' : 'Login')),
             ),
             const SizedBox(height: 16.0),
             ElevatedButton.icon(
@@ -111,7 +115,7 @@ class _LoginPageState extends State<LoginPage> {
                 widget.onLoginStateChanged(true);
               },
               icon: Image.asset('assets/images/Google.png', height: 24.0),
-              label: Text(isTc ? '使用 Google 登入' : 'Sign in with Google'),
+              label: Text(widget.isTraditionalChinese ? '使用 Google 登入' : 'Sign in with Google'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
@@ -124,9 +128,30 @@ class _LoginPageState extends State<LoginPage> {
                 });
               },
               child: Text(_isRegister
-                  ? (isTc ? '已經有帳戶？ 登入' : 'Have an account? Sign in')
-                  : (isTc ? '建立新帳戶' : 'Create an account')),
-            )
+                  ? (widget.isTraditionalChinese ? '已經有帳戶？ 登入' : 'Have an account? Sign in')
+                  : (widget.isTraditionalChinese ? '建立新帳戶' : 'Create an account')),
+            ),
+            // --- START: Added Toggle Buttons ---
+            const Spacer(), // Pushes the toggles to the bottom
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Theme Toggle
+                IconButton(
+                  icon: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+                  tooltip: widget.isTraditionalChinese ? '切換主題' : 'Toggle Theme',
+                  onPressed: widget.onThemeChanged,
+                ),
+                const SizedBox(width: 20),
+                // Language Toggle
+                IconButton(
+                  icon: const Icon(Icons.language),
+                  tooltip: widget.isTraditionalChinese ? 'Toggle Language' : '切換語言',
+                  onPressed: widget.onLanguageChanged,
+                ),
+              ],
+            ),
+            // --- END: Added Toggle Buttons ---
           ],
         ),
       ),

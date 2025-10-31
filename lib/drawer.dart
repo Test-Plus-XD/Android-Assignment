@@ -1,86 +1,105 @@
 import 'package:flutter/material.dart';
-import 'account.dart';
 import 'login.dart';
-import 'restaurants.dart';
 
-// Navigation drawer with theme and language toggles and in-drawer app icon.
 class AppNavDrawer extends StatelessWidget {
-  final bool isTraditionalChinese;
   final bool isDarkMode;
+  final bool isTraditionalChinese;
+  final bool isLoggedIn;
   final ValueChanged<bool> onThemeChanged;
   final ValueChanged<bool> onLanguageChanged;
   final ValueChanged<bool> onLoginStateChanged;
-  final bool isLoggedIn;
+  final ValueChanged<int> onSelectItem;
 
   const AppNavDrawer({
-    required this.isTraditionalChinese,
     required this.isDarkMode,
+    required this.isTraditionalChinese,
     required this.onThemeChanged,
     required this.onLanguageChanged,
-    required this.onLoginStateChanged,
     required this.isLoggedIn,
+    required this.onLoginStateChanged,
+    required this.onSelectItem,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
-    final String homeLabel = isTraditionalChinese ? '主頁' : 'Home';
-    final String allLabel = isTraditionalChinese ? '所有餐廳' : 'All Restaurants';
-    final String accountLabel = isTraditionalChinese ? '我的帳戶' : 'My Account';
-    final String loginLabel = isTraditionalChinese ? '登入 / 註冊' : 'Login / Register';
-    final String logoutLabel = isTraditionalChinese ? '登出' : 'Logout';
-    final String themeLabel = isTraditionalChinese ? '深色模式' : 'Dark theme';
-    final String languageLabel = isTraditionalChinese ? 'EN|TC' : '英|繁';
-
-    // Choose the app icon image to display in the drawer header.
-    final String appIconPath = isDarkMode ? 'assets/images/App-Dark.png' : 'assets/images/App-Light.png';
-
     return Drawer(
       child: Column(
         children: [
-          // DrawerHeader with icon image and app title; use BoxFit.contain to keep square image intact.
-          DrawerHeader(
-            decoration: BoxDecoration(color: Colors.green.withOpacity(0.5)),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // App icon displayed inside a square container without cropping.
-                Container(
-                  width: 200,
-                  height: 200,
-                  padding: const EdgeInsets.all(4),
-                  child: Image.asset(appIconPath, fit: BoxFit.contain),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                DrawerHeader(
+                  decoration: BoxDecoration(color: Theme.of(context).appBarTheme.backgroundColor),
+                  child: Image.asset(
+                    isDarkMode ? 'assets/images/App-Dark.png' : 'assets/images/App-Light.png',
+                  ),
                 ),
+                ListTile(
+                  leading: const Icon(Icons.home),
+                  title: Text(isTraditionalChinese ? '主頁' : 'Home'),
+                  onTap: () {
+                    onSelectItem(0);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.restaurant),
+                  title: Text(isTraditionalChinese ? '所有餐廳' : 'All Restaurants'),
+                  onTap: () {
+                    onSelectItem(1);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.account_circle),
+                  title: Text(isTraditionalChinese ? '我的帳戶' : 'My Account'),
+                  onTap: () {
+                    onSelectItem(2);
+                  },
+                ),
+                const Divider(),
+                if (!isLoggedIn)
+                  ListTile(
+                    leading: const Icon(Icons.login),
+                    title: Text(isTraditionalChinese ? '登錄/註冊' : 'Login / Register'),
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LoginPage(
+                            onLoginStateChanged: onLoginStateChanged,
+                            isTraditionalChinese: isTraditionalChinese,
+                            isDarkMode: isDarkMode,
+                            onThemeChanged: () => onThemeChanged(!isDarkMode),
+                            onLanguageChanged: () => onLanguageChanged(!isTraditionalChinese),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
               ],
             ),
           ),
-          ListTile(leading: const Icon(Icons.home), title: Text(homeLabel), onTap: () => Navigator.popUntil(context, (route) => route.isFirst)),
-          ListTile(leading: const Icon(Icons.restaurant), title: Text(allLabel), onTap: () {
-            Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (_) => RestaurantsPage(isTraditionalChinese: isTraditionalChinese)));
-          }),
-          ListTile(leading: const Icon(Icons.account_circle), title: Text(accountLabel), onTap: () {
-            Navigator.pop(context);
-            Navigator.push(context, MaterialPageRoute(builder: (_) => AccountPage(onLoginStateChanged: onLoginStateChanged)));
-          }),
-          if (isLoggedIn)
-            ListTile(leading: const Icon(Icons.logout), title: Text(logoutLabel), onTap: () => onLoginStateChanged(false))
-          else
-            ListTile(leading: const Icon(Icons.login), title: Text(loginLabel), onTap: () {
-              Navigator.pop(context);
-              // Correct code
-              Navigator.push(context, MaterialPageRoute(builder: (_) => LoginPage(
-                onLoginStateChanged: onLoginStateChanged,
-                isTraditionalChinese: isTraditionalChinese,
-              ),
-              ),
-              );
-            }),
-          const Spacer(),
-          // Theme toggle persisted by root via callback.
-          SwitchListTile(value: isDarkMode, title: Text(themeLabel), secondary: const Icon(Icons.brightness_6), onChanged: onThemeChanged),
-          // Language toggle persisted by root via callback.
-          SwitchListTile(value: isTraditionalChinese, title: Text(languageLabel), secondary: const Icon(Icons.language), onChanged: onLanguageChanged),
+          const Divider(),
+          ListTile(
+            leading: Icon(isDarkMode ? Icons.dark_mode : Icons.light_mode),
+            title: Text(isTraditionalChinese ? '深色模式' : 'Dark Mode'),
+            trailing: Switch(
+              value: isDarkMode,
+              onChanged: onThemeChanged,
+            ),
+            onTap: () => onThemeChanged(!isDarkMode),
+          ),
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: Text(isTraditionalChinese ? 'Switch to English' : '切換中文'),
+            trailing: Switch(
+              value: isTraditionalChinese,
+              onChanged: onLanguageChanged,
+            ),
+            onTap: () => onLanguageChanged(!isTraditionalChinese),
+          ),
         ],
       ),
     );
