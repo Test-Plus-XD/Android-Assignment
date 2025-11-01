@@ -47,7 +47,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -58,9 +58,10 @@ flutter:
     - assets/vegetarian_restaurants_hk.json
     - assets/sample_users.json
     - assets/sample_restaurants.json
-    - assets/sample_1.json
-    - assets/sample_2.json
-    - assets/sample_3.json
+    - assets/sample_reviews.json
+    - assets/images/sample_1.png
+    - assets/images/sample_2.png
+    - assets/images/sample_3.png
     - assets/images/Placeholder.png
     - assets/images/Google.png
     - assets/images/App-Light.png

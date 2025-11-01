@@ -19,6 +19,7 @@ class _FrontPageState extends State<FrontPage> {
   // Current index for indicators.
   int currentIndex = 0;
   int nearbyCurrentIndex = 0;
+  int reviewsCurrentIndex = 0;
   // Cached data.
   late Future<List<Restaurant>> restaurantsFuture;
   late Future<List<Review>> reviewsFuture;
@@ -39,7 +40,7 @@ class _FrontPageState extends State<FrontPage> {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.only(bottom: 12.0),
         child: Column(
           children: [
             // ADsCarouselSlider
@@ -82,7 +83,13 @@ class _FrontPageState extends State<FrontPage> {
               ),
             ),
             const SizedBox(height: 12),
-            Text(featuredHeading, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(featuredHeading, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              ),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               height: 220,
@@ -105,7 +112,7 @@ class _FrontPageState extends State<FrontPage> {
                               final restaurant = restaurants[index];
                               final String displayName = widget.isTraditionalChinese ? restaurant.nameTc : restaurant.nameEn;
                               return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4),
                                 child: Card(
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   child: InkWell(
@@ -174,7 +181,13 @@ class _FrontPageState extends State<FrontPage> {
             ),
             const SizedBox(height: 12),
             // Nearby Vegan Restaurants Slider
-            Text(nearbyHeading, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(nearbyHeading, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              ),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               height: 220,
@@ -201,7 +214,7 @@ class _FrontPageState extends State<FrontPage> {
                               final restaurant = restaurants[index];
                               final String displayName = widget.isTraditionalChinese ? restaurant.nameTc : restaurant.nameEn;
                               return Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                 child: Card(
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   child: InkWell(
@@ -234,7 +247,7 @@ class _FrontPageState extends State<FrontPage> {
                           children: List.generate(restaurants.length, (index) {
                             final bool active = index == nearbyCurrentIndex;
                             return AnimatedContainer(
-                              duration: const Duration(milliseconds: 250),
+                              duration: const Duration(milliseconds: 240),
                               margin: const EdgeInsets.symmetric(horizontal: 4),
                               width: active ? 12 : 8,
                               height: active ? 12 : 8,
@@ -257,7 +270,13 @@ class _FrontPageState extends State<FrontPage> {
             ),
             const SizedBox(height: 12),
             // Latest Reviews Slider
-            Text(reviewHeading, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(reviewHeading, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              ),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               height: 180,
@@ -269,67 +288,90 @@ class _FrontPageState extends State<FrontPage> {
                     if (reviews.isEmpty) {
                       return Center(child: Text(widget.isTraditionalChinese ? '沒有評論' : 'No reviews'));
                     }
-                    return CarouselSlider.builder(
-                      options: CarouselOptions(
-                        height: 180,
-                        enlargeCenterPage: true,
-                        viewportFraction: 0.8,
-                        autoPlay: true,
-                      ),
-                      itemCount: reviews.length,
-                      itemBuilder: (context, index, realIndex) {
-                        final review = reviews[index];
-                        final restaurantName = widget.isTraditionalChinese ? review.restaurantNameTc : review.restaurantNameEn;
-
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    if (review.photoURL != null && review.photoURL!.isNotEmpty)
-                                      CircleAvatar(
-                                        radius: 20,
-                                        backgroundImage: NetworkImage(review.photoURL!),
-                                      ),
-                                    const SizedBox(width: 8),
-                                    Text(review.displayName ?? 'Anonymous', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(review.review, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                const Spacer(),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                    onPressed: () {
-                                      // This is a bit of a hack. We need to find the restaurant from the list of restaurants.
-                                      // In a real app, you would have a more direct way to get the restaurant details.
-                                      restaurantsFuture.then((restaurants) {
-                                        final restaurant = restaurants.firstWhere(
-                                              (r) => r.nameEn == review.restaurantNameEn,
-                                        );
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (_) => RestaurantDetailPage(restaurant: restaurant, isTraditionalChinese: widget.isTraditionalChinese)),
-                                        );
-                                      });
-                                    },
-                                    child: Text(restaurantName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: CarouselSlider.builder(
+                            itemCount: reviews.length,
+                            itemBuilder: (context, index, realIndex) {
+                              final review = reviews[index];
+                              final String restaurantName = widget.isTraditionalChinese ? review.restaurantNameTc : review.restaurantNameEn;
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4),
+                                child: Card(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '"${review.review}"',
+                                          style: const TextStyle(fontStyle: FontStyle.italic),
+                                          maxLines: 3,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const Spacer(),
+                                        Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 15,
+                                              backgroundImage: NetworkImage(review.photoURL ?? 'https://www.gravatar.com/avatar/'),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(review.displayName ?? 'Anonymous', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                  Text('on $restaurantName'),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ],
+                              );
+                            },
+                            options: CarouselOptions(
+                              height: double.infinity,
+                              autoPlay: false,
+                              enlargeCenterPage: false,
+                              viewportFraction: 0.82,
+                              enableInfiniteScroll: reviews.length > 1,
+                              onPageChanged: (index, reason) {
+                                setState(() {
+                                  reviewsCurrentIndex = index;
+                                });
+                              },
                             ),
                           ),
-                        );
-                      },
+                        ),
+                        const SizedBox(height: 8),
+                        // Dots indicators for reviews slider.
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(reviews.length, (index) {
+                            final bool active = index == reviewsCurrentIndex;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              width: active ? 12 : 8,
+                              height: active ? 12 : 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: active ? Theme.of(context).colorScheme.secondary : Colors.grey.shade400,
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
                     );
                   } else if (snapshot.hasError) {
-                    return Center(child: Text(widget.isTraditionalChinese ? '載入評論時出錯' : 'Error loading reviews'));
+                    return Center(child: Text(widget.isTraditionalChinese ? '載入評論錯誤' : 'Error loading reviews'));
                   } else {
                     return const Center(child: CircularProgressIndicator());
                   }
