@@ -1,0 +1,29 @@
+[
+  {
+    "review": "This is a great restaurant! The food is amazing and the staff is very friendly.",
+    "language": "en",
+    "Name_EN": "VEGGIE KINGDOM",
+    "Name_TC": "緻素坊",
+    "uid": "jSofe7814ahefEda5f8",
+    "displayName": "Test User",
+    "photoURL": "https://www.gravatar.com/avatar/"
+  },
+  {
+    "review": "這家餐廳很棒！食物很美味，工作人員也很友好。",
+    "language": "tc",
+    "Name_EN": "VEGGIE KINGDOM",
+    "Name_TC": "緻素坊",
+    "uid": "jSofe7814ahefEda5f8",
+    "displayName": "Test User",
+    "photoURL": "https://www.gravatar.com/avatar/"
+  },
+  {
+    "review": "The food is so good here. I will definitely be back!",
+    "language": "en",
+    "Name_EN": "Miu's Veggie",
+    "Name_TC": "妙善",
+    "uid": "jSofe7814ahefEda5f8",
+    "displayName": "Test User",
+    "photoURL": "https://www.gravatar.com/avatar/"
+  }
+]

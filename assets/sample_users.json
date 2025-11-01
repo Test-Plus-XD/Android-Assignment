@@ -1,7 +1,10 @@
 [
   {
-    "username": "Test",
-    "email": "Test@gmail.com",
-    "password": "Password"
+    "uid": "jSofe7814ahefEda5f8",
+    "displayName": "Test User",
+    "email": "test@example.com",
+    "password": "Password",
+    "photoURL": "https://www.gravatar.com/avatar/",
+    "phoneNumber": "+11234567890"
   }
 ]

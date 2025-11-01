@@ -55,14 +55,17 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
+    - assets/vegetarian_restaurants_hk.json
     - assets/sample_users.json
     - assets/sample_restaurants.json
-    - assets/vegetarian_restaurants_hk.json
+    - assets/sample_1.json
+    - assets/sample_2.json
+    - assets/sample_3.json
+    - assets/images/Placeholder.png
+    - assets/images/Google.png
     - assets/images/App-Light.png
     - assets/images/App-Dark.png
     - assets/images/Eclipse.gif
-    - assets/images/Placeholder.png
-    - assets/images/Google.png
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

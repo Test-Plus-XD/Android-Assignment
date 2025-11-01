@@ -10,7 +10,8 @@
       "Latitude": 22.2807534,
       "Longitude": 114.1830013,
       "Keyword_EN": ["veggie"],
-      "Keyword_TC": []
+      "Keyword_TC": [],
+      "image": "sample_1.png"
     },
     {
       "Name_EN": "Miu's Veggie",
@@ -22,7 +23,8 @@
       "Latitude": 22.3037908,
       "Longitude": 114.1892659,
       "Keyword_EN": ["veggie"],
-      "Keyword_TC": []
+      "Keyword_TC": [],
+      "image": "sample_2.png"
     },
     {
       "Name_EN": "Soo Good Luen Wo Vegan Restaurant",
@@ -34,7 +36,8 @@
       "Latitude": 22.5002132,
       "Longitude": 114.1425894,
       "Keyword_EN": ["vegan"],
-      "Keyword_TC": ["純素", "素餐"]
+      "Keyword_TC": ["純素", "素餐"],
+      "image": "sample_3.png"
     }
   ]
 }

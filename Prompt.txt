@@ -1,0 +1,19 @@
+How to fix these errors in  @drawer.dart ?
+The named parameter 'isTraditionalChinese' is required, but there's no corresponding argument.
+The named parameter 'onLoginSuccess' is required, but there's no corresponding argument.
+
+How to fix this error?
+NoSuchMethodError: No constructor 'LoginPage.' with matching arguments declared in class 'LoginPage'.
+Receiver: LoginPage
+Tried calling: new LoginPage.()
+Found: new LoginPage.({Key? key, _Location? $creationLocationd_0dea112b090073317d4}) => LoginPage
+
+Can you keep the  final ValueChanged<bool> onLoginSuccess; in my current file and add&use isLogin for the  @login.dart  and  @account.dart  local mock logic?
+
+Can you modify  @models.dart by adding a model for user that hold data identical to the successful Firebase OAuth login(which contain things like user's profile picture and phone .etc) with null (empty data) support. Then modify  @sample_users.json by adding mock Firebase OAuth login success return data. After that, modify  @account.dart  to display those data when the user is logged in.
+
+Can you add another carousel that render at the top of the  @home.dart , which takes up all horizontal space and switch images from top to bottom without indication dot and name but keep it clickable(named ADsCarouselSlider if needed). And another slider between the 'Featured Vegan Restaurants' CarouselSlider and 'Browse All Restaurants' button for 'Nearby Vegan Restaurants' that doesnot switch like a carousel(pure slider). Please use data from  @sample_restaurants.json  like the  'Featured Vegan Restaurants' CarouselSlider.
+
+Can you add a review model in  @models.dart  that contains 'review', 'language'(reflect the review), 'Name_EN', 'Name_TC'(  @sample_restaurants.json  ), 'uid', 'displayName' and 'photoURL'(  @sample_users.json  ). Then add a few sample into  @sample_reviews.json ?
+
+Can you help me check if all data have null support?

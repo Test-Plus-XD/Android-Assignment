@@ -166,7 +166,6 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
   }
 
   // Combined filter row as a single widget.
-  // **NEW: This is now a PreferredSizeWidget to be used in AppBar.bottom**
   PreferredSizeWidget buildFilterRow() {
     return PreferredSize(
       preferredSize: const Size.fromHeight(56.0),
@@ -255,7 +254,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                       final List<String> keywords = widget.isTraditionalChinese ? restaurant.keywordTc : restaurant.keywordEn;
                       final String keywordsText = keywords.join(', ');
                       final Color textColor = Theme.of(context).colorScheme.onSurface; // Primary text color from theme
-                      final Color secondaryTextColor = textColor.withOpacity(0.8); // Slightly transparent for secondary text
+                      final Color secondaryTextColor = textColor.withOpacity(0.75); // Slightly transparent for secondary text
                       final Color gradientBaseColor = Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface;
 
                       // Define a subtle shadow for the text to improve readability over images.
@@ -276,7 +275,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                               );
                             },
                             child: Ink.image(
-                              height: 150,
+                              height: 200,
                               image: AssetImage(restaurant.image),
                               fit: BoxFit.cover,
                               child: Container(
@@ -284,11 +283,11 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      gradientBaseColor.withOpacity(0.9), // Opaque at the very bottom
-                                      gradientBaseColor.withOpacity(0.7), // Semi-transparent
+                                      gradientBaseColor.withOpacity(0.97), // Opaque at the very bottom
+                                      gradientBaseColor.withOpacity(0.79), // Semi-transparent
                                       Colors.transparent, // Fully transparent
                                     ],
-                                    stops: const [0.0, 0.3, 0.5], // Gradient ends at 50% height
+                                    stops: const [0.0, 0.3, 0.6], // Gradient ends at 60% height
                                     begin: Alignment.bottomCenter,
                                     end: Alignment.topCenter,
                                   ),

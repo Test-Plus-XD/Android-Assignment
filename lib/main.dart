@@ -9,6 +9,7 @@ import 'login.dart';
 // Keys for persisted preferences.
 const String prefKeyIsDark = 'pourrice_is_dark';
 const String prefKeyIsTc = 'pourrice_is_tc';
+const String prefKeyIsLoggedIn = 'pourrice_is_logged_in';
 
 // Entry point for the app.
 void main() async {
@@ -39,21 +40,25 @@ class _PourRiceAppState extends State<PourRiceApp> {
     _loadPreferences();
   }
 
-  void _onLoginStateChanged(bool loggedIn) {
-    setState(() {
-      isLoggedIn = loggedIn;
-    });
-  }
-
   // Load persisted preferences asynchronously.
   Future<void> _loadPreferences() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final bool loadedDark = prefs.getBool(prefKeyIsDark) ?? false;
     final bool loadedTc = prefs.getBool(prefKeyIsTc) ?? false;
+    final bool loadedLoggedIn = prefs.getBool(prefKeyIsLoggedIn) ?? false;
     setState(() {
       isDarkMode = loadedDark;
       isTraditionalChinese = loadedTc;
+      isLoggedIn = loadedLoggedIn;
       prefsLoaded = true;
+    });
+  }
+  // Persist login state changes.
+  Future<void> _onLoginStateChanged(bool loggedIn) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(prefKeyIsLoggedIn, loggedIn);
+    setState(() {
+      isLoggedIn = loggedIn;
     });
   }
 
@@ -85,7 +90,7 @@ class _PourRiceAppState extends State<PourRiceApp> {
     // ---------- Subtle green accents ----------
     // Light-mode subtle green tint for header/nav (very soft).
     const Color lightHeaderTint = Color(0xFFEFF7EF); // very light green background tint
-    const Color lightAccent = Color(0xFF2E7D32); // main green for icons and highlights (Green 700)
+    const Color lightAccent = Color(0xFF2E7D32); // main green for icons and highlights
     const Color lightInnerTint = Color(0xFFF1FBF3); // cards and surfaces with a touch of green
 
     // Dark-mode subtle green tint for header/nav (dimmed).
@@ -204,20 +209,20 @@ class _PourRiceAppState extends State<PourRiceApp> {
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: isLoggedIn
           ? MainShell(
-              isDarkMode: isDarkMode,
-              isTraditionalChinese: isTraditionalChinese,
-              isLoggedIn: isLoggedIn,
-              onThemeChanged: _toggleTheme,
-              onLanguageChanged: _toggleLanguage,
-              onLoginStateChanged: _onLoginStateChanged,
-            )
+        isDarkMode: isDarkMode,
+        isTraditionalChinese: isTraditionalChinese,
+        isLoggedIn: isLoggedIn,
+        onThemeChanged: _toggleTheme,
+        onLanguageChanged: _toggleLanguage,
+        onLoginStateChanged: _onLoginStateChanged,
+      )
           : LoginPage(
-              onLoginStateChanged: _onLoginStateChanged,
-              isTraditionalChinese: isTraditionalChinese,
-              isDarkMode: isDarkMode,
-              onThemeChanged: () => _toggleTheme(!isDarkMode),
-              onLanguageChanged: () => _toggleLanguage(!isTraditionalChinese),
-            ),
+        onLoginStateChanged: _onLoginStateChanged,
+        isTraditionalChinese: isTraditionalChinese,
+        isDarkMode: isDarkMode,
+        onThemeChanged: () => _toggleTheme(!isDarkMode),
+        onLanguageChanged: () => _toggleLanguage(!isTraditionalChinese),
+      ),
     );
   }
 }
@@ -258,12 +263,12 @@ class _MainShellState extends State<MainShell> {
       FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
       RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
       AccountPage(
-          isLoggedIn: widget.isLoggedIn,
-          onLoginStateChanged: widget.onLoginStateChanged,
-          isDarkMode: widget.isDarkMode,
-          isTraditionalChinese: widget.isTraditionalChinese,
-          onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
-          onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
+        isLoggedIn: widget.isLoggedIn,
+        onLoginStateChanged: widget.onLoginStateChanged,
+        isDarkMode: widget.isDarkMode,
+        isTraditionalChinese: widget.isTraditionalChinese,
+        onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
+        onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
       ),
     ];
   }
