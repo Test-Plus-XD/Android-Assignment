@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'models.dart';
 
 // Restaurant detail page.
@@ -23,7 +24,22 @@ class RestaurantDetailPage extends StatelessWidget {
           ListTile(leading: const Icon(Icons.location_on), title: Text(address)),
           ListTile(leading: const Icon(Icons.map), title: Text('${isTraditionalChinese ? '地區' : 'District'}: $district')),
           ListTile(leading: const Icon(Icons.label), title: Text('${isTraditionalChinese ? '關鍵字' : 'Keywords'}: $keywords')),
-          ListTile(leading: const Icon(Icons.gps_fixed), title: Text('${isTraditionalChinese ? '緯度' : 'Latitude'}: ${restaurant.latitude}'), subtitle: Text('${isTraditionalChinese ? '經度' : 'Longitude'}: ${restaurant.longitude}')),
+          SizedBox(
+            height: 300,
+            child: GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: LatLng(restaurant.latitude, restaurant.longitude),
+                zoom: 15,
+              ),
+              markers: {
+                Marker(
+                  markerId: MarkerId(restaurant.nameEn),
+                  position: LatLng(restaurant.latitude, restaurant.longitude),
+                  infoWindow: InfoWindow(title: displayName),
+                ),
+              },
+            ),
+          ),
         ],
       ),
     );
