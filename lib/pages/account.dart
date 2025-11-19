@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'models.dart';
+import '../models.dart';
 
 class AccountPage extends StatefulWidget {
   final bool isLoggedIn;

@@ -283,7 +283,7 @@ class NotificationService with ChangeNotifier {
       );
 
       // Convert notification time to timezone-aware format
-      final scheduledDate = tz.TzDateTime.from(notificationTime, tz.local);
+      final scheduledDate = tz.TimeZone.from(notificationTime, tz.local);
 
       // Schedule the notification
       await _notificationsPlugin.zonedSchedule(

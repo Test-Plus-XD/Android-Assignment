@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'models.dart';
 import 'restaurant_detail.dart';
+import '../models.dart';
 
 // Restaurants page with client-side search, district filter and Veggie/Vegan toggles.
 // District list is hardcoded for fastest client performance.

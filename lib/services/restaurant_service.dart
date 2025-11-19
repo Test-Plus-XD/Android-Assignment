@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../config/app_config.dart';
+import '../config.dart';
 
 /// Restaurant Model
 /// 
