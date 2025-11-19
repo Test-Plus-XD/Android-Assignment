@@ -1,38 +1,168 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'home.dart';
-import 'restaurants.dart';
-import 'drawer.dart';
-import 'account.dart';
-import 'login.dart';
+import 'firebase_options.dart';
+import 'services/auth_service.dart';
+import 'services/user_service.dart';
+import 'services/restaurant_service.dart';
+import 'pages/home.dart';
+import 'pages/restaurants.dart';
+import 'pages/account.dart';
+import 'pages/login.dart';
+import 'widgets/drawer.dart';
 
-// Keys for persisted preferences.
+/// Understanding the Architecture
+/// 
+/// This Flutter app follows a layered architecture similar to your Angular app:
+/// 
+/// 1. Services Layer (Business Logic):
+///    - AuthService: Handles authentication (login/logout/register)
+///    - UserService: Manages user profiles via your Node.js API
+///    - RestaurantService: Searches restaurants via Algolia
+/// 
+/// 2. State Management (Provider):
+///    - Services extend ChangeNotifier (like RxJS BehaviorSubjects in Angular)
+///    - Widgets "listen" to services and rebuild when data changes
+///    - This is Flutter's equivalent to Angular's reactive programming
+/// 
+/// 3. UI Layer (Widgets):
+///    - Pages display data from services
+///    - User interactions trigger service methods
+///    - Services notify widgets of state changes
+/// 
+/// Why Provider?
+/// - It's the official recommended state management solution
+/// - Simple to understand and use
+/// - Automatically handles widget rebuilding
+/// - Similar mental model to Angular's dependency injection
+
+// Keys for persisted preferences (same as before)
 const String prefKeyIsDark = 'pourrice_is_dark';
 const String prefKeyIsTc = 'pourrice_is_tc';
-const String prefKeyIsLoggedIn = 'pourrice_is_logged_in';
 
-// Entry point for the app.
+/// Main Entry Point
+/// 
+/// This is where everything begins. Notice the async - we need to initialize
+/// Firebase and notifications before the app starts, so we await those operations.
+/// 
+/// Initialization order matters:
+/// 1. Flutter bindings (required for async work before runApp)
+/// 2. Firebase (needed for authentication)
+/// 3. Notifications (sets up channels and timezone)
+/// 4. Then we can start the app
 void main() async {
+  // Ensures Flutter is ready before we do async work
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const PourRiceApp());
+  
+  // Initialize Firebase
+  // This connects your app to Firebase services (Auth, Firestore, etc.)
+  // It's like calling firebase.initializeApp() in your Angular app
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  // Initialize NotificationService
+  // This sets up notification channels and timezone data
+  // We do it here once, before the app starts, so notifications work immediately
+  final notificationService = NotificationService();
+  await notificationService.initialise();
+  
+  // Start the app, passing notification service instance
+  runApp(PourRiceApp(notificationService: notificationService));
 }
 
-// Root widget that manages theme and language and persists them.
-class PourRiceApp extends StatefulWidget {
-  const PourRiceApp({super.key});
+/// Root App Widget
+/// 
+/// This widget sets up the Provider architecture and initializes services.
+/// Think of it as the "root module" in Angular.
+/// 
+/// Now includes NotificationService and LocationService for native Android features.
+class PourRiceApp extends StatelessWidget {
+  final NotificationService notificationService;
+  
+  const PourRiceApp({
+    required this.notificationService,
+    super.key,
+  });
 
   @override
-  State<PourRiceApp> createState() => _PourRiceAppState();
+  Widget build(BuildContext context) {
+    /// MultiProvider Setup
+    /// 
+    /// MultiProvider is like Angular's dependency injection container.
+    /// It creates service instances and makes them available to all child widgets.
+    /// 
+    /// Order matters here:
+    /// 1. NotificationService comes first (pre-initialised, passed from main)
+    /// 2. LocationService is independent (no dependencies)
+    /// 3. AuthService is independent (no dependencies)
+    /// 4. UserService depends on AuthService (needs auth tokens)
+    /// 5. RestaurantService is independent
+    /// 6. BookingService depends on AuthService (needs auth tokens)
+    /// 
+    /// This is the same pattern as your Angular services with inject()
+    return MultiProvider(
+      providers: [
+        // NotificationService - already initialised in main()
+        ChangeNotifierProvider.value(
+          value: notificationService,
+        ),
+        
+        // LocationService - handles GPS and distance calculations
+        ChangeNotifierProvider(
+          create: (_) => LocationService(),
+        ),
+        
+        // AuthService - handles authentication
+        ChangeNotifierProvider(
+          create: (_) => AuthService(),
+        ),
+        
+        // UserService - needs AuthService for tokens
+        ChangeNotifierProxyProvider<AuthService, UserService>(
+          create: (context) => UserService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? UserService(authService),
+        ),
+        
+        // RestaurantService - independent
+        ChangeNotifierProvider(
+          create: (_) => RestaurantService(),
+        ),
+        
+        // BookingService - needs AuthService for tokens
+        ChangeNotifierProxyProvider<AuthService, BookingService>(
+          create: (context) => BookingService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? BookingService(authService),
+        ),
+      ],
+      child: const AppRoot(),
+    );
+  }
 }
 
-class _PourRiceAppState extends State<PourRiceApp> {
-  // Theme state; non-nullable.
+/// App Root Widget
+/// 
+/// This widget manages theme, language, and navigation.
+/// It's similar to your Angular AppComponent.
+class AppRoot extends StatefulWidget {
+  const AppRoot({super.key});
+
+  @override
+  State<AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<AppRoot> {
+  // Theme and language state (same as before)
   bool isDarkMode = false;
-  // Language state; false => English, true => Traditional Chinese.
   bool isTraditionalChinese = false;
-  // Indicate preferences loaded.
   bool prefsLoaded = false;
-  bool isLoggedIn = false;
 
   @override
   void initState() {
@@ -40,209 +170,221 @@ class _PourRiceAppState extends State<PourRiceApp> {
     _loadPreferences();
   }
 
-  // Load persisted preferences asynchronously.
+  /// Load User Preferences
+  /// 
+  /// Loads theme and language preferences from SharedPreferences.
+  /// This is like localStorage in your Angular app.
   Future<void> _loadPreferences() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final bool loadedDark = prefs.getBool(prefKeyIsDark) ?? false;
-    final bool loadedTc = prefs.getBool(prefKeyIsTc) ?? false;
-    final bool loadedLoggedIn = prefs.getBool(prefKeyIsLoggedIn) ?? false;
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
-      isDarkMode = loadedDark;
-      isTraditionalChinese = loadedTc;
-      isLoggedIn = loadedLoggedIn;
+      isDarkMode = prefs.getBool(prefKeyIsDark) ?? false;
+      isTraditionalChinese = prefs.getBool(prefKeyIsTc) ?? false;
       prefsLoaded = true;
     });
   }
-  // Persist login state changes.
-  Future<void> _onLoginStateChanged(bool loggedIn) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(prefKeyIsLoggedIn, loggedIn);
-    setState(() {
-      isLoggedIn = loggedIn;
-    });
-  }
 
-  // Persist theme selection and update state.
+  /// Toggle Theme
+  /// 
+  /// Persists theme preference and updates UI
   Future<void> _toggleTheme(bool value) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(prefKeyIsDark, value);
-    setState(() {
-      isDarkMode = value;
-    });
+    setState(() => isDarkMode = value);
   }
 
-  // Persist language selection and update state.
+  /// Toggle Language
+  /// 
+  /// Persists language preference and updates UI
   Future<void> _toggleLanguage(bool value) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(prefKeyIsTc, value);
-    setState(() {
-      isTraditionalChinese = value;
-    });
+    setState(() => isTraditionalChinese = value);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Wait until preferences load to avoid flicker of default values.
+    // Wait for preferences to load
     if (!prefsLoaded) {
-      return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
+      return const MaterialApp(
+        home: Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
 
-    // ---------- Subtle green accents ----------
-    // Light-mode subtle green tint for header/nav (very soft).
-    const Color lightHeaderTint = Color(0xFFEFF7EF); // very light green background tint
-    const Color lightAccent = Color(0xFF2E7D32); // main green for icons and highlights
-    const Color lightInnerTint = Color(0xFFF1FBF3); // cards and surfaces with a touch of green
+    /// Theme Configuration
+    /// 
+    /// Updated with a professional vegan green aesthetic.
+    /// Key color theory concepts:
+    /// - Green evokes nature, health, and sustainability (perfect for vegan theme)
+    /// - We use various shades of green for depth and visual interest
+    /// - Light theme: Fresh, bright greens with white backgrounds
+    /// - Dark theme: Deep, rich greens with dark backgrounds
+    /// - All colors pass WCAG accessibility standards for contrast
+    
+    // Light theme green palette
+    const Color lightPrimary = Color(0xFF2E7D32);      // Forest green
+    const Color lightSecondary = Color(0xFF66BB6A);    // Light green
+    const Color lightSurface = Color(0xFFF1F8E9);      // Very light green tint
+    const Color lightBackground = Colors.white;         // Pure white for main content
+    
+    // Dark theme green palette
+    const Color darkPrimary = Color(0xFF66BB6A);       // Light green (primary in dark)
+    const Color darkSecondary = Color(0xFF81C784);     // Lighter green
+    const Color darkSurface = Color(0xFF1B5E20);       // Dark forest green
+    const Color darkBackground = Color(0xFF0D1F0E);    // Very dark green-black
 
-    // Dark-mode subtle green tint for header/nav (dimmed).
-    const Color darkHeaderTint = Color(0xFF083016); // dim green header in dark mode
-    const Color darkAccent = Color(0xFF66BB6A); // lighter green accent in dark mode
-    const Color darkInnerTint = Color(0xFF0C2416); // dark card surface with green hint
-
-    // ---------- Light theme (Material 3) with explicit colours ----------
     final ThemeData lightTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      // Set scaffold background to pure white for the app body.
-      scaffoldBackgroundColor: Colors.white,
-      // Ensure general canvas/drawers/dialogs are white as well.
-      canvasColor: Colors.white,
+      scaffoldBackgroundColor: lightBackground,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: lightAccent,
+        seedColor: lightPrimary,
         brightness: Brightness.light,
       ).copyWith(
-        primary: lightAccent,
-        secondary: lightAccent,
-        // Keep surface (cards) as your faint green tint.
-        surface: lightInnerTint,
-        // Force background slot to pure white so widgets that use colorScheme.background are white.
-        background: Colors.white,
+        primary: lightPrimary,
+        secondary: lightSecondary,
+        surface: lightSurface,
+        background: lightBackground,
         onPrimary: Colors.white,
         onSurface: Colors.black87,
-        onBackground: Colors.black87,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: lightHeaderTint,
-        foregroundColor: lightAccent,
+        backgroundColor: lightSurface,
+        foregroundColor: lightPrimary,
         elevation: 1,
-        centerTitle: false,
       ),
-      bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: lightHeaderTint,
-        selectedItemColor: lightAccent,
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: lightSurface,
+        selectedItemColor: lightPrimary,
         unselectedItemColor: Colors.black54,
-        showUnselectedLabels: true,
       ),
-      // Explicitly set drawer background so it doesn't inherit a non-white canvas.
-      drawerTheme: const DrawerThemeData(backgroundColor: Colors.white),
-      cardTheme: const CardThemeData(
-        color: lightInnerTint,
+      cardTheme: CardTheme(
+        color: lightSurface,
         elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-        margin: EdgeInsets.zero,
-      ),
-      iconTheme: const IconThemeData(color: lightAccent),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: lightAccent,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
-      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: lightAccent)),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(backgroundColor: lightAccent), dialogTheme: DialogThemeData(backgroundColor: Colors.white),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: lightPrimary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
     );
 
-    // ---------- Dark theme (Material 3) with explicit colours ----------
     final ThemeData darkTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black87,
-      colorScheme: ColorScheme.fromSeed(seedColor: darkAccent, brightness: Brightness.dark).copyWith(
-        primary: darkAccent,
-        secondary: darkAccent,
-        surface: darkInnerTint,
-        onPrimary: Colors.white,
+      scaffoldBackgroundColor: darkBackground,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: darkPrimary,
+        brightness: Brightness.dark,
+      ).copyWith(
+        primary: darkPrimary,
+        secondary: darkSecondary,
+        surface: darkSurface,
+        background: darkBackground,
+        onPrimary: Colors.black87,
         onSurface: Colors.white70,
       ),
-      // AppBar uses dim green header tint and white text/icons.
       appBarTheme: AppBarTheme(
-        backgroundColor: darkHeaderTint,
+        backgroundColor: darkSurface,
         foregroundColor: Colors.white,
         elevation: 1,
-        centerTitle: false,
       ),
-      // Bottom navigation uses dim header tint and light icons.
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: darkHeaderTint,
+        backgroundColor: darkSurface,
         selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white70,
-        showUnselectedLabels: true,
+        unselectedItemColor: Colors.white60,
       ),
-      // Revert drawer styling to default dark surface.
-      drawerTheme: const DrawerThemeData(),
-      // Card surface uses a dark green-tinted surface, not just outline.
-      cardTheme: const CardThemeData(
-        color: darkInnerTint,
-        elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-        margin: EdgeInsets.zero,
-      ),
-      // Icons use the dark accent tint where appropriate.
-      iconTheme: const IconThemeData(color: darkAccent),
-      // Buttons in dark mode use slightly deeper green.
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: darkAccent,
-          foregroundColor: Colors.black87,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      cardTheme: CardTheme(
+        color: darkSurface,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
-      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: darkAccent)),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(backgroundColor: darkAccent),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: darkPrimary,
+          foregroundColor: Colors.black87,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
     );
 
+    /// Authentication Flow
+    /// 
+    /// Consumer widget listens to AuthService.
+    /// When auth state changes, it rebuilds and shows appropriate screen.
+    /// 
+    /// Flow:
+    /// 1. App starts, AuthService checks if user is logged in
+    /// 2. If logged in -> show MainShell (home screen)
+    /// 3. If not logged in -> show LoginPage
+    /// 4. After login, AuthService notifies listeners, UI rebuilds
     return MaterialApp(
       title: 'PourRice',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: isLoggedIn
-          ? MainShell(
-        isDarkMode: isDarkMode,
-        isTraditionalChinese: isTraditionalChinese,
-        isLoggedIn: isLoggedIn,
-        onThemeChanged: _toggleTheme,
-        onLanguageChanged: _toggleLanguage,
-        onLoginStateChanged: _onLoginStateChanged,
-      )
-          : LoginPage(
-        onLoginStateChanged: _onLoginStateChanged,
-        isTraditionalChinese: isTraditionalChinese,
-        isDarkMode: isDarkMode,
-        onThemeChanged: () => _toggleTheme(!isDarkMode),
-        onLanguageChanged: () => _toggleLanguage(!isTraditionalChinese),
+      
+      // Consumer listens to AuthService and rebuilds on changes
+      home: Consumer<AuthService>(
+        builder: (context, authService, _) {
+          // Show loading while checking auth state
+          if (authService.isLoading) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          
+          // User is logged in -> show main app
+          if (authService.isLoggedIn) {
+            return MainShell(
+              isDarkMode: isDarkMode,
+              isTraditionalChinese: isTraditionalChinese,
+              onThemeChanged: _toggleTheme,
+              onLanguageChanged: _toggleLanguage,
+            );
+          }
+          
+          // User not logged in -> show login page
+          return LoginPage(
+            isTraditionalChinese: isTraditionalChinese,
+            isDarkMode: isDarkMode,
+            onThemeChanged: () => _toggleTheme(!isDarkMode),
+            onLanguageChanged: () => _toggleLanguage(!isTraditionalChinese),
+          );
+        },
       ),
     );
   }
 }
 
-// MainShell manages bottom navigation and provides drawer with toggles.
+/// Main Shell
+/// 
+/// The main navigation structure of the app.
+/// Contains bottom navigation and drawer.
 class MainShell extends StatefulWidget {
   final bool isDarkMode;
   final bool isTraditionalChinese;
-  final bool isLoggedIn;
   final ValueChanged<bool> onThemeChanged;
   final ValueChanged<bool> onLanguageChanged;
-  final ValueChanged<bool> onLoginStateChanged;
 
   const MainShell({
     required this.isDarkMode,
     required this.isTraditionalChinese,
     required this.onThemeChanged,
     required this.onLanguageChanged,
-    required this.isLoggedIn,
-    required this.onLoginStateChanged,
     super.key,
   });
 
@@ -251,9 +393,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  // Current index for bottom navigation.
   int currentIndex = 0;
-  // Pages for bottom navigation; index order matches bottom nav items.
   late List<Widget> pages;
 
   @override
@@ -262,78 +402,70 @@ class _MainShellState extends State<MainShell> {
     pages = [
       FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
       RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
-      AccountPage(
-        isLoggedIn: widget.isLoggedIn,
-        onLoginStateChanged: widget.onLoginStateChanged,
-        isDarkMode: widget.isDarkMode,
-        isTraditionalChinese: widget.isTraditionalChinese,
-        onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
-        onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
-      ),
+      AccountPage(isTraditionalChinese: widget.isTraditionalChinese),
     ];
   }
 
   @override
   void didUpdateWidget(covariant MainShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isTraditionalChinese != widget.isTraditionalChinese ||
-        oldWidget.isDarkMode != widget.isDarkMode) {
+    if (oldWidget.isTraditionalChinese != widget.isTraditionalChinese) {
       setState(() {
         pages = [
           FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
           RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
-          AccountPage(
-            isLoggedIn: widget.isLoggedIn,
-            onLoginStateChanged: widget.onLoginStateChanged,
-            isDarkMode: widget.isDarkMode,
-            isTraditionalChinese: widget.isTraditionalChinese,
-            onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
-            onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
-          ),
+          AccountPage(isTraditionalChinese: widget.isTraditionalChinese),
         ];
       });
     }
   }
+
   void _onSelectItem(int index) {
-    setState(() {
-      currentIndex = index;
-    });
-    Navigator.pop(context); // Close the drawer
+    setState(() => currentIndex = index);
+    Navigator.pop(context);
   }
 
-  // Switch bottom nav index.
   void _onNavTapped(int index) {
-    setState(() {
-      currentIndex = index;
-    });
+    setState(() => currentIndex = index);
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<String> pageTitles = widget.isTraditionalChinese
+    final pageTitles = widget.isTraditionalChinese
         ? ['主頁', '餐廳列表', '我的帳戶']
         : ['Home', 'Restaurants', 'My Account'];
 
     return Scaffold(
-      appBar: AppBar(title: Text(pageTitles[currentIndex])),
+      appBar: AppBar(
+        title: Text(pageTitles[currentIndex]),
+      ),
       drawer: AppNavDrawer(
         isTraditionalChinese: widget.isTraditionalChinese,
         isDarkMode: widget.isDarkMode,
         onThemeChanged: widget.onThemeChanged,
         onLanguageChanged: widget.onLanguageChanged,
-        onLoginStateChanged: widget.onLoginStateChanged,
-        isLoggedIn: widget.isLoggedIn,
         onSelectItem: _onSelectItem,
       ),
-      body: IndexedStack(index: currentIndex, children: pages),
+      body: IndexedStack(
+        index: currentIndex,
+        children: pages,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: _onNavTapped,
-        type: BottomNavigationBarType.fixed,
         items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.home), label: widget.isTraditionalChinese ? '主頁' : 'Home'),
-          BottomNavigationBarItem(icon: const Icon(Icons.restaurant), label: widget.isTraditionalChinese ? '餐廳' : 'Restaurants'),
-          BottomNavigationBarItem(icon: const Icon(Icons.account_circle), label: widget.isTraditionalChinese ? '帳戶' : 'Account'),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.home),
+            label: widget.isTraditionalChinese ? '主頁' : 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.restaurant),
+            label: widget.isTraditionalChinese ? '餐廳' : 'Restaurants',
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.account_circle),
+            label: widget.isTraditionalChinese ? '帳戶' : 'Account',
+          ),
         ],
       ),
     );

@@ -33,7 +33,38 @@ dependencies:
   auto_updater: ^1.0.0
   shared_preferences: ^2.5.3
   carousel_slider: ^5.1.1
+  # Google/Firebase packages for authentication and database
+  firebase_core: ^3.8.1
+  firebase_auth: ^5.3.3
+  cloud_firestore: ^5.5.2
+  google_sign_in: ^6.2.2
   google_maps_flutter: ^2.13.1
+  # HTTP client for REST API calls
+  http: ^1.2.2
+  # State management
+  provider: ^6.1.2
+  # Location services for GPS functionality
+  geolocator: ^13.0.2
+  permission_handler: ^11.3.1
+
+  # Tier 1: Essential native Android features (currently implemented)
+  flutter_local_notifications: ^18.0.1  # Booking reminder notifications
+  timezone: ^0.9.4                      # Required for scheduling notifications
+  share_plus: ^10.1.2                   # Native Android share sheet
+  url_launcher: ^6.3.1                  # Open URLs, phone numbers, maps
+  cached_network_image: ^3.4.1          # Image caching for better performance
+
+  # Tier 2: Polish and user experience enhancements (ready for future implementation)
+  # shimmer: ^3.0.0                     # Loading skeleton animations
+  # connectivity_plus: ^6.1.1           # Network status detection
+
+  # Tier 3: Advanced features (ready for future implementation)
+  # flutter_animate: ^4.5.0             # Smooth UI animations
+  # hive: ^2.2.3                        # Fast local database
+  # hive_flutter: ^1.1.0                # Hive Flutter integration
+
+  # Stripe payment integration (for final assignment stage)
+  # flutter_stripe: ^11.2.0             # Stripe payment processing
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -60,9 +91,6 @@ flutter:
     - assets/sample_users.json
     - assets/sample_restaurants.json
     - assets/sample_reviews.json
-    - assets/images/sample_1.png
-    - assets/images/sample_2.png
-    - assets/images/sample_3.png
     - assets/images/Placeholder.png
     - assets/images/Google.png
     - assets/images/App-Light.png
