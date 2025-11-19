@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "937491674619",
+    "project_id": "cross-platform-assignmen-b97cc",
+    "storage_bucket": "cross-platform-assignmen-b97cc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:937491674619:android:3ed2cc7c79ba35fd3a475e",
+        "android_client_info": {
+          "package_name": "com.example.android_assignment"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "937491674619-r1e5di42mi8tdgkqfhe2fubdms7jks9f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyButlKdDpD6u6XAmkCiafU8Litar5FLK1Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "937491674619-r1e5di42mi8tdgkqfhe2fubdms7jks9f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
