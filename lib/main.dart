@@ -61,9 +61,11 @@ void main() async {
   // Initialize Firebase
   // This connects your app to Firebase services (Auth, Firestore, etc.)
   // It's like calling firebase.initializeApp() in your Angular app
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
   
   // Initialize NotificationService
   // This sets up notification channels and timezone data
