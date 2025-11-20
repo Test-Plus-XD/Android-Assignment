@@ -13,7 +13,7 @@ import 'pages/restaurants.dart';
 import 'pages/account.dart';
 import 'pages/login.dart';
 import 'widgets/drawer.dart';
-import 'firebase.dart';
+import 'firebase_options.dart';
 
 /// Understanding the Architecture
 /// 
@@ -57,21 +57,35 @@ const String prefKeyIsTc = 'pourrice_is_tc';
 void main() async {
   // Ensures Flutter is ready before we do async work
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Firebase
-  // This connects your app to Firebase services (Auth, Firestore, etc.)
-  // It's like calling firebase.initializeApp() in your Angular app
-  if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+
+  // Initialize Firebase with proper error handling
+  try {
+    // Check if Firebase is already initialized
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      print('Firebase initialized successfully');
+    } else {
+      print('Firebase already initialized, using existing instance');
+    }
+  } catch (e) {
+    // If initialisation fails, log the error but don't crash
+    print('Firebase initialization error: $e');
+    // In production, show an error screen here
   }
   
-  // Initialize NotificationService
+  // Initialise NotificationService with error handling
   // This sets up notification channels and timezone data
   // We do it here once, before the app starts, so notifications work immediately
   final notificationService = NotificationService();
-  await notificationService.initialise();
+  try {
+    await notificationService.initialise();
+    print('Notification service initialized successfully');
+  } catch (e) {
+    print('Notification service initialization error: $e');
+    // App can still run without notifications, so we continue
+  }
   
   // Start the app, passing notification service instance
   runApp(PourRiceApp(notificationService: notificationService));

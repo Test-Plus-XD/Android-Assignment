@@ -3,6 +3,15 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart';
 
+/// This function is designed to be run in a separate isolate to avoid blocking the UI thread.
+/// It initializes the timezone database, which can be a time-consuming operation.
+void _initializeTimezones(void _) {
+  // Initialize the timezone database.
+  initializeTimeZones();
+  // Set the local timezone for the application.
+  tz.setLocalLocation(tz.getLocation('Asia/Hong_Kong'));
+}
+
 /// Notification Service - Bilingual Local Notifications
 /// 
 /// This service manages local notifications with full Traditional Chinese and
@@ -64,19 +73,17 @@ class NotificationService with ChangeNotifier {
   Future<void> initialise() async {
     try {
       if (_isInitialised) {
-        // Already initialised, don't do it again
+        if (kDebugMode) {
+          print('NotificationService: Already initialised, skipping');
+        }
         return;
       }
+      if (kDebugMode) print('NotificationService: Starting initialization');
 
-      // Step 1: Initialise timezone database
-      // This is necessary for scheduling notifications at specific times.
-      // Without this, we can't convert "2024-01-15 18:00 Hong Kong time"
-      // into a format Android understands.
-      initializeTimeZones();
-      
-      // Set Hong Kong as default timezone
-      // Change this if your app targets different regions
-      tz.setLocalLocation(tz.getLocation('Asia/Hong_Kong'));
+      // Step 1: Initialise timezone database in a background isolate
+      // This is a heavy operation and can cause the app to hang on startup.
+      // We use Flutter's `compute` function to run it in a separate isolate.
+      await compute(_initializeTimezones, null);
 
       // Step 2: Configure Android-specific settings
       // The AndroidInitializationSettings takes an icon name.
@@ -415,78 +422,3 @@ class NotificationService with ChangeNotifier {
     notifyListeners();
   }
 }
-
-/*
- * API Integration Functions (for future implementation)
- * 
- * These functions would connect to your Node.js API to sync notification
- * preferences and booking reminders across devices. Currently commented out
- * because local notifications work fine without server sync.
- * 
- * Uncomment and implement when you need:
- * - Multiple devices per user (sync notification settings)
- * - Admin panel to send notifications to all users
- * - Analytics on notification engagement
- */
-
-/*
-/// Save notification preferences to API
-Future<void> saveNotificationPreferencesToAPI(String userId, bool enabled) async {
-  final headers = await _getAuthHeaders();
-  final response = await http.put(
-    Uri.parse('${AppConfig.apiBaseUrl}/API/Users/$userId/notifications'),
-    headers: headers,
-    body: jsonEncode({'notificationsEnabled': enabled}),
-  );
-  
-  if (response.statusCode != 200) {
-    throw Exception('Failed to save notification preferences');
-  }
-}
-
-/// Load notification preferences from API
-Future<bool> loadNotificationPreferencesFromAPI(String userId) async {
-  final headers = await _getAuthHeaders();
-  final response = await http.get(
-    Uri.parse('${AppConfig.apiBaseUrl}/API/Users/$userId/notifications'),
-    headers: headers,
-  );
-  
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
-    return data['notificationsEnabled'] ?? false;
-  }
-  
-  return false;
-}
-
-/// Sync scheduled notifications with server
-/// (useful if user has multiple devices)
-Future<void> syncNotificationsWithServer(String userId) async {
-  final headers = await _getAuthHeaders();
-  final response = await http.get(
-    Uri.parse('${AppConfig.apiBaseUrl}/API/Bookings/$userId/notifications'),
-    headers: headers,
-  );
-  
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
-    final serverNotifications = data['notifications'] as List;
-    
-    // Cancel all local notifications
-    await cancelAllNotifications();
-    
-    // Re-schedule based on server data
-    for (var notification in serverNotifications) {
-      await scheduleBookingReminder(
-        id: notification['id'],
-        restaurantNameEn: notification['restaurantNameEn'],
-        restaurantNameTc: notification['restaurantNameTc'],
-        bookingDateTime: DateTime.parse(notification['bookingDateTime']),
-        notificationTime: DateTime.parse(notification['notificationTime']),
-        isTraditionalChinese: notification['language'] == 'TC',
-      );
-    }
-  }
-}
-*/
