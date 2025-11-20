@@ -179,9 +179,8 @@ class RestaurantService with ChangeNotifier {
     int hitsPerPage = 20,
   }) async {
     // Schedule the work to run after the current build cycle is complete.
-    await Future.microtask(() {
-      _setLoading(true);
-    });
+    _isLoading = true;
+    notifyListeners();
       
       // Build the filters string
       // Algolia uses a SQL-like syntax for filters
@@ -202,7 +201,12 @@ class RestaurantService with ChangeNotifier {
       final url = Uri.parse(
         'https://$_algoliaAppId-dsn.algolia.net/1/indexes/$_algoliaIndexName/query'
       );
-      
+      if (kDebugMode) {
+        print('RestaurantService: Searching Algolia...');
+        print('URL: $url');
+        print('Params: $searchParams');
+      }
+
       final response = await http.post(
         url,
         headers: {
@@ -265,8 +269,14 @@ class RestaurantService with ChangeNotifier {
   /// Fetches a single restaurant from your Node.js API.
   /// Useful for detail pages where you need all the data.
   Future<Restaurant?> getRestaurantById(String id) async {
+    _setLoading(true);
+    notifyListeners();
+
     try {
-      _setLoading(true);
+      if (kDebugMode) {
+        print('RestaurantService: Fetching restaurant $id from API');
+        print('URL: $_apiUrl/$id');
+      }
       
       final response = await http.get(
         Uri.parse('$_apiUrl/$id'),
@@ -299,8 +309,14 @@ class RestaurantService with ChangeNotifier {
   /// Fetches all restaurants from your Node.js API.
   /// Only use this for small datasets - for searching, use Algolia instead.
   Future<List<Restaurant>> getAllRestaurants() async {
+    _setLoading(true);
+    notifyListeners();
+
     try {
-      _setLoading(true);
+      if (kDebugMode) {
+        print('RestaurantService: Fetching all restaurants from API');
+        print('URL: $_apiUrl');
+      }
       
       final response = await http.get(
         Uri.parse(_apiUrl),
