@@ -29,7 +29,7 @@ class AppNavDrawer extends StatelessWidget {
     final String loginLabel = isTraditionalChinese ? '登入 / 註冊' : 'Login / Register';
     final String logoutLabel = isTraditionalChinese ? '登出' : 'Logout';
     final String themeLabel = isTraditionalChinese ? '深色模式' : 'Dark theme';
-    final String languageLabel = isTraditionalChinese ? 'EN|TC' : '英|繁';
+    final String languageLabel = isTraditionalChinese ? '🇬🇧|🇭🇰' : '英|繁';
 
     // Choose the app icon image to display in the drawer header.
     final String appIconPath = isDarkMode ? 'assets/images/App-Dark.png' : 'assets/images/App-Light.png';

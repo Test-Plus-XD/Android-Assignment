@@ -51,8 +51,7 @@ class AppConfig {
   /// Algolia Configuration
   /// 
   /// These settings come from your Algolia dashboard.
-  /// They're the same across all environments because Algolia
-  /// is already a hosted service.
+  /// They're the same across all environments because Algolia is already a hosted service.
   static const String algoliaAppId = 'V9HMGL1VIZ';
   static const String algoliaSearchKey = '563754aa2e02b4838af055fbf37f09b5';
   static const String algoliaIndexName = 'Restaurants';
