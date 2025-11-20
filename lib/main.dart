@@ -182,6 +182,7 @@ class _AppRootState extends State<AppRoot> {
   bool isDarkMode = false;
   bool isTraditionalChinese = false;
   bool prefsLoaded = false;
+  bool _isSkipped = false;
 
   @override
   void initState() {
@@ -218,6 +219,12 @@ class _AppRootState extends State<AppRoot> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(prefKeyIsTc, value);
     setState(() => isTraditionalChinese = value);
+  }
+  
+  void _skipLogin() {
+    setState(() {
+      _isSkipped = true;
+    });
   }
 
   @override
@@ -264,7 +271,6 @@ class _AppRootState extends State<AppRoot> {
         primary: lightPrimary,
         secondary: lightSecondary,
         surface: lightSurface,
-        background: lightBackground,
         onPrimary: Colors.white,
         onSurface: Colors.black87,
       ),
@@ -308,7 +314,6 @@ class _AppRootState extends State<AppRoot> {
         primary: darkPrimary,
         secondary: darkSecondary,
         surface: darkSurface,
-        background: darkBackground,
         onPrimary: Colors.black87,
         onSurface: Colors.white70,
       ),
@@ -369,7 +374,7 @@ class _AppRootState extends State<AppRoot> {
           }
           
           // User is logged in -> show main app
-          if (authService.isLoggedIn) {
+          if (authService.isLoggedIn || _isSkipped) {
             return MainShell(
               isDarkMode: isDarkMode,
               isTraditionalChinese: isTraditionalChinese,
@@ -384,6 +389,7 @@ class _AppRootState extends State<AppRoot> {
             isDarkMode: isDarkMode,
             onThemeChanged: () => _toggleTheme(!isDarkMode),
             onLanguageChanged: () => _toggleLanguage(!isTraditionalChinese),
+            onSkip: _skipLogin,
           );
         },
       ),
@@ -432,11 +438,11 @@ class _MainShellState extends State<MainShell> {
         : ['Home', 'Restaurants', 'My Account'];
 
     final authService = context.read<AuthService>();
-    final onLoginStateChanged = (loggedIn) {
+    void onLoginStateChanged(loggedIn) {
       if (!loggedIn) {
         authService.logout();
       }
-    };
+    }
 
     final pages = [
       FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
@@ -446,7 +452,7 @@ class _MainShellState extends State<MainShell> {
         isTraditionalChinese: widget.isTraditionalChinese,
         onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
         onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
-        isLoggedIn: true,
+        isLoggedIn: authService.isLoggedIn,
         onLoginStateChanged: onLoginStateChanged,
       ),
     ];
@@ -461,7 +467,7 @@ class _MainShellState extends State<MainShell> {
         onThemeChanged: widget.onThemeChanged,
         onLanguageChanged: widget.onLanguageChanged,
         onSelectItem: _onSelectItem,
-        isLoggedIn: true,
+        isLoggedIn: authService.isLoggedIn,
         onLoginStateChanged: onLoginStateChanged,
       ),
       body: IndexedStack(

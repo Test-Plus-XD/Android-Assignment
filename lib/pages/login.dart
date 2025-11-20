@@ -22,12 +22,14 @@ class LoginPage extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback onThemeChanged;
   final VoidCallback onLanguageChanged;
+  final VoidCallback onSkip;
 
   const LoginPage({
     required this.isTraditionalChinese,
     required this.isDarkMode,
     required this.onThemeChanged,
     required this.onLanguageChanged,
+    required this.onSkip,
     super.key,
   });
 
@@ -210,7 +212,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Get localized strings
+    // Get localised strings
     final loginTitle = widget.isTraditionalChinese ? '登入' : 'Login';
     final registerTitle = widget.isTraditionalChinese ? '註冊' : 'Register';
     final emailLabel = widget.isTraditionalChinese ? '電郵' : 'Email';
@@ -222,6 +224,7 @@ class _LoginPageState extends State<LoginPage> {
     final switchToRegister = widget.isTraditionalChinese ? '建立新帳戶' : 'Create an account';
     final switchToLogin = widget.isTraditionalChinese ? '已經有帳戶？ 登入' : 'Have an account? Sign in';
     final forgotPassword = widget.isTraditionalChinese ? '忘記密碼？' : 'Forgot password?';
+    final skipForNow = widget.isTraditionalChinese ? '暫時略過' : 'Skip for now';
     
     return Scaffold(
       appBar: AppBar(
@@ -242,20 +245,12 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       const SizedBox(height: 40),
                       
-                      // App logo or title
-                      Icon(
-                        Icons.restaurant_menu,
-                        size: 80,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'PourRice',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        textAlign: TextAlign.center,
+                      // App logo
+                      Image.asset(
+                        widget.isDarkMode
+                            ? 'assets/images/App-Dark.png'
+                            : 'assets/images/App-Light.png',
+                        height: 100,
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -437,7 +432,15 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 16),
+
+                      // Skip for now button
+                      TextButton(
+                        onPressed: widget.onSkip,
+                        child: Text(skipForNow),
+                      ),
+
+                      const SizedBox(height: 24),
                       
                       // Theme and language toggles
                       Row(

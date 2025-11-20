@@ -178,12 +178,15 @@ class RestaurantService with ChangeNotifier {
     int page = 0,
     int hitsPerPage = 20,
   }) async {
-    try {
+    // Schedule the work to run after the current build cycle is complete.
+    await Future.microtask(() {
       _setLoading(true);
+    });
       
       // Build the filters string
       // Algolia uses a SQL-like syntax for filters
       // Format: field:value AND field:value
+    try {
       final filters = _buildFilters(districtEn, keywordEn);
       
       // Build the search request
@@ -227,15 +230,12 @@ class RestaurantService with ChangeNotifier {
         _errorMessage = 'Search failed: ${response.statusCode}';
         _searchResults = [];
       }
-      
-      _setLoading(false);
-      notifyListeners();
-      
     } catch (e) {
       _errorMessage = 'Search error: $e';
       _searchResults = [];
+    } finally {
+      // Ensure loading state is always turned off
       _setLoading(false);
-      notifyListeners();
     }
   }
 
