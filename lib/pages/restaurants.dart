@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import '../services/restaurant_service.dart';
 import 'restaurant_detail.dart';
-import '../models.dart';
 
 // Restaurants page with client-side search, district filter and Veggie/Vegan toggles.
 // District list is hardcoded for fastest client performance.
@@ -19,7 +17,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
   // Text controller for name search.
   final TextEditingController searchController = TextEditingController();
 
-  // Cached restaurants loaded from the large JSON file.
+  // Cached restaurants loaded from the service.
   late Future<List<Restaurant>> restaurantsFuture;
 
   // UI filter state.
@@ -54,22 +52,14 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
   @override
   void initState() {
     super.initState();
-    // Load the large data file containing all restaurants.
-    restaurantsFuture = loadAllRestaurants();
+    // Load restaurants from the service.
+    restaurantsFuture = RestaurantService().getAllRestaurants();
   }
 
   @override
   void dispose() {
     searchController.dispose();
     super.dispose();
-  }
-
-  // Load restaurants from the larger JSON file in assets.
-  Future<List<Restaurant>> loadAllRestaurants() async {
-    final String jsonString = await rootBundle.loadString('assets/vegetarian_restaurants_hk.json');
-    final Map<String, dynamic> jsonMap = json.decode(jsonString) as Map<String, dynamic>;
-    final List<dynamic> restaurantList = jsonMap['restaurants'] as List<dynamic>;
-    return restaurantList.map((e) => Restaurant.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   // Apply client-side filters to the loaded list.
@@ -79,8 +69,8 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     bool dietMatches(Restaurant restaurant) {
       if (!filterVeggie && !filterVegan) return true;
       final List<String> keywordLower = [
-        ...restaurant.keywordEn.map((k) => k.toLowerCase()),
-        ...restaurant.keywordTc.map((k) => k.toLowerCase())
+        ...(restaurant.keywordEn ?? []).map((k) => k.toLowerCase()),
+        ...(restaurant.keywordTc ?? []).map((k) => k.toLowerCase())
       ];
       final bool hasVeggie = keywordLower.any((k) => k.contains('veggie') || k.contains('齋'));
       final bool hasVegan = keywordLower.any((k) => k.contains('vegan') || k.contains('純素'));
@@ -99,10 +89,10 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
       if (!dietMatches(restaurant)) return false;
 
       if (query.isNotEmpty) {
-        final String nameEn = restaurant.nameEn.toLowerCase();
-        final String nameTc = restaurant.nameTc.toLowerCase();
-        final String addressEn = restaurant.addressEn.toLowerCase();
-        final String addressTc = restaurant.addressTc.toLowerCase();
+        final String nameEn = (restaurant.nameEn ?? '').toLowerCase();
+        final String nameTc = (restaurant.nameTc ?? '').toLowerCase();
+        final String addressEn = (restaurant.addressEn ?? '').toLowerCase();
+        final String addressTc = (restaurant.addressTc ?? '').toLowerCase();
         return nameEn.contains(query) || nameTc.contains(query) || addressEn.contains(query) || addressTc.contains(query);
       }
       return true;
@@ -202,7 +192,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
             final List<Restaurant> allRestaurants = snapshot.data!;
             final List<Restaurant> filtered = applyFilters(allRestaurants);
 
-            // **REFACTORED: Use CustomScrollView for advanced scrolling effects**
+            // Use CustomScrollView for advanced scrolling effects
             return CustomScrollView(
               slivers: [
                 // The AppBar that will hide and show on scroll
@@ -249,9 +239,9 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                   delegate: SliverChildBuilderDelegate(
                         (context, index) {
                       final restaurant = filtered[index];
-                      final String displayName = widget.isTraditionalChinese ? restaurant.nameTc : restaurant.nameEn;
-                      final String displayAddress = widget.isTraditionalChinese ? restaurant.addressTc : restaurant.addressEn;
-                      final List<String> keywords = widget.isTraditionalChinese ? restaurant.keywordTc : restaurant.keywordEn;
+                      final String displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
+                      final String displayAddress = restaurant.getDisplayAddress(widget.isTraditionalChinese);
+                      final List<String> keywords = restaurant.getDisplayKeywords(widget.isTraditionalChinese);
                       final String keywordsText = keywords.join(', ');
                       final Color textColor = Theme.of(context).colorScheme.onSurface; // Primary text color from theme
                       final Color secondaryTextColor = textColor.withOpacity(0.75); // Slightly transparent for secondary text
@@ -276,7 +266,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                             },
                             child: Ink.image(
                               height: 200,
-                              image: AssetImage(restaurant.image),
+                              image: NetworkImage(restaurant.imageUrl ?? 'https://via.placeholder.com/200'),
                               fit: BoxFit.cover,
                               child: Container(
                                 // Add the new gradient overlay from the bottom up to 30%.

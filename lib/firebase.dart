@@ -43,13 +43,13 @@ class DefaultFirebaseOptions {
   // You'll get these values when you register your Android app in Firebase Console
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCsVCZW7tF7ScW4e2SBdYtSQrl_GrK4zBk',
-    appId: '1:937491674619:android:YOUR_ANDROID_APP_ID', // Replace with your actual Android app ID
+    appId: '1:937491674619:android:3ed2cc7c79ba35fd3a475e',
     messagingSenderId: '937491674619',
     projectId: 'cross-platform-assignmen-b97cc',
     storageBucket: 'cross-platform-assignmen-b97cc.firebasestorage.app',
   );
 
-  // iOS configuration (for future reference if you expand to iOS)
+  // iOS configuration (for future reference)
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCsVCZW7tF7ScW4e2SBdYtSQrl_GrK4zBk',
     appId: '1:937491674619:ios:YOUR_IOS_APP_ID', // Replace with your actual iOS app ID

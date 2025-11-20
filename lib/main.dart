@@ -256,13 +256,14 @@ class _AppRootState extends State<AppRoot> {
         backgroundColor: lightSurface,
         foregroundColor: lightPrimary,
         elevation: 1,
+        centerTitle: false,
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: lightSurface,
         selectedItemColor: lightPrimary,
         unselectedItemColor: Colors.black54,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: lightSurface,
         elevation: 2,
         shape: RoundedRectangleBorder(
@@ -299,13 +300,14 @@ class _AppRootState extends State<AppRoot> {
         backgroundColor: darkSurface,
         foregroundColor: Colors.white,
         elevation: 1,
+        centerTitle: false,
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: darkSurface,
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white60,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: darkSurface,
         elevation: 2,
         shape: RoundedRectangleBorder(

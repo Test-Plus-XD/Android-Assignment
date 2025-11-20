@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest_all.dart';
 
 /// Notification Service - Bilingual Local Notifications
 /// 
@@ -72,7 +72,7 @@ class NotificationService with ChangeNotifier {
       // This is necessary for scheduling notifications at specific times.
       // Without this, we can't convert "2024-01-15 18:00 Hong Kong time"
       // into a format Android understands.
-      tz.initializeTimeZones();
+      initializeTimeZones();
       
       // Set Hong Kong as default timezone
       // Change this if your app targets different regions
@@ -283,7 +283,7 @@ class NotificationService with ChangeNotifier {
       );
 
       // Convert notification time to timezone-aware format
-      final scheduledDate = tz.TimeZone.from(notificationTime, tz.local);
+      final scheduledDate = tz.TZDateTime.from(notificationTime, tz.local);
 
       // Schedule the notification
       await _notificationsPlugin.zonedSchedule(
