@@ -7,13 +7,15 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:android_assignment/main.dart';
+import 'package:android_assignment/services/notification_service.dart';
+
+final notificationService = NotificationService();
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const PourRiceApp());
+    await tester.pumpWidget(PourRiceApp(notificationService: notificationService));
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);
