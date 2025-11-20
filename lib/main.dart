@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'firebase.dart';
 import 'services/auth_service.dart';
-import 'services/user_service.dart';
-import 'services/restaurant_service.dart';
 import 'services/booking_service.dart';
 import 'services/location_service.dart';
 import 'services/notification_service.dart';
+import 'services/restaurant_service.dart';
+import 'services/user_service.dart';
 import 'pages/home.dart';
 import 'pages/restaurants.dart';
 import 'pages/account.dart';
 import 'pages/login.dart';
 import 'widgets/drawer.dart';
+import 'firebase.dart';
 
 /// Understanding the Architecture
 /// 
@@ -399,31 +399,6 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int currentIndex = 0;
-  late List<Widget> pages;
-
-  @override
-  void initState() {
-    super.initState();
-    pages = [
-      FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
-      RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
-      AccountPage(isTraditionalChinese: widget.isTraditionalChinese),
-    ];
-  }
-
-  @override
-  void didUpdateWidget(covariant MainShell oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.isTraditionalChinese != widget.isTraditionalChinese) {
-      setState(() {
-        pages = [
-          FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
-          RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
-          AccountPage(isTraditionalChinese: widget.isTraditionalChinese),
-        ];
-      });
-    }
-  }
 
   void _onSelectItem(int index) {
     setState(() => currentIndex = index);
@@ -440,6 +415,26 @@ class _MainShellState extends State<MainShell> {
         ? ['主頁', '餐廳列表', '我的帳戶']
         : ['Home', 'Restaurants', 'My Account'];
 
+    final authService = context.read<AuthService>();
+    final onLoginStateChanged = (loggedIn) {
+      if (!loggedIn) {
+        authService.logout();
+      }
+    };
+
+    final pages = [
+      FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
+      RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
+      AccountPage(
+        isDarkMode: widget.isDarkMode,
+        isTraditionalChinese: widget.isTraditionalChinese,
+        onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
+        onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
+        isLoggedIn: true,
+        onLoginStateChanged: onLoginStateChanged,
+      ),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text(pageTitles[currentIndex]),
@@ -450,6 +445,8 @@ class _MainShellState extends State<MainShell> {
         onThemeChanged: widget.onThemeChanged,
         onLanguageChanged: widget.onLanguageChanged,
         onSelectItem: _onSelectItem,
+        isLoggedIn: true,
+        onLoginStateChanged: onLoginStateChanged,
       ),
       body: IndexedStack(
         index: currentIndex,
