@@ -187,24 +187,32 @@ class RestaurantService with ChangeNotifier {
       // Format: field:value AND field:value
     try {
       final filters = _buildFilters(districtEn, keywordEn);
-      
-      // Build the search request
-      // This follows Algolia's REST API format
-      final searchParams = {
+
+      // Build params object (NOT the top-level payload)
+      final params = <String, dynamic>{
         'query': query,
         'page': page,
         'hitsPerPage': hitsPerPage,
         if (filters != null) 'filters': filters,
       };
       
-      // Call Algolia search API
+      // Call Algolia search API with multi-index search endpoint
       final url = Uri.parse(
-        'https://$_algoliaAppId-dsn.algolia.net/1/indexes/$_algoliaIndexName/query'
+          'https://$_algoliaAppId-dsn.algolia.net/1/indexes/*/queries' // Not 'https://$_algoliaAppId-dsn.algolia.net/1/indexes/$_algoliaIndexName/query'
       );
+      // Send array of requests to Algolia
+      final requestBody = {
+        'requests': [
+          {
+            'indexName': _algoliaIndexName,
+            'params': params,
+          }
+        ]
+      };
       if (kDebugMode) {
         print('RestaurantService: Searching Algolia...');
         print('URL: $url');
-        print('Params: $searchParams');
+        print('Body: ${jsonEncode(requestBody)}');
       }
 
       final response = await http.post(
@@ -214,12 +222,19 @@ class RestaurantService with ChangeNotifier {
           'X-Algolia-Application-Id': _algoliaAppId,
           'Content-Type': 'application/json',
         },
-        body: jsonEncode(searchParams),
+        body: jsonEncode(requestBody),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Algolia search timed out');
+        },
       );
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final results = SearchResults.fromJson(data);
+        // Extracts the first element from the 'results' list after casting it to a dynamic list
+        final searchResult = (data['results'] as List<dynamic>)[0]; //Access results[0]
+        final results = SearchResults.fromJson(searchResult);
         
         _searchResults = results.hits;
         _totalHits = results.nbHits;
@@ -233,13 +248,16 @@ class RestaurantService with ChangeNotifier {
       } else {
         _errorMessage = 'Search failed: ${response.statusCode}';
         _searchResults = [];
+        if (kDebugMode) print('RestaurantService Error: ${response.body}');
       }
     } catch (e) {
       _errorMessage = 'Search error: $e';
       _searchResults = [];
+      if (kDebugMode) print('RestaurantService Exception: $e');
     } finally {
       // Ensure loading state is always turned off
       _setLoading(false);
+      notifyListeners();
     }
   }
 

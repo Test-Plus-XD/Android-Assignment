@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ import 'pages/account.dart';
 import 'pages/login.dart';
 import 'widgets/drawer.dart';
 import 'firebase_options.dart';
+import 'config.dart';
 
 /// Understanding the Architecture
 /// 
@@ -40,7 +42,7 @@ import 'firebase_options.dart';
 /// - Automatically handles widget rebuilding
 /// - Similar mental model to Angular's dependency injection
 
-// Keys for persisted preferences (same as before)
+// Keys for persisted preferences
 const String prefKeyIsDark = 'pourrice_is_dark';
 const String prefKeyIsTc = 'pourrice_is_tc';
 
@@ -49,7 +51,7 @@ const String prefKeyIsTc = 'pourrice_is_tc';
 /// This is where everything begins. Notice the async - we need to initialize
 /// Firebase and notifications before the app starts, so we await those operations.
 /// 
-/// Initialization order matters:
+/// Initialisation order matters:
 /// 1. Flutter bindings (required for async work before runApp)
 /// 2. Firebase (needed for authentication)
 /// 3. Notifications (sets up channels and timezone)
@@ -57,7 +59,11 @@ const String prefKeyIsTc = 'pourrice_is_tc';
 void main() async {
   // Ensures Flutter is ready before we do async work
   WidgetsFlutterBinding.ensureInitialized();
-
+  // Print configuration for debugging
+  if (kDebugMode) {
+    print('DEBUG MODE ENABLED');
+    AppConfig.printConfig();
+  }
   // Initialize Firebase with proper error handling
   try {
     // Check if Firebase is already initialized
@@ -71,7 +77,7 @@ void main() async {
     }
   } catch (e) {
     // If initialisation fails, log the error but don't crash
-    print('Firebase initialization error: $e');
+    print('Firebase Initialisation error: $e');
     // In production, show an error screen here
   }
   
@@ -83,7 +89,7 @@ void main() async {
     await notificationService.initialise();
     print('Notification service initialized successfully');
   } catch (e) {
-    print('Notification service initialization error: $e');
+    print('Notification service Initialisation error: $e');
     // App can still run without notifications, so we continue
   }
   
