@@ -3,7 +3,8 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 
-class AccountPage extends StatelessWidget {
+// 1. Convert to StatefulWidget
+class AccountPage extends StatefulWidget {
   final bool isDarkMode;
   final bool isTraditionalChinese;
   final VoidCallback onThemeChanged;
@@ -22,31 +23,60 @@ class AccountPage extends StatelessWidget {
   });
 
   @override
+  // 2. Create the State class
+  State<AccountPage> createState() => _AccountPageState();
+}
+
+class _AccountPageState extends State<AccountPage> {
+  // 3. Declare a Future to hold the profile data
+  late Future<UserProfile?> _userProfileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // 4. Fetch the data only once, in initState
+    // We use context.read which is like Provider.of(context, listen: false)
+    final authService = context.read<AuthService>();
+    final userService = context.read<UserService>();
+
+    // Check if logged in before making the call
+    if (widget.isLoggedIn && authService.uid != null) {
+      _userProfileFuture = userService.getUserProfile(authService.uid!);
+    } else {
+      // If not logged in, create a future that completes with null
+      _userProfileFuture = Future.value(null);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final authService = Provider.of<AuthService>(context);
-    final userService = Provider.of<UserService>(context);
+    // Translations
+    final String welcomeMessage = widget.isTraditionalChinese ? '歡迎, ' : 'Welcome, ';
+    final String emailLabel = widget.isTraditionalChinese ? '電郵: ' : 'Email: ';
+    final String phoneLabel = widget.isTraditionalChinese ? '電話: ' : 'Phone: ';
+    final String logoutLabel = widget.isTraditionalChinese ? '登出' : 'Logout';
+    final String loginPrompt = widget.isTraditionalChinese ? '請先登入' : 'Please log in';
+    final String errorLabel = widget.isTraditionalChinese ? '載入用戶數據時出錯' : 'Error loading user data';
 
-    final String welcomeMessage = isTraditionalChinese ? '歡迎, ' : 'Welcome, ';
-    final String emailLabel = isTraditionalChinese ? '電郵: ' : 'Email: ';
-    final String phoneLabel = isTraditionalChinese ? '電話: ' : 'Phone: ';
-    final String logoutLabel = isTraditionalChinese ? '登出' : 'Logout';
-    final String loginPrompt = isTraditionalChinese ? '請先登入' : 'Please log in';
-    final String errorLabel = isTraditionalChinese ? '載入用戶數據時出錯' : 'Error loading user data';
-
-    if (!isLoggedIn) {
+    if (!widget.isLoggedIn) {
       return Center(child: Text(loginPrompt));
     }
 
+    // 5. Use the pre-fetched future in the FutureBuilder
     return FutureBuilder<UserProfile?>(
-      future: userService.getUserProfile(authService.uid!),
+      future: _userProfileFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
+          // It's good practice to log the error
+          print('Error in AccountPage FutureBuilder: ${snapshot.error}');
           return Center(child: Text(errorLabel));
         }
+        // Use a single check for no data or null data
         if (!snapshot.hasData || snapshot.data == null) {
+           // This can happen if the profile doesn't exist yet for a new user
           return Center(child: Text(loginPrompt));
         }
 
@@ -80,7 +110,8 @@ class AccountPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton(
-                    onPressed: () => onLoginStateChanged(false),
+                    // Use the callback from the widget
+                    onPressed: () => widget.onLoginStateChanged(false),
                     child: Text(logoutLabel),
                   ),
                 ],

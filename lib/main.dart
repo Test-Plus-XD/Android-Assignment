@@ -66,14 +66,14 @@ void main() async {
   }
   // Initialize Firebase with proper error handling
   try {
-    // Check if Firebase is already initialized
+    // Check if Firebase is already initialised
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-      print('Firebase initialized successfully');
+      print('Firebase initialised successfully');
     } else {
-      print('Firebase already initialized, using existing instance');
+      print('Firebase already initialised, using existing instance');
     }
   } catch (e) {
     // If initialisation fails, log the error but don't crash
@@ -87,7 +87,7 @@ void main() async {
   final notificationService = NotificationService();
   try {
     await notificationService.initialise();
-    print('Notification service initialized successfully');
+    print('Notification service initialised successfully');
   } catch (e) {
     print('Notification service Initialisation error: $e');
     // App can still run without notifications, so we continue

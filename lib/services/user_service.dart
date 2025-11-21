@@ -130,8 +130,9 @@ class UserService with ChangeNotifier {
   /// - Clear profile if user logged out
   void _onAuthChanged() {
     if (_authService.isLoggedIn && _authService.uid != null) {
-      // User just logged in, load their profile
-      getUserProfile(_authService.uid!);
+      // User just logged in, load their profile.
+      // We use a Future.microtask to schedule this work for after the current build cycle, preventing a "setState() or markNeedsBuild() called during build" error.
+      Future.microtask(() => getUserProfile(_authService.uid!));
     } else {
       // User logged out, clear profile
       _currentProfile = null;
