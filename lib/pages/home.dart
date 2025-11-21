@@ -49,10 +49,11 @@ class _FrontPageState extends State<FrontPage> {
   @override
   void initState() {
     super.initState();
-    // Load featured restaurants when page opens
-    _loadFeaturedRestaurants();
-    // Attempt to load nearby restaurants (will request permission if needed)
-    _loadNearbyRestaurants();
+    // Schedule the loads to happen AFTER the first frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadFeaturedRestaurants(); // Load featured restaurants when page opens
+      _loadNearbyRestaurants(); // Attempt to load nearby restaurants (will request permission if needed)
+    });
   }
 
   /// Load featured restaurants from Algolia

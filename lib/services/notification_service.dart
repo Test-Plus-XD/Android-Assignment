@@ -6,23 +6,23 @@ import 'package:timezone/data/latest_all.dart';
 /// This function is designed to be run in a separate isolate to avoid blocking the UI thread.
 /// It initializes the timezone database, which can be a time-consuming operation.
 void _initializeTimezones(void _) {
-  // Initialize the timezone database.
+  // Initialise the timezone database.
   initializeTimeZones();
   // Set the local timezone for the application.
   tz.setLocalLocation(tz.getLocation('Asia/Hong_Kong'));
 }
 
 /// Notification Service - Bilingual Local Notifications
-/// 
+///
 /// This service manages local notifications with full Traditional Chinese and
 /// English language support, integrating with your existing LanguageService.
-/// 
+///
 /// Understanding Local vs Push Notifications:
-/// 
+///
 /// Local notifications are scheduled on the device itself. Think of them like
 /// setting an alarm clock - you tell your phone "remind me at 3pm" and it does,
 /// even if you're offline. The notification lives entirely on your device.
-/// 
+///
 /// Push notifications come from a server through Firebase Cloud Messaging.
 /// They're like receiving a text message - someone else sends it to you.
 /// For this assignment, local notifications are perfect because they:
@@ -30,29 +30,29 @@ void _initializeTimezones(void _) {
 /// - Work offline
 /// - Are simpler to implement and demonstrate
 /// - Still show native Android features
-/// 
+///
 /// Why Notification Channels Matter:
-/// 
+///
 /// Android 8.0+ requires notification channels. These are categories that let
 /// users control notification behaviour per category. For example:
 /// - Booking reminders: High priority, sound enabled
 /// - Promotional offers: Low priority, no sound
-/// 
-/// Users can customize these in their system settings (Settings > Apps > 
+///
+/// Users can customize these in their system settings (Settings > Apps >
 /// Your App > Notifications), giving them fine-grained control. This is actually
 /// a good thing for UX - users who have control are less likely to disable
 /// all notifications entirely.
 class NotificationService with ChangeNotifier {
   // The plugin instance that communicates with Android's notification system
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = 
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
-  
+
   // Track whether service is initialised
   bool _isInitialised = false;
-  
+
   // Track whether notifications are enabled (user permission)
   bool _notificationsEnabled = false;
-  
+
   // Error message if something goes wrong
   String? _errorMessage;
 
@@ -62,12 +62,12 @@ class NotificationService with ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   /// Initialise the notification system
-  /// 
+  ///
   /// This method does three critical things:
   /// 1. Initialises timezone data (needed for scheduling)
   /// 2. Sets up Android notification settings
   /// 3. Creates notification channels
-  /// 
+  ///
   /// Call this once when your app starts, ideally in main.dart
   /// before runApp() is called, so notifications are ready immediately.
   Future<void> initialise() async {
@@ -78,7 +78,7 @@ class NotificationService with ChangeNotifier {
         }
         return;
       }
-      if (kDebugMode) print('NotificationService: Starting initialization');
+      if (kDebugMode) print('NotificationService: Starting initialisation');
 
       // Step 1: Initialise timezone database in a background isolate
       // This is a heavy operation and can cause the app to hang on startup.
