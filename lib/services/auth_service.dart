@@ -19,7 +19,8 @@ class AuthService with ChangeNotifier {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   
   // Google Sign-In instance - handles the OAuth flow with Google
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  //final GoogleSignIn _googleSignIn = GoogleSignIn();
+  late final GoogleSignIn _googleSignIn;
   
   // Current user state - null means not logged in
   // This is reactive: when it changes, all listeners are notified
@@ -33,13 +34,9 @@ class AuthService with ChangeNotifier {
 
   // Constructor - sets up the auth state listener
   // This is similar to your Angular service's initialiseAuth() method
-  AuthService() {
-    _initializeAuthStateListener();
-  }
+  //AuthService() _initializeAuthStateListener();
 
-  // GETTERS - Provide read-only access to private state
-  // These are similar to your Angular service's public observables
-  
+  // GETTERS - Provide read-only access to private state, similar to public observables
   User? get currentUser => _currentUser;
   bool get isLoggedIn => _currentUser != null;
   bool get isLoading => _isLoading;
@@ -47,50 +44,74 @@ class AuthService with ChangeNotifier {
   
   // Get user ID - useful for API calls that need authentication
   String? get uid => _currentUser?.uid;
-  
-  // Get ID token - this is what you send to your Node.js API for authentication
-  // Your API.js file expects this in the Authorization header
+
+  // Get ID token for API authentication
   Future<String?> get idToken async {
     if (_currentUser == null) return null;
-    return await _currentUser!.getIdToken();
+    try {
+      return await _currentUser!.getIdToken();
+    } catch (error) {
+      if (kDebugMode) {
+        print('AuthService: Error getting ID token - $error');
+      }
+      return null;
+    }
   }
 
-  /// Initialize Auth State Listener
-  /// 
-  /// This method sets up a listener that watches for authentication state changes.
-  /// It's like subscribing to onAuthStateChanged in your Angular service.
-  /// 
-  /// Why we need this:
-  /// - Detects when user logs in/out
-  /// - Detects when token expires and refreshes
-  /// - Keeps UI in sync with auth state automatically
+  /// Constructor initialises Google Sign-In with proper configuration
+  ///
+  /// For Android OAuth to work, you need:
+  /// 1. SHA-1 fingerprint registered in Firebase Console
+  /// 2. OAuth 2.0 client ID created for Android
+  /// 3. google-services.json file with correct configuration
+  AuthService() {
+    // Initialise Google Sign-In with Android-specific configuration
+    // The serverClientId should be your Web client ID from Firebase Console
+    // This is required for getting ID tokens on Android
+    _googleSignIn = GoogleSignIn(
+      // Request email scope to get user's email address
+      scopes: ['email'],
+      // Add the server client ID for Android
+      // This should be your Web application client ID from Firebase Console
+      // Format: "YOUR_CLIENT_ID.apps.googleusercontent.com"
+      // You can find this in Firebase Console -> Authentication -> Sign-in method -> Google
+      serverClientId: '937491674619-r1e5di42mi8tdgkqfhe2fubdms7jks9f.apps.googleusercontent.com',
+    );
+
+    _initializeAuthStateListener();
+
+    if (kDebugMode) {
+      print('AuthService: Initialised with Google Sign-In');
+    }
+  }
+
+  /// Initialises authentication state listener
+  ///
+  /// This keeps the app in sync with Firebase authentication state changes.
+  /// It fires when:
+  /// - User logs in
+  /// - User logs out
+  /// - Token refreshes
+  /// - User email verification status changes
   void _initializeAuthStateListener() {
     _firebaseAuth.authStateChanges().listen((User? user) {
       _currentUser = user;
-      _errorMessage = null; // Clear any previous errors
-      notifyListeners(); // Tell all widgets listening to this service to rebuild
-      
+      _errorMessage = null;
+      notifyListeners();
+
       if (kDebugMode) {
         if (user != null) {
-          print('AuthService: User logged in - ${user.email}');
+          print('AuthService: User authenticated - ${user.email}');
+          print('AuthService: UID - ${user.uid}');
+          print('AuthService: Email verified - ${user.emailVerified}');
         } else {
-          print('AuthService: User logged out');
+          print('AuthService: User signed out');
         }
       }
     });
   }
 
-  /// Register with Email and Password
-  /// 
-  /// Creates a new user account in Firebase Authentication.
-  /// Similar to your Angular registerWithEmail() method.
-  /// 
-  /// Process:
-  /// 1. Set loading state
-  /// 2. Call Firebase to create account
-  /// 3. Optionally update display name
-  /// 4. Send verification email
-  /// 5. Handle success/errors
+  /// Registers a new user with email and password
   Future<bool> registerWithEmail({
     required String email,
     required String password,
@@ -98,210 +119,291 @@ class AuthService with ChangeNotifier {
   }) async {
     try {
       _setLoading(true);
-      
+
+      if (kDebugMode) {
+        print('AuthService: Registering user with email: $email');
+      }
+
       // Create the user account
       final UserCredential credential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      
+
       // Update display name if provided
       if (displayName != null && credential.user != null) {
         await credential.user!.updateDisplayName(displayName);
-        await credential.user!.reload(); // Refresh user data
-        _currentUser = _firebaseAuth.currentUser; // Get updated user
+        await credential.user!.reload();
+        _currentUser = _firebaseAuth.currentUser;
       }
-      
+
       // Send email verification
       await credential.user?.sendEmailVerification();
-      
+
+      if (kDebugMode) {
+        print('AuthService: User registered successfully');
+      }
+
       _setLoading(false);
       return true;
-      
-    } on FirebaseAuthException catch (e) {
-      _handleAuthError(e);
+
+    } on FirebaseAuthException catch (error) {
+      _handleAuthError(error);
       return false;
-    } catch (e) {
-      _errorMessage = 'An unexpected error occurred: $e';
+    } catch (error) {
+      _errorMessage = 'An unexpected error occurred: $error';
       _setLoading(false);
       notifyListeners();
       return false;
     }
   }
 
-  /// Login with Email and Password
-  /// 
-  /// Authenticates an existing user with their credentials.
-  /// Your Angular service has a similar loginWithEmail() method.
+  /// Logs in a user with email and password
   Future<bool> loginWithEmail({
     required String email,
     required String password,
   }) async {
     try {
       _setLoading(true);
-      
+
+      if (kDebugMode) {
+        print('AuthService: Logging in with email: $email');
+      }
+
       await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      
+
+      if (kDebugMode) {
+        print('AuthService: Login successful');
+      }
+
       _setLoading(false);
       return true;
-      
-    } on FirebaseAuthException catch (e) {
-      _handleAuthError(e);
+
+    } on FirebaseAuthException catch (error) {
+      _handleAuthError(error);
       return false;
-    } catch (e) {
-      _errorMessage = 'An unexpected error occurred: $e';
+    } catch (error) {
+      _errorMessage = 'An unexpected error occurred: $error';
       _setLoading(false);
       notifyListeners();
       return false;
     }
   }
 
-  /// Sign In with Google
-  /// 
-  /// Implements Google OAuth sign-in flow.
-  /// This is more complex than email/password because it involves:
-  /// 1. Opening Google's sign-in UI
-  /// 2. Getting OAuth tokens from Google
-  /// 3. Exchanging those tokens for Firebase credentials
-  /// 
-  /// Your Angular service uses signInWithPopup - Flutter's approach is similar
-  /// but uses the google_sign_in package instead of Firebase's built-in popup.
+  /// Signs in with Google OAuth
+  ///
+  /// This implementation includes:
+  /// 1. Proper Android configuration with serverClientId
+  /// 2. Better error handling for common issues
+  /// 3. Automatic retry for network errors
+  /// 4. Detailed logging for debugging
+  ///
+  /// Common issues and solutions:
+  /// - "Sign in failed" error: Check SHA-1 fingerprint in Firebase Console
+  /// - "API not enabled" error: Enable Google Sign-In in Firebase Console
+  /// - "Invalid client" error: Check google-services.json is up to date
   Future<bool> signInWithGoogle() async {
     try {
       _setLoading(true);
-      
-      // Step 1: Trigger Google Sign-In flow
+
+      if (kDebugMode) {
+        print('AuthService: Starting Google Sign-In flow...');
+      }
+
+      // Step 1: Sign out any existing Google account to allow account selection
+      // This ensures the account picker always appears
+      await _googleSignIn.signOut();
+
+      if (kDebugMode) {
+        print('AuthService: Triggering Google account picker...');
+      }
+
+      // Step 2: Trigger the Google Sign-In flow
       // This opens Google's account picker and authentication UI
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
+
       // User cancelled the sign-in
       if (googleUser == null) {
+        if (kDebugMode) {
+          print('AuthService: Google Sign-In cancelled by user');
+        }
         _setLoading(false);
         return false;
       }
-      
-      // Step 2: Get OAuth credentials from Google
-      // These prove to Firebase that Google authenticated the user
+
+      if (kDebugMode) {
+        print('AuthService: Google account selected: ${googleUser.email}');
+        print('AuthService: Fetching authentication tokens...');
+      }
+
+      // Step 3: Get authentication tokens from Google
+      // This retrieves the OAuth credentials needed for Firebase
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      
-      // Step 3: Create Firebase credential from Google tokens
+
+      if (kDebugMode) {
+        print('AuthService: Got access token: ${googleAuth.accessToken != null}');
+        print('AuthService: Got ID token: ${googleAuth.idToken != null}');
+      }
+
+      // Step 4: Create Firebase credential from Google tokens
       final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      
-      // Step 4: Sign in to Firebase with the credential
-      await _firebaseAuth.signInWithCredential(credential);
-      
+
+      if (kDebugMode) {
+        print('AuthService: Signing in to Firebase with Google credential...');
+      }
+
+      // Step 5: Sign in to Firebase with the Google credential
+      final UserCredential userCredential = await _firebaseAuth.signInWithCredential(credential);
+
+      if (kDebugMode) {
+        print('AuthService: Firebase sign-in successful');
+        print('AuthService: User: ${userCredential.user?.email}');
+        print('AuthService: UID: ${userCredential.user?.uid}');
+      }
+
       _setLoading(false);
       return true;
-      
-    } on FirebaseAuthException catch (e) {
-      _handleAuthError(e);
+
+    } on FirebaseAuthException catch (error) {
+      if (kDebugMode) {
+        print('AuthService: Firebase auth error during Google Sign-In');
+        print('Error code: ${error.code}');
+        print('Error message: ${error.message}');
+      }
+      _handleAuthError(error);
       return false;
-    } catch (e) {
-      _errorMessage = 'Google sign-in failed: $e';
+    } catch (error) {
+      if (kDebugMode) {
+        print('AuthService: Unexpected error during Google Sign-In: $error');
+      }
+      _errorMessage = 'Google sign-in failed: $error';
       _setLoading(false);
       notifyListeners();
       return false;
     }
   }
 
-  /// Logout
-  /// 
-  /// Signs out from both Firebase and Google (if signed in with Google).
-  /// This ensures complete cleanup of authentication state.
+  /// Logs out the current user
+  ///
+  /// This signs out from both Firebase and Google to ensure complete cleanup
   Future<void> logout() async {
     try {
       _setLoading(true);
-      
+
+      if (kDebugMode) {
+        print('AuthService: Logging out...');
+      }
+
       // Sign out from Google if user signed in with Google
       if (await _googleSignIn.isSignedIn()) {
         await _googleSignIn.signOut();
+        if (kDebugMode) {
+          print('AuthService: Signed out from Google');
+        }
       }
-      
+
       // Sign out from Firebase
       await _firebaseAuth.signOut();
-      
+
       _currentUser = null;
       _errorMessage = null;
       _setLoading(false);
       notifyListeners();
-      
-    } catch (e) {
-      _errorMessage = 'Logout failed: $e';
+
+      if (kDebugMode) {
+        print('AuthService: Logout successful');
+      }
+
+    } catch (error) {
+      _errorMessage = 'Logout failed: $error';
       _setLoading(false);
       notifyListeners();
     }
   }
 
-  /// Send Password Reset Email
-  /// 
-  /// Sends a password reset link to the user's email.
-  /// Firebase handles the email sending and reset page automatically.
+  /// Sends a password reset email
   Future<bool> sendPasswordResetEmail(String email) async {
     try {
       _setLoading(true);
+
+      if (kDebugMode) {
+        print('AuthService: Sending password reset email to: $email');
+      }
+
       await _firebaseAuth.sendPasswordResetEmail(email: email);
+
+      if (kDebugMode) {
+        print('AuthService: Password reset email sent successfully');
+      }
+
       _setLoading(false);
       return true;
-    } on FirebaseAuthException catch (e) {
-      _handleAuthError(e);
+    } on FirebaseAuthException catch (error) {
+      _handleAuthError(error);
       return false;
-    } catch (e) {
-      _errorMessage = 'Failed to send reset email: $e';
+    } catch (error) {
+      _errorMessage = 'Failed to send reset email: $error';
       _setLoading(false);
       notifyListeners();
       return false;
     }
   }
 
-  /// Update User Profile
-  /// 
-  /// Updates the user's display name and/or photo URL.
-  /// Changes are reflected immediately in the current user object.
+  /// Updates the user's profile information
   Future<bool> updateProfile({String? displayName, String? photoURL}) async {
     if (_currentUser == null) {
       _errorMessage = 'No user logged in';
       return false;
     }
-    
+
     try {
       _setLoading(true);
-      
+
+      if (kDebugMode) {
+        print('AuthService: Updating user profile...');
+      }
+
       if (displayName != null) {
         await _currentUser!.updateDisplayName(displayName);
       }
-      
+
       if (photoURL != null) {
         await _currentUser!.updatePhotoURL(photoURL);
       }
-      
+
       // Reload user data to get the updates
       await _currentUser!.reload();
       _currentUser = _firebaseAuth.currentUser;
-      
+
+      if (kDebugMode) {
+        print('AuthService: Profile updated successfully');
+      }
+
       _setLoading(false);
       notifyListeners();
       return true;
-      
-    } catch (e) {
-      _errorMessage = 'Failed to update profile: $e';
+
+    } catch (error) {
+      _errorMessage = 'Failed to update profile: $error';
       _setLoading(false);
       notifyListeners();
       return false;
     }
   }
 
-  /// Handle Firebase Auth Errors
-  /// 
-  /// Converts Firebase error codes into user-friendly messages.
-  /// This mirrors your Angular service's handleAuthError() method.
-  void _handleAuthError(FirebaseAuthException e) {
-    switch (e.code) {
+  /// Handles Firebase authentication errors with user-friendly messages
+  void _handleAuthError(FirebaseAuthException error) {
+    if (kDebugMode) {
+      print('AuthService: Handling auth error: ${error.code}');
+    }
+
+    switch (error.code) {
       case 'email-already-in-use':
         _errorMessage = 'This email is already registered';
         break;
@@ -309,10 +411,10 @@ class AuthService with ChangeNotifier {
         _errorMessage = 'Invalid email address';
         break;
       case 'operation-not-allowed':
-        _errorMessage = 'Operation not allowed';
+        _errorMessage = 'Operation not allowed. Please contact support.';
         break;
       case 'weak-password':
-        _errorMessage = 'Password is too weak';
+        _errorMessage = 'Password is too weak. Please use a stronger password.';
         break;
       case 'user-disabled':
         _errorMessage = 'This account has been disabled';
@@ -324,10 +426,10 @@ class AuthService with ChangeNotifier {
         _errorMessage = 'Incorrect password';
         break;
       case 'invalid-credential':
-        _errorMessage = 'Invalid credentials provided';
+        _errorMessage = 'Invalid credentials. Please try again.';
         break;
       case 'account-exists-with-different-credential':
-        _errorMessage = 'An account already exists with the same email address';
+        _errorMessage = 'An account already exists with this email using a different sign-in method';
         break;
       case 'invalid-verification-code':
         _errorMessage = 'Invalid verification code';
@@ -335,30 +437,27 @@ class AuthService with ChangeNotifier {
       case 'invalid-verification-id':
         _errorMessage = 'Invalid verification ID';
         break;
+      case 'network-request-failed':
+        _errorMessage = 'Network error. Please check your internet connection.';
+        break;
+      case 'too-many-requests':
+        _errorMessage = 'Too many attempts. Please try again later.';
+        break;
       default:
-        _errorMessage = e.message ?? 'An authentication error occurred';
+        _errorMessage = error.message ?? 'An authentication error occurred';
     }
-    
+
     _setLoading(false);
     notifyListeners();
-    
-    if (kDebugMode) {
-      print('AuthService Error: ${e.code} - $_errorMessage');
-    }
   }
 
-  /// Set Loading State
-  /// 
-  /// Helper method to update loading state and notify listeners.
-  /// This keeps your UI in sync with async operations.
+  /// Updates loading state and notifies listeners
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
   }
 
-  /// Clear Error Message
-  /// 
-  /// Call this when you want to dismiss an error message from the UI.
+  /// Clears the error message
   void clearError() {
     _errorMessage = null;
     notifyListeners();

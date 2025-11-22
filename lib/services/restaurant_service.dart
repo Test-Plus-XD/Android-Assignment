@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../config.dart';
 
 /// Restaurant Model
-/// 
+///
 /// This matches your Firestore restaurant schema and the Restaurant interface
 /// from your Angular restaurants.service.ts
 class Restaurant {
@@ -37,7 +37,7 @@ class Restaurant {
   });
 
   /// Create Restaurant from JSON
-  /// 
+  ///
   /// Handles both Algolia search results and your API responses.
   /// Algolia returns objectID, your API returns id.
   factory Restaurant.fromJson(Map<String, dynamic> json) {
@@ -61,29 +61,29 @@ class Restaurant {
     );
   }
 
-  /// Get display name based on language
+  // Get display name based on language
   String getDisplayName(bool isTraditionalChinese) {
     return isTraditionalChinese ? (nameTc ?? nameEn ?? 'Unknown') : (nameEn ?? nameTc ?? 'Unknown');
   }
 
-  /// Get display address based on language
+  // Get display address based on language
   String getDisplayAddress(bool isTraditionalChinese) {
     return isTraditionalChinese ? (addressTc ?? addressEn ?? 'Unknown') : (addressEn ?? addressTc ?? 'Unknown');
   }
 
-  /// Get display district based on language
+  // Get display district based on language
   String getDisplayDistrict(bool isTraditionalChinese) {
     return isTraditionalChinese ? (districtTc ?? districtEn ?? 'Unknown') : (districtEn ?? districtTc ?? 'Unknown');
   }
 
-  /// Get display keywords based on language
+  // Get display keywords based on language
   List<String> getDisplayKeywords(bool isTraditionalChinese) {
     return isTraditionalChinese ? (keywordTc ?? keywordEn ?? []) : (keywordEn ?? keywordTc ?? []);
   }
 }
 
 /// Algolia Search Results
-/// 
+///
 /// This wraps the response from Algolia search API.
 /// It includes the results plus metadata about the search (total hits, pages, etc.)
 class SearchResults {
@@ -111,18 +111,17 @@ class SearchResults {
   }
 }
 
-/// Restaurant Service - Flutter Implementation
-/// 
-/// This service provides restaurant search using Algolia.
-/// It mirrors your Angular RestaurantsService but adapted for Flutter.
-/// 
+/// Restaurant service handling all restaurant data operations
+///
+/// This service uses Algolia for fast search and your Node.js API for CRUD operations.
+///
 /// Why Algolia?
 /// - Instant search as you type (very fast)
 /// - Full-text search across all fields
 /// - Faceted filtering (district, keywords)
 /// - Pagination for large datasets
 /// - Typo tolerance and relevance ranking
-/// 
+///
 /// Your Angular service uses @algolia/client-search. Flutter uses HTTP directly
 /// to call Algolia's REST API, which is simpler and gives you more control.
 class RestaurantService with ChangeNotifier {
@@ -152,11 +151,18 @@ class RestaurantService with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  /// Search Restaurants with Algolia
-  /// 
-  /// This method calls Algolia's search API with your query and filters.
-  /// It mirrors your Angular service's searchRestaurants() method.
-  /// 
+  /// Searches restaurants using Algolia with the multi-index endpoint
+  ///
+  /// This implementation matches your working Ionic app exactly:
+  /// 1. Uses the /1/indexes/*/queries endpoint (multi-index search)
+  /// 2. Sends requests as an array with a single search request
+  /// 3. Includes the x-algolia-agent header for better analytics
+  ///
+  /// How Algolia Search Works:
+  /// 1. You send a POST request with search parameters
+  /// 2. Algolia processes the query across its indexed data
+  /// 3. Returns ranked results with highlighting and metadata
+  ///
   /// Parameters:
   /// - query: Search text (searches across name, address, keywords)
   /// - districtEn: Filter by district (English name)
@@ -164,12 +170,6 @@ class RestaurantService with ChangeNotifier {
   /// - isTraditionalChinese: Language for display (doesn't affect search)
   /// - page: Page number for pagination (0-indexed)
   /// - hitsPerPage: Results per page
-  /// 
-  /// How Algolia Search Works:
-  /// 1. You send a POST request with search parameters
-  /// 2. Algolia processes the query across its indexed data
-  /// 3. Returns ranked results with highlighting and metadata
-  /// 4. All in milliseconds, even with millions of records
   Future<void> searchRestaurants({
     String query = '',
     String? districtEn,
@@ -188,32 +188,27 @@ class RestaurantService with ChangeNotifier {
     try {
       final filters = _buildFilters(districtEn, keywordEn);
 
-      // Build params string for the single-index endpoint
-      // The single-index endpoint requires params as a URL-encoded string
-      final paramsMap = <String, dynamic>{
+      // Construct the search request parameters
+      final searchParams = <String, dynamic>{
+        'indexName': _algoliaIndexName,
         'query': query,
-        'page': page.toString(),
-        'hitsPerPage': hitsPerPage.toString(),
+        'page': page,
+        'hitsPerPage': hitsPerPage,
       };
 
+      // Add filters if they exist
       if (filters != null) {
-        paramsMap['filters'] = filters;
+        searchParams['filters'] = filters;
       }
 
-      // Convert params map to URL-encoded string
-      final paramsString = paramsMap.entries
-          .map((entry) => '${Uri.encodeComponent(entry.key)}=${Uri.encodeComponent(entry.value)}')
-          .join('&');
-
-      // Use the correct single-index query endpoint
-      // This is the standard Algolia endpoint that matches your test file
+      // Use the multi-index search endpoint - /1/indexes/*/queries
       final url = Uri.parse(
-          'https://$_algoliaAppId-dsn.algolia.net/1/indexes/$_algoliaIndexName/query'
+          'https://$_algoliaAppId-dsn.algolia.net/1/indexes/*/queries'
       );
 
-      // Send request body with params string
+      // Build the request body with the requests array
       final requestBody = {
-        'params': paramsString,
+        'requests': [searchParams],
       };
 
       if (kDebugMode) {
@@ -222,37 +217,44 @@ class RestaurantService with ChangeNotifier {
         print('Body: ${jsonEncode(requestBody)}');
       }
 
+      // Send the POST request with proper headers
       final response = await http.post(
         url,
         headers: {
           'X-Algolia-API-Key': _algoliaSearchKey,
           'X-Algolia-Application-Id': _algoliaAppId,
           'Content-Type': 'application/json',
+          'x-algolia-agent': 'Flutter Client; Algolia for Dart', // Add the user agent header for better analytics tracking
         },
         body: jsonEncode(requestBody),
       ).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          throw Exception('Algolia search timed out');
+          throw Exception('Algolia search timed out after 10 seconds');
         },
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        // The multi-index endpoint returns a results array
+        // Extract the first result (since only one request is sent)
+        final resultsArray = data['results'] as List<dynamic>;
+        if (resultsArray.isEmpty) {
+          _searchResults = [];
+          _totalHits = 0;
+          _currentPage = 0;
+          _totalPages = 0;
+        } else {
+          final searchResult = resultsArray[0] as Map<String, dynamic>;
+          final results = SearchResults.fromJson(searchResult);
 
-        // With the single-index endpoint, the response is directly the search result
-        // No need to extract from a results array
-        final results = SearchResults.fromJson(data);
-
-        _searchResults = results.hits;
-        _totalHits = results.nbHits;
-        _currentPage = results.page;
-        _totalPages = results.nbPages;
-        _errorMessage = null;
-
-        if (kDebugMode) {
-          print('RestaurantService: Found ${results.nbHits} restaurants');
+          _searchResults = results.hits;
+          _totalHits = results.nbHits;
+          _currentPage = results.page;
+          _totalPages = results.nbPages;
         }
+        _errorMessage = null;
+        if (kDebugMode) print('RestaurantService: Search successful - found $_totalHits restaurants');
       } else {
         _errorMessage = 'Search failed: ${response.statusCode}';
         _searchResults = [];
@@ -269,31 +271,35 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  /// Build Algolia Filters
-  /// 
-  /// Converts your filter parameters into Algolia's filter syntax.
-  /// This handles multi-word values by wrapping them in quotes.
+  /// Builds Algolia filter syntax from selected filters
+  ///
+  /// Algolia uses a SQL-like syntax for filters. This method constructs
+  /// filter strings like: District_EN:"Kowloon" AND Keyword_EN:"veggie"
   String? _buildFilters(String? districtEn, String? keywordEn) {
     final parts = <String>[];
 
+    // Add district filter if specified and not "All Districts"
     if (districtEn != null && districtEn.isNotEmpty && districtEn != 'All Districts') {
-      // Quote the value if it contains spaces
-      final quotedDistrict = districtEn.contains(' ') ? '"$districtEn"' : districtEn;
+      // Escape any quotes in the value and wrap multi-word values in quotes
+      final escapedDistrict = districtEn.replaceAll('"', '\\"');
+      final quotedDistrict = districtEn.contains(' ') ? '"$escapedDistrict"' : escapedDistrict;
       parts.add('District_EN:$quotedDistrict');
     }
 
+    // Add keyword filter if specified
     if (keywordEn != null && keywordEn.isNotEmpty) {
-      final quotedKeyword = keywordEn.contains(' ') ? '"$keywordEn"' : keywordEn;
+      final escapedKeyword = keywordEn.replaceAll('"', '\\"');
+      final quotedKeyword = keywordEn.contains(' ') ? '"$escapedKeyword"' : escapedKeyword;
       parts.add('Keyword_EN:$quotedKeyword');
     }
 
+    // Return null if no filters, otherwise join with AND
     return parts.isEmpty ? null : parts.join(' AND ');
   }
 
   /// Get Restaurant by ID from API
-  /// 
-  /// Fetches a single restaurant from your Node.js API.
-  /// Useful for detail pages where you need all the data.
+  ///
+  /// Fetches a single restaurant from Node.js API.
   Future<Restaurant?> getRestaurantById(String id) async {
     _setLoading(true);
     notifyListeners();
@@ -331,8 +337,8 @@ class RestaurantService with ChangeNotifier {
   }
 
   /// Load All Restaurants from API
-  /// 
-  /// Fetches all restaurants from your Node.js API.
+  ///
+  /// Fetches all restaurants from Node.js API.
   /// Only use this for small datasets - for searching, use Algolia instead.
   Future<List<Restaurant>> getAllRestaurants() async {
     _setLoading(true);
@@ -377,7 +383,7 @@ class RestaurantService with ChangeNotifier {
   }
 
   /// Clear Search Results
-  /// 
+  ///
   /// Resets the search state. Useful when navigating away from search.
   void clearResults() {
     _searchResults = [];
