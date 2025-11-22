@@ -4,9 +4,6 @@ import 'package:http/http.dart' as http;
 import '../config.dart';
 
 /// Restaurant Model
-///
-/// This matches your Firestore restaurant schema and the Restaurant interface
-/// from your Angular restaurants.service.ts
 class Restaurant {
   final String id;
   final String? nameEn;
@@ -37,7 +34,7 @@ class Restaurant {
   });
 
   /// Create Restaurant from JSON
-  ///
+  // 
   /// Handles both Algolia search results and your API responses.
   /// Algolia returns objectID, your API returns id.
   factory Restaurant.fromJson(Map<String, dynamic> json) {
@@ -83,7 +80,7 @@ class Restaurant {
 }
 
 /// Algolia Search Results
-///
+// 
 /// This wraps the response from Algolia search API.
 /// It includes the results plus metadata about the search (total hits, pages, etc.)
 class SearchResults {
@@ -112,16 +109,16 @@ class SearchResults {
 }
 
 /// Restaurant service handling all restaurant data operations
-///
+//
 /// This service uses Algolia for fast search and your Node.js API for CRUD operations.
-///
+// 
 /// Why Algolia?
 /// - Instant search as you type (very fast)
 /// - Full-text search across all fields
 /// - Faceted filtering (district, keywords)
 /// - Pagination for large datasets
 /// - Typo tolerance and relevance ranking
-///
+// 
 /// Your Angular service uses @algolia/client-search. Flutter uses HTTP directly
 /// to call Algolia's REST API, which is simpler and gives you more control.
 class RestaurantService with ChangeNotifier {
@@ -152,7 +149,7 @@ class RestaurantService with ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   /// Searches restaurants using Algolia with the multi-index endpoint
-  ///
+  //
   /// This implementation matches your working Ionic app exactly:
   /// 1. Uses the /1/indexes/*/queries endpoint (multi-index search)
   /// 2. Sends requests as an array with a single search request
@@ -162,7 +159,7 @@ class RestaurantService with ChangeNotifier {
   /// 1. You send a POST request with search parameters
   /// 2. Algolia processes the query across its indexed data
   /// 3. Returns ranked results with highlighting and metadata
-  ///
+  //
   /// Parameters:
   /// - query: Search text (searches across name, address, keywords)
   /// - districtEn: Filter by district (English name)
@@ -272,7 +269,7 @@ class RestaurantService with ChangeNotifier {
   }
 
   /// Builds Algolia filter syntax from selected filters
-  ///
+  //
   /// Algolia uses a SQL-like syntax for filters. This method constructs
   /// filter strings like: District_EN:"Kowloon" AND Keyword_EN:"veggie"
   String? _buildFilters(String? districtEn, String? keywordEn) {
@@ -298,8 +295,8 @@ class RestaurantService with ChangeNotifier {
   }
 
   /// Get Restaurant by ID from API
-  ///
-  /// Fetches a single restaurant from Node.js API.
+  // 
+  // Fetches a single restaurant from Node.js API.
   Future<Restaurant?> getRestaurantById(String id) async {
     _setLoading(true);
     notifyListeners();
@@ -337,9 +334,9 @@ class RestaurantService with ChangeNotifier {
   }
 
   /// Load All Restaurants from API
-  ///
-  /// Fetches all restaurants from Node.js API.
-  /// Only use this for small datasets - for searching, use Algolia instead.
+  // 
+  // Fetches all restaurants from Node.js API.
+  // Only use this for small datasets - for searching, use Algolia instead.
   Future<List<Restaurant>> getAllRestaurants() async {
     _setLoading(true);
     notifyListeners();
@@ -382,9 +379,7 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  /// Clear Search Results
-  ///
-  /// Resets the search state. Useful when navigating away from search.
+  // Clear Search Results
   void clearResults() {
     _searchResults = [];
     _totalHits = 0;
@@ -394,13 +389,13 @@ class RestaurantService with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clear Error Message
+  // Clear Error Message
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
 
-  /// Set Loading State
+  // Set Loading State
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
