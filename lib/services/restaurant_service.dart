@@ -130,16 +130,16 @@ class RestaurantService with ChangeNotifier {
   static final String _algoliaAppId = AppConfig.algoliaAppId;
   static final String _algoliaSearchKey = AppConfig.algoliaSearchKey;
   static final String _algoliaIndexName = AppConfig.algoliaIndexName;
-  
+
   // Your Node.js API endpoint from AppConfig
   final String _apiUrl = AppConfig.getEndpoint('API/Restaurants');
-  
+
   // Cached search results to avoid unnecessary API calls
   List<Restaurant> _searchResults = [];
   int _totalHits = 0;
   int _currentPage = 0;
   int _totalPages = 0;
-  
+
   // Loading and error state
   bool _isLoading = false;
   String? _errorMessage;
@@ -181,34 +181,41 @@ class RestaurantService with ChangeNotifier {
     // Schedule the work to run after the current build cycle is complete.
     _isLoading = true;
     notifyListeners();
-      
-      // Build the filters string
-      // Algolia uses a SQL-like syntax for filters
-      // Format: field:value AND field:value
+
+    // Build the filters string
+    // Algolia uses a SQL-like syntax for filters
+    // Format: field:value AND field:value
     try {
       final filters = _buildFilters(districtEn, keywordEn);
 
-      // Build params object (NOT the top-level payload)
-      final params = <String, dynamic>{
+      // Build params string for the single-index endpoint
+      // The single-index endpoint requires params as a URL-encoded string
+      final paramsMap = <String, dynamic>{
         'query': query,
-        'page': page,
-        'hitsPerPage': hitsPerPage,
-        if (filters != null) 'filters': filters,
+        'page': page.toString(),
+        'hitsPerPage': hitsPerPage.toString(),
       };
-      
-      // Call Algolia search API with multi-index search endpoint
+
+      if (filters != null) {
+        paramsMap['filters'] = filters;
+      }
+
+      // Convert params map to URL-encoded string
+      final paramsString = paramsMap.entries
+          .map((entry) => '${Uri.encodeComponent(entry.key)}=${Uri.encodeComponent(entry.value)}')
+          .join('&');
+
+      // Use the correct single-index query endpoint
+      // This is the standard Algolia endpoint that matches your test file
       final url = Uri.parse(
-          'https://$_algoliaAppId-dsn.algolia.net/1/indexes/*/queries' // Not 'https://$_algoliaAppId-dsn.algolia.net/1/indexes/$_algoliaIndexName/query'
+          'https://$_algoliaAppId-dsn.algolia.net/1/indexes/$_algoliaIndexName/query'
       );
-      // Send array of requests to Algolia
+
+      // Send request body with params string
       final requestBody = {
-        'requests': [
-          {
-            'indexName': _algoliaIndexName,
-            'params': params,
-          }
-        ]
+        'params': paramsString,
       };
+
       if (kDebugMode) {
         print('RestaurantService: Searching Algolia...');
         print('URL: $url');
@@ -229,19 +236,20 @@ class RestaurantService with ChangeNotifier {
           throw Exception('Algolia search timed out');
         },
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Extracts the first element from the 'results' list after casting it to a dynamic list
-        final searchResult = (data['results'] as List<dynamic>)[0]; //Access results[0]
-        final results = SearchResults.fromJson(searchResult);
-        
+
+        // With the single-index endpoint, the response is directly the search result
+        // No need to extract from a results array
+        final results = SearchResults.fromJson(data);
+
         _searchResults = results.hits;
         _totalHits = results.nbHits;
         _currentPage = results.page;
         _totalPages = results.nbPages;
         _errorMessage = null;
-        
+
         if (kDebugMode) {
           print('RestaurantService: Found ${results.nbHits} restaurants');
         }
@@ -267,18 +275,18 @@ class RestaurantService with ChangeNotifier {
   /// This handles multi-word values by wrapping them in quotes.
   String? _buildFilters(String? districtEn, String? keywordEn) {
     final parts = <String>[];
-    
+
     if (districtEn != null && districtEn.isNotEmpty && districtEn != 'All Districts') {
       // Quote the value if it contains spaces
       final quotedDistrict = districtEn.contains(' ') ? '"$districtEn"' : districtEn;
       parts.add('District_EN:$quotedDistrict');
     }
-    
+
     if (keywordEn != null && keywordEn.isNotEmpty) {
       final quotedKeyword = keywordEn.contains(' ') ? '"$keywordEn"' : keywordEn;
       parts.add('Keyword_EN:$quotedKeyword');
     }
-    
+
     return parts.isEmpty ? null : parts.join(' AND ');
   }
 
@@ -295,12 +303,12 @@ class RestaurantService with ChangeNotifier {
         print('RestaurantService: Fetching restaurant $id from API');
         print('URL: $_apiUrl/$id');
       }
-      
+
       final response = await http.get(
         Uri.parse('$_apiUrl/$id'),
         headers: {'Content-Type': 'application/json'},
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final restaurant = Restaurant.fromJson(data);
@@ -335,24 +343,24 @@ class RestaurantService with ChangeNotifier {
         print('RestaurantService: Fetching all restaurants from API');
         print('URL: $_apiUrl');
       }
-      
+
       final response = await http.get(
         Uri.parse(_apiUrl),
         headers: {'Content-Type': 'application/json'},
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final restaurants = (data['data'] as List<dynamic>)
             .map((e) => Restaurant.fromJson(e as Map<String, dynamic>))
             .toList();
-        
+
         _searchResults = restaurants;
         _totalHits = restaurants.length;
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
-        
+
         return restaurants;
       } else {
         _errorMessage = 'Failed to load restaurants';

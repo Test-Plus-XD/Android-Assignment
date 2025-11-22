@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/restaurant_service.dart';
 import 'restaurant_detail.dart';
 
-// Restaurants page with client-side search, district filter and Veggie/Vegan toggles.
-// District list is hardcoded for fastest client performance.
-
+/// Restaurants Search Page - Algolia Implementation
+///
+/// This page now matches your working Ionic search.page.ts architecture:
+/// - Uses Algolia search instead of local filtering
+/// - Supports district and keyword filters
+/// - Real-time search with debouncing
+/// - Pagination support
 class RestaurantsPage extends StatefulWidget {
   final bool isTraditionalChinese;
   const RestaurantsPage({this.isTraditionalChinese = false, super.key});
@@ -14,11 +19,25 @@ class RestaurantsPage extends StatefulWidget {
 }
 
 class _RestaurantsPageState extends State<RestaurantsPage> {
-  // Text controller for name search.
+  // Search query text controller
   final TextEditingController searchController = TextEditingController();
+  // Selected filters (using EN tokens as canonical values, like Ionic)
+  final List<String> selectedDistrictTokens = [];
+  final List<String> selectedKeywordTokens = [];
+
+  // Available filter options (loaded from Algolia)
+  List<DistrictOption> availableDistricts = [];
+  List<KeywordOption> availableKeywords = [];
+
+  // Pagination state
+  int currentPage = 0;
+  final int resultsPerPage = 12;
+
+  // Debounce timer for search input
+  DateTime? lastSearchTime;
 
   // Cached restaurants loaded from the service.
-  late Future<List<Restaurant>> restaurantsFuture;
+  //late Future<List<Restaurant>> restaurantsFuture;
 
   // UI filter state.
   String selectedDistrict = 'All Districts';
@@ -52,8 +71,10 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
   @override
   void initState() {
     super.initState();
-    // Load restaurants from the service.
-    restaurantsFuture = RestaurantService().getAllRestaurants();
+    // Load initial results after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _performSearch();
+    });
   }
 
   @override
@@ -62,122 +83,215 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     super.dispose();
   }
 
-  // Apply client-side filters to the loaded list.
-  List<Restaurant> applyFilters(List<Restaurant> sourceList) {
-    final String query = searchController.text.trim().toLowerCase();
+  /// Perform Algolia Search
+  Future<void> _performSearch() async {
+    final restaurantService = context.read<RestaurantService>();
 
-    bool dietMatches(Restaurant restaurant) {
-      if (!filterVeggie && !filterVegan) return true;
-      final List<String> keywordLower = [
-        ...(restaurant.keywordEn ?? []).map((k) => k.toLowerCase()),
-        ...(restaurant.keywordTc ?? []).map((k) => k.toLowerCase())
-      ];
-      final bool hasVeggie = keywordLower.any((k) => k.contains('veggie') || k.contains('齋'));
-      final bool hasVegan = keywordLower.any((k) => k.contains('vegan') || k.contains('純素'));
-      if (filterVeggie && filterVegan) return hasVeggie || hasVegan;
-      if (filterVeggie) return hasVeggie;
-      return hasVegan;
+    // Build Algolia filter string (like Ionic does)
+    final filters = _buildAlgoliaFilter(selectedDistrictTokens, []);
+
+    // Call Algolia search (like Ionic searchRestaurantsWithFilters)
+    await restaurantService.searchRestaurants(
+      query: searchController.text.trim(),
+      districtEn: filters,
+      isTraditionalChinese: widget.isTraditionalChinese,
+      page: currentPage,
+      hitsPerPage: resultsPerPage,
+    );
+  }
+
+  /// Build Algolia Filter String
+  // Converts selected districts into Algolia filter syntax
+  // Example: District_EN:"Kowloon" OR District_EN:"Wan Chai"
+  String? _buildAlgoliaFilter(List<String> districts, List<String> keywords) {
+    final parts = <String>[];
+
+    // Add district filters
+    if (districts.isNotEmpty) {
+      final districtClauses = districts
+          .map((d) => 'District_EN:"${_escapeFilterValue(d)}"')
+          .join(' OR ');
+      if (districtClauses.isNotEmpty) {
+        parts.add(districtClauses);
+      }
     }
 
-    return sourceList.where((restaurant) {
-      if (selectedDistrict != 'All Districts') {
-        if (restaurant.districtEn != selectedDistrict) {
-          return false;
-        }
+    // Add keyword filters (for future implementation)
+    if (keywords.isNotEmpty) {
+      final keywordClauses = keywords
+          .map((k) => 'Keyword_EN:"${_escapeFilterValue(k)}"')
+          .join(' OR ');
+      if (keywordClauses.isNotEmpty) {
+        parts.add('(${keywordClauses})');
       }
+    }
 
-      if (!dietMatches(restaurant)) return false;
-
-      if (query.isNotEmpty) {
-        final String nameEn = (restaurant.nameEn ?? '').toLowerCase();
-        final String nameTc = (restaurant.nameTc ?? '').toLowerCase();
-        final String addressEn = (restaurant.addressEn ?? '').toLowerCase();
-        final String addressTc = (restaurant.addressTc ?? '').toLowerCase();
-        return nameEn.contains(query) || nameTc.contains(query) || addressEn.contains(query) || addressTc.contains(query);
-      }
-      return true;
-    }).toList();
+    if (parts.isEmpty) return null;
+    return parts.join(' AND ');
   }
 
-  // Helper to build district dropdown.
-  Widget buildDistrictDropdown() {
-    final List<DropdownMenuItem<String>> items = districtList
-        .map((d) => DropdownMenuItem<String>(
-      value: d['en'],
-      child: Text(widget.isTraditionalChinese ? (d['tc'] ?? d['en']!) : (d['en'] ?? d['tc']!)),
-    ))
-        .toList();
+  // Escape filter values for Algolia
+  String _escapeFilterValue(String value) {
+    return value.replaceAll('"', '\\"');
+  }
 
-    return DropdownButton<String>(
-      value: selectedDistrict,
-      items: items,
-      isExpanded: true,
-      underline: Container(), // Hide default underline to avoid double borders
-      onChanged: (val) {
-        if (val == null) return;
+  // Handle search input with debounce
+  void _onSearchChanged() {
+    lastSearchTime = DateTime.now();
+
+    // Debounce by 300ms (like Ionic)
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (lastSearchTime != null &&
+          DateTime.now().difference(lastSearchTime!) >= const Duration(milliseconds: 300)) {
+        currentPage = 0;
+        _performSearch();
+      }
+    });
+  }
+
+  // Open district filter dialog
+  Future<void> _openDistrictFilter() async {
+    final currentLang = widget.isTraditionalChinese ? 'TC' : 'EN';
+
+    // Build checkbox options
+    final selectedDistrict = selectedDistrictTokens.isNotEmpty
+        ? selectedDistrictTokens[0]
+        : 'All Districts';
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(currentLang == 'TC' ? '選擇地區' : 'Select District'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: districtList.map((district) {
+              final districtEn = district['en']!;
+              final districtTc = district['tc']!;
+              final label = currentLang == 'TC' ? districtTc : districtEn;
+              final isSelected = districtEn == selectedDistrict;
+
+              return RadioListTile<String>(
+                title: Text(label),
+                value: districtEn,
+                groupValue: selectedDistrict,
+                onChanged: (value) {
+                  Navigator.pop(context, value);
+                },
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(currentLang == 'TC' ? '取消' : 'Cancel'),
+          ),
+        ],
+      ),
+    ).then((value) {
+      if (value != null) {
         setState(() {
-          selectedDistrict = val;
+          if (value == 'All Districts') {
+            selectedDistrictTokens.clear();
+          } else {
+            selectedDistrictTokens.clear();
+            selectedDistrictTokens.add(value);
+          }
+          currentPage = 0;
         });
-      },
-    );
+        _performSearch();
+      }
+    });
   }
 
-  // Helper to build Veggie/Vegan toggle buttons.
-  Widget buildDietFilters() {
-    return Row(
-      children: [
-        SizedBox(
-          height: 40,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              elevation: filterVeggie ? 4 : 0,
-              backgroundColor: filterVeggie ? Colors.green.shade300 : null,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-            ),
-            onPressed: () => setState(() => filterVeggie = !filterVeggie),
-            child: Text(widget.isTraditionalChinese ? '齋' : 'Veggie'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          height: 40,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              elevation: filterVegan ? 4 : 0,
-              backgroundColor: filterVegan ? Colors.green.shade300 : null,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-            ),
-            onPressed: () => setState(() => filterVegan = !filterVegan),
-            child: Text(widget.isTraditionalChinese ? '純素' : 'Vegan'),
-          ),
-        ),
-      ],
-    );
+  // Clear district filter
+  void _clearDistrict() {
+    setState(() {
+      selectedDistrictTokens.clear();
+      currentPage = 0;
+    });
+    _performSearch();
   }
 
-  // Combined filter row as a single widget.
-  PreferredSizeWidget buildFilterRow() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56.0),
-      child: Material(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: Colors.green.shade300, width: 1.0),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
+  // Clear keyword filter
+  void _clearKeyword() {
+    setState(() {
+      selectedKeywordTokens.clear();
+      currentPage = 0;
+    });
+    _performSearch();
+  }
+
+  // Clear all filters
+  void _clearAllFilters() {
+    setState(() {
+      selectedDistrictTokens.clear();
+      selectedKeywordTokens.clear();
+      searchController.clear();
+      currentPage = 0;
+    });
+    _performSearch();
+  }
+
+  // Get display label for selected district
+  String get selectedDistrictLabel {
+    if (selectedDistrictTokens.isEmpty) {
+      return widget.isTraditionalChinese ? '所有地區' : 'All Districts';
+    }
+
+    final token = selectedDistrictTokens[0];
+    final district = districtList.firstWhere(
+          (d) => d['en'] == token,
+      orElse: () => {'en': token, 'tc': token},
+    );
+
+    return widget.isTraditionalChinese ? district['tc']! : district['en']!;
+  }
+
+  /// Build filter chips
+  Widget _buildFilterChips() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          // District filter chip
+          FilterChip(
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(child: buildDistrictDropdown()),
-                const SizedBox(width: 12),
-                buildDietFilters(),
+                const Icon(Icons.location_on_outlined, size: 18),
+                const SizedBox(width: 4),
+                Text(selectedDistrictLabel),
+                if (selectedDistrictTokens.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: _clearDistrict,
+                    child: const Icon(Icons.close, size: 16),
+                  ),
+                ],
               ],
             ),
+            selected: selectedDistrictTokens.isNotEmpty,
+            onSelected: (_) => _openDistrictFilter(),
           ),
-        ),
+
+          // Clear all button (if any filters active)
+          if (selectedDistrictTokens.isNotEmpty || searchController.text.isNotEmpty)
+            ActionChip(
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.close, size: 18),
+                  const SizedBox(width: 4),
+                  Text(widget.isTraditionalChinese ? '清除所有' : 'Clear All'),
+                ],
+              ),
+              onPressed: _clearAllFilters,
+            ),
+        ],
       ),
     );
   }
@@ -185,12 +299,12 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FutureBuilder<List<Restaurant>>(
-        future: restaurantsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            final List<Restaurant> allRestaurants = snapshot.data!;
-            final List<Restaurant> filtered = applyFilters(allRestaurants);
+        body: Consumer<RestaurantService>(
+            builder: (context, restaurantService, _) {
+              final restaurants = restaurantService.searchResults;
+              final isLoading = restaurantService.isLoading;
+              final totalResults = restaurantService.totalHits;
+              final totalPages = restaurantService.totalPages;
 
             // Use CustomScrollView for advanced scrolling effects
             return CustomScrollView(
@@ -210,139 +324,262 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                   pinned: false,  // The app bar will not stay at the top
                   floating: true, // It will become visible as soon as you scroll up
                   snap: true,     // It will snap into place (fully visible or fully hidden)
-                  // Place the filter row in the AppBar's bottom property
-                  bottom: buildFilterRow(),
                 ),
 
-                // Info row showing number of results, now as a Sliver
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-                    child: Visibility(
-                      visible: filtered.isNotEmpty,
-                      child: Text(
-                        widget.isTraditionalChinese
-                            ? '顯示 ${filtered.length} 個餐廳 (共 ${allRestaurants.length})'
-                            : 'Showing ${filtered.length} restaurants (total ${allRestaurants.length})',
-                        style: const TextStyle(fontSize: 14),
+                // Loading indicator
+                if (isLoading)
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+
+                // Empty state
+                if (!isLoading && restaurants.isEmpty)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: 64,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            widget.isTraditionalChinese
+                                ? '沒有找到餐廳'
+                                : 'No restaurants found',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.isTraditionalChinese
+                                ? '嘗試調整您的搜尋或篩選條件'
+                                : 'Try adjusting your search or filters',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          if (selectedDistrictTokens.isNotEmpty || searchController.text.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: OutlinedButton(
+                                onPressed: _clearAllFilters,
+                                child: Text(
+                                  widget.isTraditionalChinese
+                                      ? '清除篩選'
+                                      : 'Clear Filters',
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                ),
 
-                // The list of restaurants, now as a SliverList
-                filtered.isEmpty
-                    ? SliverFillRemaining(
-                  child: Center(child: Text(widget.isTraditionalChinese ? '沒有找到餐廳' : 'No restaurants found')),
-                )
-                    : SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                      final restaurant = filtered[index];
-                      final String displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
-                      final String displayAddress = restaurant.getDisplayAddress(widget.isTraditionalChinese);
-                      final List<String> keywords = restaurant.getDisplayKeywords(widget.isTraditionalChinese);
-                      final String keywordsText = keywords.join(', ');
-                      final Color textColor = Theme.of(context).colorScheme.onSurface; // Primary text color from theme
-                      final Color secondaryTextColor = textColor.withOpacity(0.75); // Slightly transparent for secondary text
-                      final Color gradientBaseColor = Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface;
+                // Restaurant cards
+                if (!isLoading && restaurants.isNotEmpty)
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                        final restaurant = restaurants[index];
+                        final displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
+                        final displayAddress = restaurant.getDisplayAddress(widget.isTraditionalChinese);
+                        final displayDistrict = restaurant.getDisplayDistrict(widget.isTraditionalChinese);
+                        final keywords = restaurant.getDisplayKeywords(widget.isTraditionalChinese);
 
-                      // Define a subtle shadow for the text to improve readability over images.
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: Card(
-                          // The card now uses the color defined in main.dart's CardTheme
-                          margin: EdgeInsets.zero,
-                          // The shape and clipBehavior are correctly inherited from the theme
-                          clipBehavior: Clip.hardEdge,
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => RestaurantDetailPage(restaurant: restaurant, isTraditionalChinese: widget.isTraditionalChinese),
-                                ),
-                              );
-                            },
-                            child: Ink.image(
-                              height: 200,
-                              image: NetworkImage(restaurant.imageUrl ?? 'https://via.placeholder.com/200'),
-                              fit: BoxFit.cover,
-                              child: Container(
-                                // Add the new gradient overlay from the bottom up to 30%.
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      gradientBaseColor.withOpacity(0.97), // Opaque at the very bottom
-                                      gradientBaseColor.withOpacity(0.79), // Semi-transparent
-                                      Colors.transparent, // Fully transparent
-                                    ],
-                                    stops: const [0.0, 0.3, 0.6], // Gradient ends at 60% height
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: Card(
+                            clipBehavior: Clip.hardEdge,
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RestaurantDetailPage(
+                                      restaurant: restaurant,
+                                      isTraditionalChinese: widget.isTraditionalChinese,
+                                    ),
                                   ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // 3. Use RichText with theme-based colors.
-                                      RichText(
-                                        text: TextSpan(
-                                          style: TextStyle(
-                                            color: textColor, // Use main text color from theme
-                                            fontSize: 18,
+                                );
+                              },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Restaurant image
+                                  if (restaurant.imageUrl != null)
+                                    Image.network(
+                                      restaurant.imageUrl!,
+                                      height: 200,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          height: 200,
+                                          color: Colors.grey.shade300,
+                                          child: const Icon(
+                                            Icons.restaurant,
+                                            size: 64,
+                                          ),
+                                        );
+                                      },
+                                    ),
+
+                                  // Restaurant info
+                                  Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Name
+                                        Text(
+                                          displayName,
+                                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                             fontWeight: FontWeight.bold,
                                           ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 8),
+
+                                        // District
+                                        Row(
                                           children: [
-                                            TextSpan(text: displayName),
-                                            TextSpan(
-                                              text: ' ⚪ $keywordsText',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: secondaryTextColor, // Use slightly fainter color
-                                                fontWeight: FontWeight.normal,
+                                            Icon(
+                                              Icons.location_on_outlined,
+                                              size: 16,
+                                              color: Theme.of(context).textTheme.bodySmall?.color,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                displayDistrict,
+                                                style: Theme.of(context).textTheme.bodyMedium,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ],
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      // 4. Use theme-based color for the address.
-                                      Text(
-                                        displayAddress,
-                                        style: TextStyle(
-                                          color: secondaryTextColor, // Use secondary text color
-                                          fontSize: 14,
+
+                                        // Keywords
+                                        if (keywords.isNotEmpty) ...[
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 4,
+                                            runSpacing: 4,
+                                            children: keywords.take(3).map((keyword) => Chip(
+                                              label: Text(
+                                                keyword,
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
+                                              padding: EdgeInsets.zero,
+                                              visualDensity: VisualDensity.compact,
+                                            )).toList(),
+                                          ),
+                                        ],
+
+                                        // View details
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              widget.isTraditionalChinese
+                                                  ? '查看詳情'
+                                                  : 'View Details',
+                                              style: TextStyle(
+                                                color: Theme.of(context).colorScheme.primary,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              Icons.arrow_forward,
+                                              size: 16,
+                                              color: Theme.of(context).colorScheme.primary,
+                                            ),
+                                          ],
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
                           ),
-                        ),
-                      );
-                        },
-                    childCount: filtered.length,
+                        );
+                      },
+                      childCount: restaurants.length,
+                    ),
                   ),
+
+                // Pagination (if multiple pages)
+                if (!isLoading && totalPages > 1)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.chevron_left),
+                            onPressed: currentPage > 0
+                                ? () {
+                              setState(() => currentPage--);
+                              _performSearch();
+                            }
+                                : null,
+                          ),
+                          Text(
+                            '${currentPage + 1} / $totalPages',
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.chevron_right),
+                            onPressed: currentPage < totalPages - 1
+                                ? () {
+                              setState(() => currentPage++);
+                              _performSearch();
+                            }
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // Bottom spacer
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 24),
                 ),
               ],
             );
-          } else if (snapshot.hasError) {
-            return Center(child: Text(widget.isTraditionalChinese ? '載入錯誤' : 'Error loading restaurants'));
-          } else {
-            return const Center(child: CircularProgressIndicator());
-          }
-        },
-      ),
+            },
+        ),
     );
   }
+}
+
+// District option model
+class DistrictOption {
+  final String districtEn;
+  final String districtTc;
+
+  DistrictOption({
+    required this.districtEn,
+    required this.districtTc,
+  });
+}
+
+// Keyword option model
+class KeywordOption {
+  final String valueEn;
+  final String labelEn;
+  final String labelTc;
+
+  KeywordOption({
+    required this.valueEn,
+    required this.labelEn,
+    required this.labelTc,
+  });
 }

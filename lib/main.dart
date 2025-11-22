@@ -47,24 +47,20 @@ const String prefKeyIsDark = 'pourrice_is_dark';
 const String prefKeyIsTc = 'pourrice_is_tc';
 
 /// Main Entry Point
-/// 
-/// This is where everything begins. Notice the async - we need to initialize
-/// Firebase and notifications before the app starts, so we await those operations.
-/// 
 /// Initialisation order matters:
 /// 1. Flutter bindings (required for async work before runApp)
-/// 2. Firebase (needed for authentication)
-/// 3. Notifications (sets up channels and timezone)
-/// 4. Then we can start the app
+/// 2. Firebase
+/// 3. Notifications (sets up channels and timezone) [This part is not implemented]
+/// 4. Then start the app
 void main() async {
-  // Ensures Flutter is ready before we do async work
+  // Ensures Flutter is ready before async work
   WidgetsFlutterBinding.ensureInitialized();
   // Print configuration for debugging
   if (kDebugMode) {
     print('DEBUG MODE ENABLED');
     AppConfig.printConfig();
   }
-  // Initialize Firebase with proper error handling
+  // Initialise Firebase with proper error handling
   try {
     // Check if Firebase is already initialised
     if (Firebase.apps.isEmpty) {
