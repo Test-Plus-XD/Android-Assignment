@@ -37,3 +37,4 @@ void main() async {
     print('❌ Exception: $e');
   }
 }
+// dart run algolia_test.dart

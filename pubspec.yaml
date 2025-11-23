@@ -46,8 +46,12 @@ dependencies:
   # Location services for GPS functionality
   geolocator: ^13.0.2
   permission_handler: ^11.3.1
+  # Algolia search
+  algoliasearch: ^1.41.1
+  algolia_helper_flutter: ^1.5.0
+  infinite_scroll_pagination: ^5.1.1
 
-  # Tier 1: Essential native Android features (currently implemented)
+  # Tier 1: Essential native Android features
   flutter_local_notifications: ^18.0.1  # Booking reminder notifications
   timezone: ^0.9.4                      # Required for scheduling notifications
   share_plus: ^10.1.2                   # Native Android share sheet
@@ -58,12 +62,12 @@ dependencies:
   # shimmer: ^3.0.0                     # Loading skeleton animations
   # connectivity_plus: ^6.1.1           # Network status detection
 
-  # Tier 3: Advanced features (ready for future implementation)
+  # Tier 3: Advanced features
   # flutter_animate: ^4.5.0             # Smooth UI animations
   # hive: ^2.2.3                        # Fast local database
   # hive_flutter: ^1.1.0                # Hive Flutter integration
 
-  # Stripe payment integration (for final assignment stage)
+  # Stripe payment integration
   # flutter_stripe: ^11.2.0             # Stripe payment processing
 
   # The following adds the Cupertino Icons font to your application.

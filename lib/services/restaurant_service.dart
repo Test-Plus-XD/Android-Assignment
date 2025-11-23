@@ -1,9 +1,12 @@
-import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:algolia_helper_flutter/algolia_helper_flutter.dart';
 import '../config.dart';
 
 /// Restaurant Model
+///
+/// Represents a restaurant entity with bilingual support (English and Traditional Chinese).
+/// This model handles both Algolia search results and potential API responses.
 class Restaurant {
   final String id;
   final String? nameEn;
@@ -33,10 +36,11 @@ class Restaurant {
     this.imageUrl,
   });
 
-  /// Create Restaurant from JSON
-  // 
-  /// Handles both Algolia search results and your API responses.
-  /// Algolia returns objectID, your API returns id.
+  /// Creates a Restaurant instance from JSON data
+  ///
+  /// This factory constructor handles both Algolia search results (which use objectID)
+  /// and your custom API responses (which might use id). It safely extracts values
+  /// and provides defaults for missing fields.
   factory Restaurant.fromJson(Map<String, dynamic> json) {
     return Restaurant(
       id: json['objectID'] ?? json['id'] ?? '',
@@ -58,89 +62,135 @@ class Restaurant {
     );
   }
 
-  // Get display name based on language
+  /// Returns the restaurant name in the appropriate language
+  ///
+  /// Falls back to the alternate language if the preferred language is unavailable.
   String getDisplayName(bool isTraditionalChinese) {
     return isTraditionalChinese ? (nameTc ?? nameEn ?? 'Unknown') : (nameEn ?? nameTc ?? 'Unknown');
   }
 
-  // Get display address based on language
+  /// Returns the restaurant address in the appropriate language
   String getDisplayAddress(bool isTraditionalChinese) {
     return isTraditionalChinese ? (addressTc ?? addressEn ?? 'Unknown') : (addressEn ?? addressTc ?? 'Unknown');
   }
 
-  // Get display district based on language
+  /// Returns the district name in the appropriate language
   String getDisplayDistrict(bool isTraditionalChinese) {
     return isTraditionalChinese ? (districtTc ?? districtEn ?? 'Unknown') : (districtEn ?? districtTc ?? 'Unknown');
   }
 
-  // Get display keywords based on language
+  /// Returns the keywords list in the appropriate language
   List<String> getDisplayKeywords(bool isTraditionalChinese) {
     return isTraditionalChinese ? (keywordTc ?? keywordEn ?? []) : (keywordEn ?? keywordTc ?? []);
   }
 }
 
-/// Algolia Search Results
-// 
-/// This wraps the response from Algolia search API.
-/// It includes the results plus metadata about the search (total hits, pages, etc.)
-class SearchResults {
-  final List<Restaurant> hits;
+/// Search Metadata Model
+///
+/// Contains metadata about a search response, primarily the total number of hits.
+/// This is used to display search statistics to users (e.g., "Found 42 restaurants").
+class SearchMetadata {
   final int nbHits;
-  final int page;
-  final int nbPages;
 
-  SearchResults({
-    required this.hits,
-    required this.nbHits,
-    required this.page,
-    required this.nbPages,
-  });
+  const SearchMetadata(this.nbHits);
 
-  factory SearchResults.fromJson(Map<String, dynamic> json) {
-    return SearchResults(
-      hits: (json['hits'] as List<dynamic>?)
-          ?.map((e) => Restaurant.fromJson(e as Map<String, dynamic>))
-          .toList() ?? [],
-      nbHits: json['nbHits'] as int? ?? 0,
-      page: json['page'] as int? ?? 0,
-      nbPages: json['nbPages'] as int? ?? 0,
-    );
+  /// Creates SearchMetadata from an Algolia SearchResponse
+  ///
+  /// Extracts the total number of hits from the response object.
+  factory SearchMetadata.fromResponse(SearchResponse response) {
+    return SearchMetadata(response.nbHits);
   }
 }
 
-/// Restaurant service handling all restaurant data operations
-//
-/// This service uses Algolia for fast search and your Node.js API for CRUD operations.
-// 
-/// Why Algolia?
-/// - Instant search as you type (very fast)
-/// - Full-text search across all fields
-/// - Faceted filtering (district, keywords)
-/// - Pagination for large datasets
-/// - Typo tolerance and relevance ranking
-// 
-/// Your Angular service uses @algolia/client-search. Flutter uses HTTP directly
-/// to call Algolia's REST API, which is simpler and gives you more control.
+/// Hits Page Model
+///
+/// Represents a single page of search results for pagination purposes.
+/// This model works with the infinite_scroll_pagination package to handle
+/// loading subsequent pages as the user scrolls.
+class HitsPage {
+  final List<Restaurant> items;
+  final int pageKey;
+  final int? nextPageKey;
+
+  const HitsPage(this.items, this.pageKey, this.nextPageKey);
+
+  /// Creates a HitsPage from an Algolia SearchResponse
+  ///
+  /// This factory method performs several important tasks:
+  /// 1. Converts raw JSON hits into Restaurant objects
+  /// 2. Determines if this is the last page of results
+  /// 3. Calculates the next page key (null if this is the last page)
+  ///
+  /// The infinite scroll pagination library uses the nextPageKey to know
+  /// whether to load more results. A null value indicates no more pages.
+  factory HitsPage.fromResponse(SearchResponse response) {
+    final items = response.hits.map((hit) => Restaurant.fromJson(hit)).toList();
+    final isLastPage = response.page >= response.nbPages - 1;
+    final nextPageKey = isLastPage ? null : response.page + 1;
+    return HitsPage(items, response.page, nextPageKey);
+  }
+}
+
+/// Restaurant Service - Algolia Helper Flutter Implementation
+///
+/// This service manages restaurant search using Algolia's official Flutter helper library.
+/// It provides a reactive, stream-based interface for search operations.
+///
+/// Architecture Overview:
+/// - Uses HitsSearcher from algolia_helper_flutter for search operations
+/// - Provides streams that UI widgets can listen to for reactive updates
+/// - Handles search state management including filters, pagination, and query text
+/// - Integrates seamlessly with infinite_scroll_pagination for smooth scrolling
+///
+/// Why algolia_helper_flutter?
+/// 1. Official Algolia library designed specifically for Flutter
+/// 2. Built-in support for common UI patterns (infinite scroll, faceting)
+/// 3. Automatic state management and debouncing
+/// 4. Stream-based reactive architecture matches Flutter's patterns
+/// 5. Simpler API than raw HTTP or low-level client packages
 class RestaurantService with ChangeNotifier {
-  // Algolia configuration from AppConfig
+  /// Algolia configuration from AppConfig
   static final String _algoliaAppId = AppConfig.algoliaAppId;
   static final String _algoliaSearchKey = AppConfig.algoliaSearchKey;
   static final String _algoliaIndexName = AppConfig.algoliaIndexName;
 
-  // Your Node.js API endpoint from AppConfig
-  final String _apiUrl = AppConfig.getEndpoint('API/Restaurants');
+  /// HitsSearcher - The core search component
+  ///
+  /// HitsSearcher manages the entire search lifecycle:
+  /// - Sends search requests to Algolia
+  /// - Manages search state (query, filters, page number)
+  /// - Provides reactive streams for responses
+  /// - Handles debouncing to avoid excessive API calls
+  ///
+  /// This is initialised once when the service is created and reused throughout
+  /// the app's lifecycle. The searcher maintains its own internal state.
+  late final HitsSearcher _hitsSearcher;
 
-  // Cached search results to avoid unnecessary API calls
+  /// Stream subscriptions for reactive updates
+  ///
+  /// These subscriptions listen to the HitsSearcher's response streams and
+  /// update the service's cached state accordingly. They're stored so we can
+  /// properly dispose of them when the service is destroyed.
+  StreamSubscription<SearchResponse>? _responsesSubscription;
+  StreamSubscription<SearchMetadata>? _metadataSubscription;
+
+  /// Cached search state
+  ///
+  /// These properties store the current search results and metadata.
+  /// They're updated whenever new responses arrive from Algolia.
+  /// The UI reads these values and rebuilds when notifyListeners() is called.
   List<Restaurant> _searchResults = [];
   int _totalHits = 0;
   int _currentPage = 0;
   int _totalPages = 0;
-
-  // Loading and error state
   bool _isLoading = false;
   String? _errorMessage;
 
-  // GETTERS
+  /// Public getters for accessing cached state
+  ///
+  /// These getters allow UI components to read the current search state
+  /// without being able to modify it directly. All state changes go through
+  /// the service's methods, maintaining a single source of truth.
   List<Restaurant> get searchResults => _searchResults;
   int get totalHits => _totalHits;
   int get currentPage => _currentPage;
@@ -148,256 +198,279 @@ class RestaurantService with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  /// Searches restaurants using Algolia with the multi-index endpoint
-  //
-  /// This implementation matches your working Ionic app exactly:
-  /// 1. Uses the /1/indexes/*/queries endpoint (multi-index search)
-  /// 2. Sends requests as an array with a single search request
-  /// 3. Includes the x-algolia-agent header for better analytics
+  /// Stream exposing the HitsSearcher's responses
   ///
-  /// How Algolia Search Works:
-  /// 1. You send a POST request with search parameters
-  /// 2. Algolia processes the query across its indexed data
-  /// 3. Returns ranked results with highlighting and metadata
+  /// This stream emits SearchResponse objects whenever a search completes.
+  /// UI components can listen to this stream for reactive updates.
+  /// The stream automatically handles errors and provides them to listeners.
+  Stream<SearchResponse> get responsesStream => _hitsSearcher.responses;
+
+  /// Stream exposing search metadata
+  ///
+  /// This stream emits SearchMetadata objects containing information like
+  /// total hit count. It's useful for displaying search statistics in the UI.
+  Stream<SearchMetadata> get metadataStream =>
+      _hitsSearcher.responses.map(SearchMetadata.fromResponse);
+
+  /// Stream exposing paginated results
+  ///
+  /// This stream is specifically designed for use with infinite_scroll_pagination.
+  /// It emits HitsPage objects that contain:
+  /// - The current page's items
+  /// - The current page number
+  /// - The next page number (or null if this is the last page)
+  ///
+  /// The pagination library uses this information to automatically load more
+  /// results as the user scrolls down the list.
+  Stream<HitsPage> get pagesStream =>
+      _hitsSearcher.responses.map(HitsPage.fromResponse);
+
+  /// Constructor initialises the Algolia searcher
+  ///
+  /// This sets up the HitsSearcher with your Algolia credentials and configures
+  /// the initial search state. The searcher is created once and reused for all
+  /// searches, maintaining its state between requests.
+  RestaurantService() {
+    _initialiseAlgolia();
+    _setupStreamListeners();
+  }
+
+  /// Initialises the Algolia HitsSearcher
   //
+  /// The HitsSearcher is configured with:
+  /// - applicationID: Algolia application ID
+  /// - apiKey: Search-only API key (safe for client-side use)
+  /// - indexName: Which Algolia index to search
+  //
+  /// The initial state sets up:
+  /// - indexName: Which Algolia index to search
+  /// - query: Empty string (shows all results initially)
+  /// - page: 0 (first page)
+  /// - hitsPerPage: Number of results per page
+  void _initialiseAlgolia() {
+    _hitsSearcher = HitsSearcher(
+      applicationID: _algoliaAppId,
+      apiKey: _algoliaSearchKey,
+      indexName: 'Restaurants',
+    );
+
+    if (kDebugMode) {
+      print('RestaurantService: Algolia Helper initialised');
+      print('App ID: $_algoliaAppId');
+      print('Index: $_algoliaIndexName');
+    }
+  }
+
+  /// Sets up stream listeners for reactive state updates
+  ///
+  /// This method subscribes to the HitsSearcher's response streams and updates
+  /// the service's cached state whenever new search results arrive. The listeners
+  /// handle both successful responses and errors.
+  ///
+  /// Why use streams?
+  /// - Reactive updates: UI automatically rebuilds when data changes
+  /// - Asynchronous: Doesn't block the UI thread while waiting for results
+  /// - Error handling: Errors flow through the same stream pipeline
+  /// - Composable: Multiple listeners can subscribe to the same stream
+  void _setupStreamListeners() {
+    /// Listen to search responses
+    ///
+    /// This subscription updates the cached search results whenever a new
+    /// response arrives from Algolia. It extracts the restaurants from the
+    /// response and calculates pagination metadata.
+    _responsesSubscription = _hitsSearcher.responses.listen(
+          (response) {
+        _searchResults = response.hits.map((hit) => Restaurant.fromJson(hit)).toList();
+        _totalHits = response.nbHits;
+        _currentPage = response.page;
+        _totalPages = response.nbPages;
+        _isLoading = false;
+        _errorMessage = null;
+        notifyListeners();
+
+        if (kDebugMode) {
+          print('RestaurantService: Received ${_searchResults.length} results');
+          print('Page $_currentPage of $_totalPages, $_totalHits total hits');
+        }
+      },
+      onError: (error) {
+        _errorMessage = 'Search error: $error';
+        _isLoading = false;
+        _searchResults = [];
+        notifyListeners();
+
+        if (kDebugMode) {
+          print('RestaurantService Error: $error');
+        }
+      },
+    );
+  }
+
+  /// Updates the search query text
+  ///
+  /// This method modifies the HitsSearcher's state to include a new query string.
+  /// The searcher automatically debounces rapid changes and triggers a new search.
+  ///
+  /// The applyState method uses a callback pattern to update the state immutably:
+  /// 1. It receives the current state
+  /// 2. Creates a copy with the new query
+  /// 3. Resets to page 0 (since it's a new search)
+  /// 4. Triggers a new Algolia request
+  ///
   /// Parameters:
-  /// - query: Search text (searches across name, address, keywords)
-  /// - districtEn: Filter by district (English name)
-  /// - keywordEn: Filter by keyword (English)
-  /// - isTraditionalChinese: Language for display (doesn't affect search)
-  /// - page: Page number for pagination (0-indexed)
-  /// - hitsPerPage: Results per page
-  Future<void> searchRestaurants({
-    String query = '',
-    String? districtEn,
-    String? keywordEn,
-    bool isTraditionalChinese = false,
-    int page = 0,
-    int hitsPerPage = 20,
-  }) async {
-    // Schedule the work to run after the current build cycle is complete.
+  /// - query: The search text entered by the user
+  void setQuery(String query) {
     _isLoading = true;
     notifyListeners();
 
-    // Build the filters string
-    // Algolia uses a SQL-like syntax for filters
-    // Format: field:value AND field:value
-    try {
-      final filters = _buildFilters(districtEn, keywordEn);
+    _hitsSearcher.applyState(
+          (state) => state.copyWith(
+        query: query,
+        page: 0,
+      ),
+    );
 
-      // Construct the search request parameters
-      final searchParams = <String, dynamic>{
-        'indexName': _algoliaIndexName,
-        'query': query,
-        'page': page,
-        'hitsPerPage': hitsPerPage,
-      };
-
-      // Add filters if they exist
-      if (filters != null) {
-        searchParams['filters'] = filters;
-      }
-
-      // Use the multi-index search endpoint - /1/indexes/*/queries
-      final url = Uri.parse(
-          'https://$_algoliaAppId-dsn.algolia.net/1/indexes/*/queries'
-      );
-
-      // Build the request body with the requests array
-      final requestBody = {
-        'requests': [searchParams],
-      };
-
-      if (kDebugMode) {
-        print('RestaurantService: Searching Algolia...');
-        print('URL: $url');
-        print('Body: ${jsonEncode(requestBody)}');
-      }
-
-      // Send the POST request with proper headers
-      final response = await http.post(
-        url,
-        headers: {
-          'X-Algolia-API-Key': _algoliaSearchKey,
-          'X-Algolia-Application-Id': _algoliaAppId,
-          'Content-Type': 'application/json',
-          'x-algolia-agent': 'Flutter Client; Algolia for Dart', // Add the user agent header for better analytics tracking
-        },
-        body: jsonEncode(requestBody),
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('Algolia search timed out after 10 seconds');
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // The multi-index endpoint returns a results array
-        // Extract the first result (since only one request is sent)
-        final resultsArray = data['results'] as List<dynamic>;
-        if (resultsArray.isEmpty) {
-          _searchResults = [];
-          _totalHits = 0;
-          _currentPage = 0;
-          _totalPages = 0;
-        } else {
-          final searchResult = resultsArray[0] as Map<String, dynamic>;
-          final results = SearchResults.fromJson(searchResult);
-
-          _searchResults = results.hits;
-          _totalHits = results.nbHits;
-          _currentPage = results.page;
-          _totalPages = results.nbPages;
-        }
-        _errorMessage = null;
-        if (kDebugMode) print('RestaurantService: Search successful - found $_totalHits restaurants');
-      } else {
-        _errorMessage = 'Search failed: ${response.statusCode}';
-        _searchResults = [];
-        if (kDebugMode) print('RestaurantService Error: ${response.body}');
-      }
-    } catch (e) {
-      _errorMessage = 'Search error: $e';
-      _searchResults = [];
-      if (kDebugMode) print('RestaurantService Exception: $e');
-    } finally {
-      // Ensure loading state is always turned off
-      _setLoading(false);
-      notifyListeners();
+    if (kDebugMode) {
+      print('RestaurantService: Query set to "$query"');
     }
   }
 
-  /// Builds Algolia filter syntax from selected filters
-  //
-  /// Algolia uses a SQL-like syntax for filters. This method constructs
-  /// filter strings like: District_EN:"Kowloon" AND Keyword_EN:"veggie"
-  String? _buildFilters(String? districtEn, String? keywordEn) {
-    final parts = <String>[];
-
-    // Add district filter if specified and not "All Districts"
-    if (districtEn != null && districtEn.isNotEmpty && districtEn != 'All Districts') {
-      // Escape any quotes in the value and wrap multi-word values in quotes
-      final escapedDistrict = districtEn.replaceAll('"', '\\"');
-      final quotedDistrict = districtEn.contains(' ') ? '"$escapedDistrict"' : escapedDistrict;
-      parts.add('District_EN:$quotedDistrict');
-    }
-
-    // Add keyword filter if specified
-    if (keywordEn != null && keywordEn.isNotEmpty) {
-      final escapedKeyword = keywordEn.replaceAll('"', '\\"');
-      final quotedKeyword = keywordEn.contains(' ') ? '"$escapedKeyword"' : escapedKeyword;
-      parts.add('Keyword_EN:$quotedKeyword');
-    }
-
-    // Return null if no filters, otherwise join with AND
-    return parts.isEmpty ? null : parts.join(' AND ');
-  }
-
-  /// Get Restaurant by ID from API
-  // 
-  // Fetches a single restaurant from Node.js API.
-  Future<Restaurant?> getRestaurantById(String id) async {
-    _setLoading(true);
+  /// Updates the search filters
+  ///
+  /// This method applies Algolia filter syntax to restrict search results.
+  /// Filters use a SQL-like syntax, for example:
+  /// - District_EN:"Kowloon"
+  /// - District_EN:"Kowloon" AND Keyword_EN:"veggie"
+  ///
+  /// When filters change, we reset to page 0 since it's effectively a new search.
+  ///
+  /// Parameters:
+  /// - filters: Algolia filter string (null removes all filters)
+  void setFilters(String? filters) {
+    _isLoading = true;
     notifyListeners();
 
-    try {
-      if (kDebugMode) {
-        print('RestaurantService: Fetching restaurant $id from API');
-        print('URL: $_apiUrl/$id');
-      }
+    _hitsSearcher.applyState(
+          (state) => state.copyWith(
+        filters: filters,
+        page: 0,
+      ),
+    );
 
-      final response = await http.get(
-        Uri.parse('$_apiUrl/$id'),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final restaurant = Restaurant.fromJson(data);
-        _errorMessage = null;
-        _setLoading(false);
-        notifyListeners();
-        return restaurant;
-      } else {
-        _errorMessage = 'Failed to load restaurant';
-        _setLoading(false);
-        notifyListeners();
-        return null;
-      }
-    } catch (e) {
-      _errorMessage = 'Error loading restaurant: $e';
-      _setLoading(false);
-      notifyListeners();
-      return null;
+    if (kDebugMode) {
+      print('RestaurantService: Filters set to "$filters"');
     }
   }
 
-  /// Load All Restaurants from API
-  // 
-  // Fetches all restaurants from Node.js API.
-  // Only use this for small datasets - for searching, use Algolia instead.
-  Future<List<Restaurant>> getAllRestaurants() async {
-    _setLoading(true);
+  /// Loads a specific page of results
+  ///
+  /// This method is typically called by the infinite scroll pagination controller
+  /// when the user scrolls near the end of the current results. It updates the
+  /// page number in the search state, triggering a new Algolia request.
+  ///
+  /// Parameters:
+  /// - page: The zero-indexed page number to load
+  void loadPage(int page) {
+    _isLoading = true;
     notifyListeners();
 
-    try {
-      if (kDebugMode) {
-        print('RestaurantService: Fetching all restaurants from API');
-        print('URL: $_apiUrl');
-      }
+    _hitsSearcher.applyState(
+          (state) => state.copyWith(page: page),
+    );
 
-      final response = await http.get(
-        Uri.parse(_apiUrl),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final restaurants = (data['data'] as List<dynamic>)
-            .map((e) => Restaurant.fromJson(e as Map<String, dynamic>))
-            .toList();
-
-        _searchResults = restaurants;
-        _totalHits = restaurants.length;
-        _errorMessage = null;
-        _setLoading(false);
-        notifyListeners();
-
-        return restaurants;
-      } else {
-        _errorMessage = 'Failed to load restaurants';
-        _setLoading(false);
-        notifyListeners();
-        return [];
-      }
-    } catch (e) {
-      _errorMessage = 'Error loading restaurants: $e';
-      _setLoading(false);
-      notifyListeners();
-      return [];
+    if (kDebugMode) {
+      print('RestaurantService: Loading page $page');
     }
   }
 
-  // Clear Search Results
+  /// Performs a complete search with all parameters
+  ///
+  /// This is a convenience method that updates multiple search parameters at once.
+  /// It's useful when you want to change the query, filters, and pagination
+  /// settings in a single operation, triggering only one Algolia request.
+  ///
+  /// Parameters:
+  /// - query: Search text (optional)
+  /// - filters: Algolia filter string (optional)
+  /// - page: Page number (defaults to 0)
+  /// - hitsPerPage: Results per page (optional)
+  Future<void> search({
+    String? query,
+    String? filters,
+    int page = 0,
+    int? hitsPerPage,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    _hitsSearcher.applyState(
+          (state) => state.copyWith(
+        query: query ?? state.query,
+        filters: filters,
+        page: page,
+        hitsPerPage: hitsPerPage ?? state.hitsPerPage,
+      ),
+    );
+
+    if (kDebugMode) {
+      print('RestaurantService: Searching with query="$query", filters="$filters", page=$page');
+    }
+  }
+
+  /// Clears all search results and resets state
+  ///
+  /// This method resets the service to its initial state, clearing all cached
+  /// results and resetting the search query and filters. It's useful when the
+  /// user wants to start a fresh search or when navigating away from the search page.
   void clearResults() {
     _searchResults = [];
     _totalHits = 0;
     _currentPage = 0;
     _totalPages = 0;
     _errorMessage = null;
+    _isLoading = false;
+
+    _hitsSearcher.applyState(
+          (state) => state.copyWith(
+        query: '',
+        filters: null,
+        page: 0,
+      ),
+    );
     notifyListeners();
+
+    if (kDebugMode) {
+      print('RestaurantService: Results cleared');
+    }
   }
 
-  // Clear Error Message
+  /// Clears only the error message
+  ///
+  /// This allows the UI to dismiss error messages without affecting the search state.
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
 
-  // Set Loading State
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
+  /// Disposes of resources when the service is destroyed
+  ///
+  /// This is critical for preventing memory leaks. It:
+  /// 1. Cancels all stream subscriptions (stops listening to Algolia responses)
+  /// 2. Disposes of the HitsSearcher (closes network connections)
+  /// 3. Calls super.dispose() to complete the ChangeNotifier disposal
+  ///
+  /// Flutter calls this method automatically when the service is removed from
+  /// the widget tree (e.g., when the app is closed or when using Provider with
+  /// dependency injection).
+  @override
+  void dispose() {
+    _responsesSubscription?.cancel();
+    _metadataSubscription?.cancel();
+    _hitsSearcher.dispose();
+    super.dispose();
+
+    if (kDebugMode) {
+      print('RestaurantService: Disposed');
+    }
   }
 }
