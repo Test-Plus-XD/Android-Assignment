@@ -8,6 +8,7 @@ import '../services/restaurant_service.dart';
 import '../services/location_service.dart';
 import '../services/booking_service.dart';
 import '../services/notification_service.dart';
+import '../models.dart';
 
 /// Restaurant Detail Page - Complete Native Android Integration
 /// 
