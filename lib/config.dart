@@ -30,7 +30,7 @@ class AppConfig {
       // Change this based on your setup:
       
       // Option 1: For Android Emulator
-      return 'http://10.0.2.2:3000';
+      //return 'http://10.0.2.2:3000';
       
       // Option 2: For iOS Simulator
       // return 'http://localhost:3000';
@@ -40,14 +40,17 @@ class AppConfig {
       // return 'http://192.168.1.100:3000';
       
       // Option 4: For testing with deployed API
-      // return 'https://yourapi.com';
+      return 'https://vercel-express-api-alpha.vercel.app';
     }
-    
+
     // Production URL (used when app is built in release mode)
     // TODO: Replace with your actual production API URL
     return 'https://yourapi.com';
   }
-  
+
+  // API passcode for authentication (matches .env)
+  static const String apiPasscode = 'PourRice';
+
   /// Algolia Configuration
   /// 
   /// These settings come from your Algolia dashboard.
@@ -68,7 +71,6 @@ class AppConfig {
   
   /// Check if running in development mode
   static bool get isDevelopment => kDebugMode;
-  
   /// Check if running in production mode
   static bool get isProduction => !kDebugMode;
   

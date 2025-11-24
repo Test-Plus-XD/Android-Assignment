@@ -9,9 +9,7 @@ import '../models.dart';
 // Search metadata containing result count
 class SearchMetadata {
   final int nbHits;
-
   const SearchMetadata(this.nbHits);
-
   factory SearchMetadata.fromResponse(SearchResponse response) {
     return SearchMetadata(response.nbHits);
   }
@@ -22,13 +20,16 @@ class HitsPage {
   final List<Restaurant> items;
   final int pageKey;
   final int? nextPageKey;
-
   const HitsPage(this.items, this.pageKey, this.nextPageKey);
 
   factory HitsPage.fromResponse(SearchResponse response) {
     final items = response.hits.map((hit) => Restaurant.fromJson(hit)).toList();
-    final isLastPage = response.page >= response.nbPages - 1;
-    final nextPageKey = isLastPage ? null : response.page + 1;
+    // Debug: log pagination info
+    if (kDebugMode) print('Algolia response → page: ${response.page}, nbPages: ${response.nbPages}, hits this page: ${response.hits.length}, totalHits: ${response.nbHits}');
+    // Compute next page key more defensively, treat `response.page` as zero-based.
+    final isLastPage = (response.page >= response.nbPages - 1);
+    final int? nextPageKey = isLastPage ? null : response.page + 1;
+    if (kDebugMode) print('Computed nextPageKey = $nextPageKey (isLastPage: $isLastPage)');
     return HitsPage(items, response.page, nextPageKey);
   }
 }
@@ -39,14 +40,12 @@ class RestaurantService with ChangeNotifier {
   static final String _algoliaAppId = AppConfig.algoliaAppId;
   static final String _algoliaSearchKey = AppConfig.algoliaSearchKey;
   static final String _algoliaIndexName = AppConfig.algoliaIndexName;
-
   // REST API configuration
-  static final String _apiBaseUrl = AppConfig.apiBaseUrl;
-  static final String _apiEndpoint = '$_apiBaseUrl/API/Restaurants';
-
+  //static final String _apiBaseUrl = AppConfig.apiBaseUrl;
+  //static final String _apiEndpoint = '$_apiBaseUrl/API/Restaurants';
+  static final String _apiEndpoint = AppConfig.getEndpoint('API/Restaurants');
   // Algolia search components
   late final HitsSearcher _hitsSearcher;
-
   // Stream subscriptions
   StreamSubscription<SearchResponse>? _responsesSubscription;
 
@@ -85,11 +84,7 @@ class RestaurantService with ChangeNotifier {
       apiKey: _algoliaSearchKey,
       indexName: _algoliaIndexName,
     );
-
-    if (kDebugMode) {
-      print('RestaurantService: Algolia initialised');
-      print('App ID: $_algoliaAppId, Index: $_algoliaIndexName');
-    }
+    if (kDebugMode) print('RestaurantService: Algolia initialised. AppId=$_algoliaAppId, Index=$_algoliaIndexName');
   }
 
   // Sets up reactive listeners for search responses
@@ -106,10 +101,7 @@ class RestaurantService with ChangeNotifier {
         _errorMessage = null;
         notifyListeners();
 
-        if (kDebugMode) {
-          print('RestaurantService: Got ${_searchResults.length} results');
-          print('Page $_currentPage of $_totalPages, $_totalHits total hits');
-        }
+        if (kDebugMode) print('∘ RestaurantService: Received response → page=$_currentPage, total pages=$_totalPages, total hits=$_totalHits');
       },
       onError: (error) {
         _errorMessage = 'Search error: $error';
@@ -135,16 +127,10 @@ class RestaurantService with ChangeNotifier {
 
     // Build facet filters
     final List<String> facetFilters = [];
+    if (districtEn != null && districtEn.isNotEmpty) facetFilters.add('District_EN:$districtEn');
+    if (keywordEn != null && keywordEn.isNotEmpty) facetFilters.add('Keyword_EN:$keywordEn');
 
-    if (districtEn != null && districtEn.isNotEmpty) {
-      facetFilters.add('District_EN:$districtEn');
-    }
-
-    if (keywordEn != null && keywordEn.isNotEmpty) {
-      facetFilters.add('Keyword_EN:$keywordEn');
-    }
-
-    // Apply search state
+    // Build state with page = 0 when new search is triggered
     _hitsSearcher.applyState(
           (state) => state.copyWith(
         query: query,
@@ -153,25 +139,15 @@ class RestaurantService with ChangeNotifier {
         facetFilters: facetFilters.isEmpty ? null : facetFilters,
       ),
     );
-
-    if (kDebugMode) {
-      print('RestaurantService: Searching query="$query"');
-      print('Filters: district=$districtEn, keyword=$keywordEn');
-    }
+    if (kDebugMode) print('∘RestaurantService: searchRestaurants called → query="$query", page=$page, hitsPerPage=$hitsPerPage, filters=$facetFilters');
   }
 
   // Loads specific page (for infinite scroll)
   void loadPage(int page) {
     _isLoading = true;
     notifyListeners();
-
-    _hitsSearcher.applyState(
-          (state) => state.copyWith(page: page),
-    );
-
-    if (kDebugMode) {
-      print('RestaurantService: Loading page $page');
-    }
+    _hitsSearcher.applyState((state) => state.copyWith(page: page));
+    if (kDebugMode) print('∘RestaurantService: loadPage called → page=$page');
   }
 
   // Clears search results and resets state
@@ -182,16 +158,8 @@ class RestaurantService with ChangeNotifier {
     _totalPages = 0;
     _errorMessage = null;
     _isLoading = false;
-
-    _hitsSearcher.applyState(
-          (state) => state.copyWith(
-        query: '',
-        page: 0,
-        facetFilters: null,
-      ),
-    );
+    _hitsSearcher.applyState((state) => state.copyWith(query: '', page: 0, facetFilters: null));
     notifyListeners();
-
     if (kDebugMode) print('RestaurantService: Results cleared');
   }
 
@@ -202,12 +170,20 @@ class RestaurantService with ChangeNotifier {
   }
 
   // === REST API CRUD Operations ===
+  /// Get HTTP headers with API passcode
+  Map<String, String> _getHeaders({String? authToken}) {
+    return {
+      'Content-Type': 'application/json',
+      'X-API-Passcode': AppConfig.apiPasscode,
+      if (authToken != null) 'Authorisation': 'Bearer $authToken',
+    };
+  }
 
   // Gets single restaurant by ID from REST API
   Future<Restaurant?> getRestaurantById(String id) async {
     try {
       final url = Uri.parse('$_apiEndpoint/${Uri.encodeComponent(id)}');
-      final response = await http.get(url);
+      final response = await http.get(url, headers: _getHeaders());
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -224,18 +200,16 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  // Gets all restaurants from REST API
+  /// Get all restaurants
   Future<List<Restaurant>> getAllRestaurants() async {
     try {
       final url = Uri.parse(_apiEndpoint);
-      final response = await http.get(url);
+      final response = await http.get(url, headers: _getHeaders());
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final data = json['data'] as List<dynamic>;
-        return data
-            .map((item) => Restaurant.fromJson(item as Map<String, dynamic>))
-            .toList();
+        return data.map((item) => Restaurant.fromJson(item as Map<String, dynamic>)).toList();
       } else {
         throw Exception('Failed to load restaurants: ${response.statusCode}');
       }
@@ -245,13 +219,13 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  // Creates new restaurant via REST API
-  Future<String?> createRestaurant(Restaurant restaurant) async {
+  /// Create new restaurant (requires authentication)
+  Future<String?> createRestaurant(Restaurant restaurant, String authToken) async {
     try {
       final url = Uri.parse(_apiEndpoint);
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: _getHeaders(authToken: authToken),
         body: jsonEncode(restaurant.toJson()),
       );
 
@@ -269,13 +243,13 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  // Updates existing restaurant via REST API
-  Future<void> updateRestaurant(String id, Restaurant restaurant) async {
+  /// Update restaurant (requires authentication)
+  Future<void> updateRestaurant(String id, Restaurant restaurant, String authToken) async {
     try {
       final url = Uri.parse('$_apiEndpoint/${Uri.encodeComponent(id)}');
       final response = await http.put(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: _getHeaders(authToken: authToken),
         body: jsonEncode(restaurant.toJson()),
       );
 
@@ -292,11 +266,11 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  // Deletes restaurant via REST API
-  Future<void> deleteRestaurant(String id) async {
+  /// Delete restaurant (requires authentication)
+  Future<void> deleteRestaurant(String id, String authToken) async {
     try {
       final url = Uri.parse('$_apiEndpoint/${Uri.encodeComponent(id)}');
-      final response = await http.delete(url);
+      final response = await http.delete(url, headers: _getHeaders(authToken: authToken));
 
       if (response.statusCode == 204) {
         if (kDebugMode) print('Restaurant deleted: $id');

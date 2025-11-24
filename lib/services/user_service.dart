@@ -54,15 +54,9 @@ class UserProfile {
       type: json['type'] as String?,
       bio: json['bio'] as String?,
       preferences: json['preferences'] as Map<String, dynamic>?,
-      createdAt: json['createdAt'] != null 
-          ? DateTime.parse(json['createdAt'] as String)
-          : null,
-      modifiedAt: json['modifiedAt'] != null
-          ? DateTime.parse(json['modifiedAt'] as String)
-          : null,
-      lastLoginAt: json['lastLoginAt'] != null
-          ? DateTime.parse(json['lastLoginAt'] as String)
-          : null,
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
+      modifiedAt: json['modifiedAt'] != null ? DateTime.parse(json['modifiedAt'] as String) : null,
+      lastLoginAt: json['lastLoginAt'] != null ? DateTime.parse(json['lastLoginAt'] as String) : null,
       loginCount: json['loginCount'] as int?,
     );
   }
@@ -88,7 +82,7 @@ class UserProfile {
 
 /// User Service - Flutter Implementation
 /// 
-/// This service communicates with your Node.js API to manage user profiles.
+/// This service communicates with Vercel (Node.js) API to manage user profiles.
 /// It mirrors your Angular UserService but uses Flutter's HTTP package.
 /// 
 /// Architecture:
@@ -98,19 +92,14 @@ class UserProfile {
 class UserService with ChangeNotifier {
   // Your Node.js API endpoint from AppConfig
   final String _apiUrl = AppConfig.getEndpoint('API/Users');
-  
   // Reference to AuthService to get authentication tokens
   final AuthService _authService;
-  
   // Cached user profile - reduces API calls
   UserProfile? _currentProfile;
-  
   // Loading state for profile operations
   bool _isLoading = false;
-  
   // Error message for UI display
   String? _errorMessage;
-
   // Constructor requires AuthService dependency
   UserService(this._authService) {
     // Listen to auth state changes
@@ -142,14 +131,14 @@ class UserService with ChangeNotifier {
 
   /// Get HTTP Headers with Authentication
   /// 
-  /// Your API.js expects an Authorization header with Bearer token.
+  /// Your Vercel index.ts (API.js) expects an Authorization header with Bearer token.
   /// This is the same pattern your Angular service uses.
   Future<Map<String, String>> _getHeaders() async {
     final token = await _authService.idToken;
-    
     return {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      'X-API-Passcode': AppConfig.apiPasscode,
+      if (token != null) 'Authorisation': 'Bearer $token',
     };
   }
 
@@ -173,20 +162,14 @@ class UserService with ChangeNotifier {
       if (response.statusCode == 201) {
         // Profile created successfully
         final data = jsonDecode(response.body);
-        if (kDebugMode) {
-          print('UserService: Profile created with ID: ${data['id']}');
-        }
-        
+        if (kDebugMode) print('UserService: Profile created with ID: ${data['id']}');
         // Load the newly created profile
         await getUserProfile(profile.uid);
-        
         _setLoading(false);
         return true;
       } else if (response.statusCode == 409) {
         // Profile already exists - this is okay, just load it
-        if (kDebugMode) {
-          print('UserService: Profile already exists, loading...');
-        }
+        if (kDebugMode) print('UserService: Profile already exists, loading...');
         await getUserProfile(profile.uid);
         _setLoading(false);
         return true;
@@ -213,12 +196,9 @@ class UserService with ChangeNotifier {
   Future<UserProfile?> getUserProfile(String uid) async {
     try {
       _setLoading(true);
-      
+
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$_apiUrl/$uid'),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse('$_apiUrl/$uid'), headers: headers);
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -229,9 +209,7 @@ class UserService with ChangeNotifier {
         return _currentProfile;
       } else if (response.statusCode == 404) {
         // Profile doesn't exist - this is normal for new users
-        if (kDebugMode) {
-          print('UserService: Profile not found for uid: $uid');
-        }
+        if (kDebugMode) print('UserService: Profile not found for uid: $uid');
         _currentProfile = null;
         _setLoading(false);
         notifyListeners();
@@ -305,10 +283,7 @@ class UserService with ChangeNotifier {
   Future<bool> updatePreferences(String uid, Map<String, dynamic> preferences) async {
     final currentPrefs = _currentProfile?.preferences ?? {};
     final mergedPrefs = {...currentPrefs, ...preferences};
-    
-    return await updateUserProfile(uid, {
-      'preferences': mergedPrefs,
-    });
+    return await updateUserProfile(uid, {'preferences': mergedPrefs});
   }
 
   /// Delete User Profile
@@ -318,12 +293,9 @@ class UserService with ChangeNotifier {
   Future<bool> deleteUserProfile(String uid) async {
     try {
       _setLoading(true);
-      
+
       final headers = await _getHeaders();
-      final response = await http.delete(
-        Uri.parse('$_apiUrl/$uid'),
-        headers: headers,
-      );
+      final response = await http.delete(Uri.parse('$_apiUrl/$uid'), headers: headers);
       
       if (response.statusCode == 204) {
         _currentProfile = null;

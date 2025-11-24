@@ -63,12 +63,8 @@ class Booking {
       paymentStatus: json['paymentStatus'] as String,
       paymentIntentId: json['paymentIntentId'] as String?,
       specialRequests: json['specialRequests'] as String?,
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
-          : null,
-      modifiedAt: json['modifiedAt'] != null
-          ? DateTime.parse(json['modifiedAt'] as String)
-          : null,
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
+      modifiedAt: json['modifiedAt'] != null ? DateTime.parse(json['modifiedAt'] as String) : null,
     );
   }
 
@@ -104,16 +100,12 @@ class Booking {
 class BookingService with ChangeNotifier {
   // API endpoint for bookings
   final String _apiUrl = AppConfig.getEndpoint('API/Bookings');
-  
   // Reference to AuthService for authentication tokens
   final AuthService _authService;
-  
   // Current user's bookings
   List<Booking> _userBookings = [];
-  
   // Loading state
   bool _isLoading = false;
-  
   // Error message
   String? _errorMessage;
 
@@ -129,6 +121,7 @@ class BookingService with ChangeNotifier {
     final token = await _authService.idToken;
     return {
       'Content-Type': 'application/json',
+      'X-API-Passcode': AppConfig.apiPasscode,
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
@@ -176,8 +169,7 @@ class BookingService with ChangeNotifier {
         'numberOfGuests': numberOfGuests,
         'status': 'pending',
         'paymentStatus': 'unpaid',
-        if (specialRequests != null && specialRequests.isNotEmpty)
-          'specialRequests': specialRequests,
+        if (specialRequests != null && specialRequests.isNotEmpty) 'specialRequests': specialRequests,
       };
 
       // Send to API
@@ -192,19 +184,11 @@ class BookingService with ChangeNotifier {
         // Booking created successfully
         final data = jsonDecode(response.body);
         final bookingId = data['id'] as String;
-
-        if (kDebugMode) {
-          print('BookingService: Booking created with ID: $bookingId');
-        }
-
+        if (kDebugMode) print('BookingService: Booking created with ID: $bookingId');
         // Fetch the complete booking record
         final booking = await getBookingById(bookingId);
-        
-        if (booking != null) {
-          // Add to local cache
-          _userBookings.insert(0, booking);
-        }
-
+        // Add to local cache
+        if (booking != null) _userBookings.insert(0, booking);
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -243,12 +227,8 @@ class BookingService with ChangeNotifier {
 
       final userId = _authService.currentUser!.uid;
       final headers = await _getHeaders();
-      
       // Call API with user ID filter
-      final response = await http.get(
-        Uri.parse('$_apiUrl?userId=$userId'),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse('$_apiUrl?userId=$userId'), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -258,12 +238,10 @@ class BookingService with ChangeNotifier {
 
         // Sort by date descending (newest first)
         bookings.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-
         _userBookings = bookings;
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
-
         return bookings;
       } else {
         _errorMessage = 'Failed to load bookings';
@@ -283,21 +261,15 @@ class BookingService with ChangeNotifier {
   Future<Booking?> getBookingById(String id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$_apiUrl/$id'),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse('$_apiUrl/$id'), headers: headers);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return Booking.fromJson(data);
-      } else {
-        return null;
       }
+      return null;
     } catch (e) {
-      if (kDebugMode) {
-        print('BookingService: Error getting booking - $e');
-      }
+      if (kDebugMode) print('BookingService: Error getting booking - $e');
       return null;
     }
   }
@@ -341,11 +313,8 @@ class BookingService with ChangeNotifier {
         if (index != -1) {
           // Reload the updated booking
           final updated = await getBookingById(bookingId);
-          if (updated != null) {
-            _userBookings[index] = updated;
-          }
+          if (updated != null) _userBookings[index] = updated;
         }
-
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -371,10 +340,7 @@ class BookingService with ChangeNotifier {
   /// - Send cancellation notification email
   /// - Release the time slot for other customers
   Future<bool> cancelBooking(String bookingId) async {
-    return await updateBooking(
-      bookingId,
-      status: 'cancelled',
-    );
+    return await updateBooking(bookingId, status: 'cancelled');
   }
 
   /// Complete a booking
@@ -382,10 +348,7 @@ class BookingService with ChangeNotifier {
   /// Called after customer has dined. This closes the booking lifecycle.
   /// You might trigger this automatically after the booking time has passed.
   Future<bool> completeBooking(String bookingId) async {
-    return await updateBooking(
-      bookingId,
-      status: 'completed',
-    );
+    return await updateBooking(bookingId, status: 'completed');
   }
 
   /// Clear cached bookings
