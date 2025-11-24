@@ -10,7 +10,7 @@ import 'services/notification_service.dart';
 import 'services/restaurant_service.dart';
 import 'services/user_service.dart';
 import 'pages/home.dart';
-import 'pages/restaurants.dart';
+import 'pages/search.dart';
 import 'pages/account.dart';
 import 'pages/login.dart';
 import 'widgets/drawer.dart';
