@@ -42,13 +42,10 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
-  
   // Form key for validation
   final _formKey = GlobalKey<FormState>();
-  
   // Toggle between login and register modes
   bool _isRegisterMode = false;
-  
   // Password visibility toggle
   bool _obscurePassword = true;
 
@@ -66,10 +63,7 @@ class _LoginPageState extends State<LoginPage> {
   /// Shows error messages if authentication fails.
   Future<void> _handleEmailLogin(AuthService authService, UserService userService) async {
     // Validate form inputs
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    
+    if (!_formKey.currentState!.validate()) return;
     // Clear keyboard
     FocusScope.of(context).unfocus();
     
@@ -83,7 +77,8 @@ class _LoginPageState extends State<LoginPage> {
       // Login successful! AuthService will trigger navigation automatically.
       // Update login metadata in background
       if (authService.uid != null) {
-        userService.updateLoginMetadata(authService.uid!);
+        // Load or create user profile via Vercel API
+        await _ensureUserProfile(authService, userService);
       }
     } else if (mounted) {
       // Login failed, show error
@@ -97,10 +92,7 @@ class _LoginPageState extends State<LoginPage> {
   /// After registration, user needs to verify their email.
   Future<void> _handleEmailRegister(AuthService authService, UserService userService) async {
     // Validate form
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    
+    if (!_formKey.currentState!.validate()) return;
     // Clear keyboard
     FocusScope.of(context).unfocus();
     
@@ -108,9 +100,7 @@ class _LoginPageState extends State<LoginPage> {
     final success = await authService.registerWithEmail(
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      displayName: _nameController.text.trim().isEmpty 
-          ? null 
-          : _nameController.text.trim(),
+      displayName: _nameController.text.trim().isEmpty ? null : _nameController.text.trim(),
     );
     
     if (success && mounted) {
@@ -121,8 +111,9 @@ class _LoginPageState extends State<LoginPage> {
             : 'Registration successful! Please check your email to verify your account.',
       );
       
-      // Create user profile in Firestore
-      if (authService.currentUser != null) {
+      // Create user profile in Firestore via Vercel API
+      if (authService.currentUser != null) await _createUserProfile(authService, userService);
+      /*if (authService.currentUser != null) {
         await userService.createUserProfile(
           UserProfile(
             uid: authService.currentUser!.uid,
@@ -136,7 +127,7 @@ class _LoginPageState extends State<LoginPage> {
             },
           ),
         );
-      }
+      }*/
     } else if (mounted) {
       // Registration failed
       _showErrorSnackBar(authService.errorMessage ?? 'Registration failed');
@@ -149,13 +140,18 @@ class _LoginPageState extends State<LoginPage> {
   /// Automatically creates user profile if it doesn't exist.
   Future<void> _handleGoogleSignIn(AuthService authService, UserService userService) async {
     final success = await authService.signInWithGoogle();
-    
+
+    if (success && mounted && authService.currentUser != null) {
+      // Ensure user profile exists via Vercel API
+      await _ensureUserProfile(authService, userService);
+    } else if (mounted && authService.errorMessage != null) {
+      _showErrorSnackBar(authService.errorMessage!);
+    }
+
+    /* Check if user profile exists, create if not for native Google sign-in
     if (success && mounted) {
-      // Google sign-in successful!
-      // Check if user profile exists, create if not
       if (authService.currentUser != null) {
         final profileExists = await userService.profileExists(authService.currentUser!.uid);
-        
         if (!profileExists) {
           // Create new profile for Google user
           await userService.createUserProfile(
@@ -172,18 +168,62 @@ class _LoginPageState extends State<LoginPage> {
             ),
           );
         }
-        
         // Update login metadata
         userService.updateLoginMetadata(authService.currentUser!.uid);
       }
     } else if (mounted && authService.errorMessage != null) {
       // Google sign-in failed
       _showErrorSnackBar(authService.errorMessage!);
+    }*/
+  }
+
+  /// Create user profile via Vercel API
+  Future<void> _createUserProfile(AuthService authService, UserService userService) async {
+    try {
+      final user = authService.currentUser;
+      if (user == null) return;
+
+      final profile = UserProfile(
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        emailVerified: user.emailVerified,
+        preferences: {
+          'language': widget.isTraditionalChinese ? 'TC' : 'EN',
+          'theme': widget.isDarkMode ? 'dark' : 'light',
+        },
+      );
+
+      await userService.createUserProfile(profile);
+    } catch (error) {
+      // Profile creation failed but auth succeeded, user can continue
+      debugPrint('Failed to create user profile: $error');
+    }
+  }
+
+  /// Ensure user profile exists, create if missing
+  Future<void> _ensureUserProfile(AuthService authService, UserService userService) async {
+    try {
+      final user = authService.currentUser;
+      if (user == null) return;
+      // Try to load existing profile
+      final profile = await userService.getUserProfile(user.uid);
+      if (profile == null) {
+        // Profile doesn't exist, create it
+        await _createUserProfile(authService, userService);
+      } else {
+        // Update login metadata
+        await userService.updateLoginMetadata(user.uid);
+      }
+    } catch (error) {
+      debugPrint('Failed to ensure user profile: $error');
     }
   }
 
   /// Show Error Message
   void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -195,6 +235,7 @@ class _LoginPageState extends State<LoginPage> {
 
   /// Show Success Dialog
   void _showSuccessDialog(String message) {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -487,6 +528,7 @@ class _LoginPageState extends State<LoginPage> {
 
   /// Show Forgot Password Dialog
   void _showForgotPasswordDialog(AuthService authService) {
+    if (!mounted) return;
     final emailController = TextEditingController();
     
     showDialog(

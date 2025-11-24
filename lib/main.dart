@@ -447,7 +447,10 @@ class _MainShellState extends State<MainShell> {
     }
 
     final pages = [
-      FrontPage(isTraditionalChinese: widget.isTraditionalChinese),
+      FrontPage(
+        isTraditionalChinese: widget.isTraditionalChinese,
+        onNavigate: (index) => setState(() => currentIndex = index),
+      ),
       RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
       AccountPage(
         isDarkMode: widget.isDarkMode,

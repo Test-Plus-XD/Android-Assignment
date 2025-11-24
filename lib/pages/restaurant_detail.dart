@@ -37,15 +37,16 @@ class RestaurantDetailPage extends StatefulWidget {
 class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   // Google Maps controller for map interactions
   GoogleMapController? _mapController;
-  
   // Booking date/time selection
   DateTime? _selectedDateTime;
-  
   // Number of guests
-  int _numberOfGuests = 2;
-  
+  int _numberOfGuests = 1;
   // Loading states
   bool _isBooking = false;
+  // Map type and controls visibility
+  MapType _currentMapType = MapType.normal;
+  // Map type toggle states
+  bool _showMapControls = true;
 
   @override
   void dispose() {
@@ -59,19 +60,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// This helps users understand if the restaurant is convenient.
   String? _getDistanceText() {
     final locationService = context.read<LocationService>();
-    
-    if (widget.restaurant.latitude == null || 
-        widget.restaurant.longitude == null) {
-      return null;
-    }
-
-    final distance = locationService.calculateDistanceFromCurrent(
-      widget.restaurant.latitude!,
-      widget.restaurant.longitude!,
-    );
-
+    if (widget.restaurant.latitude == null || widget.restaurant.longitude == null) return null;
+    final distance = locationService.calculateDistanceFromCurrent( widget.restaurant.latitude!, widget.restaurant.longitude!, );
     if (distance == null) return null;
-
     return locationService.formatDistance(distance);
   }
 
@@ -91,9 +82,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       
       // Build share text with restaurant details
       final shareText = widget.isTraditionalChinese
-          ? '我發現了這家很棒的素食餐廳！\n\n$name\n$address'
+          ? '我啱啱發現咗間好正斗嘅素食餐廳！\n\n$name\n$address'
           : 'I found this great vegan restaurant!\n\n$name\n$address';
-
       // Open Android share sheet
       await Share.share(
         shareText,
@@ -102,13 +92,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isTraditionalChinese
-                  ? '分享失敗'
-                  : 'Failed to share',
-            ),
-          ),
+          SnackBar(content: Text(widget.isTraditionalChinese ? '分享失敗' : 'Failed to share')),
         );
       }
     }
@@ -126,18 +110,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isTraditionalChinese
-                  ? '無法撥打電話'
-                  : 'Could not make call',
-            ),
-          ),
-        );
-      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.isTraditionalChinese ? '無法撥打電話' : 'Could not make call')),
+      );
     }
   }
 
@@ -151,18 +127,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isTraditionalChinese
-                  ? '無法發送電郵'
-                  : 'Could not send email',
-            ),
-          ),
-        );
-      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.isTraditionalChinese ? '無法發送電郵' : 'Could not send email')),
+      );
     }
   }
 
@@ -179,18 +147,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
+    } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isTraditionalChinese
-                  ? '無法打開網站'
-                  : 'Could not open website',
-            ),
-          ),
+          SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開網站' : 'Could not open website')),
         );
-      }
     }
   }
 
@@ -202,30 +162,16 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// URL Scheme: geo:0,0?q=22.3964,114.1095(Restaurant Name)
   /// The "0,0" is placeholder, the query param has actual coordinates.
   Future<void> _openInMaps() async {
-    if (widget.restaurant.latitude == null || 
-        widget.restaurant.longitude == null) {
-      return;
-    }
-
+    if (widget.restaurant.latitude == null || widget.restaurant.longitude == null) return;
     final name = widget.restaurant.getDisplayName(widget.isTraditionalChinese);
-    final uri = Uri.parse(
-      'geo:0,0?q=${widget.restaurant.latitude},${widget.restaurant.longitude}($name)',
-    );
+    final uri = Uri.parse('geo:0,0?q=${widget.restaurant.latitude},${widget.restaurant.longitude}($name)');
     
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isTraditionalChinese
-                  ? '無法打開地圖'
-                  : 'Could not open maps',
-            ),
-          ),
-        );
-      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開地圖' : 'Could not open maps')),
+      );
     }
   }
 
@@ -241,15 +187,13 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   Future<void> _showBookingDialog() async {
     // Reset state
     _selectedDateTime = null;
-    _numberOfGuests = 2;
+    _numberOfGuests = 1;
 
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text(
-            widget.isTraditionalChinese ? '預訂餐桌' : 'Book a Table',
-          ),
+          title: Text( widget.isTraditionalChinese ? '預訂餐桌' : 'Book a Table', ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -276,30 +220,20 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 90)),
                     );
-
                     if (date != null && context.mounted) {
-                      // Show time picker
                       final time = await showTimePicker(
                         context: context,
-                        initialTime: const TimeOfDay(hour: 19, minute: 0),
+                        initialTime: const TimeOfDay(hour: 17, minute: 0),
                       );
-
                       if (time != null) {
                         setState(() {
-                          _selectedDateTime = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
+                          _selectedDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
                         });
                       }
                     }
                   },
                 ),
                 const SizedBox(height: 16),
-                
                 // Number of guests selector
                 Text(
                   widget.isTraditionalChinese ? '人數' : 'Number of Guests',
@@ -310,19 +244,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: _numberOfGuests > 1
-                          ? () => setState(() => _numberOfGuests--)
-                          : null,
+                      onPressed: _numberOfGuests > 1 ? () => setState(() => _numberOfGuests--) : null,
                     ),
-                    Text(
-                      '$_numberOfGuests',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                    Text('$_numberOfGuests', style: Theme.of(context).textTheme.titleLarge),
                     IconButton(
                       icon: const Icon(Icons.add_circle_outline),
-                      onPressed: _numberOfGuests < 20
-                          ? () => setState(() => _numberOfGuests++)
-                          : null,
+                      onPressed: _numberOfGuests < 20 ? () => setState(() => _numberOfGuests++) : null,
                     ),
                   ],
                 ),
@@ -335,12 +262,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
               child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
             ),
             ElevatedButton(
-              onPressed: _selectedDateTime == null
-                  ? null
-                  : () {
-                      Navigator.pop(context);
-                      _confirmBooking();
-                    },
+              onPressed: _selectedDateTime == null ? null : () {
+                Navigator.pop(context);
+                _confirmBooking();
+              },
               child: Text(widget.isTraditionalChinese ? '確認' : 'Confirm'),
             ),
           ],
@@ -357,33 +282,23 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// 3. Show confirmation to user
   Future<void> _confirmBooking() async {
     if (_selectedDateTime == null) return;
-
     setState(() => _isBooking = true);
-
     try {
       final bookingService = context.read<BookingService>();
       final notificationService = context.read<NotificationService>();
-      
       // Step 1: Create booking in Firestore
       final booking = await bookingService.createBooking(
         restaurantId: widget.restaurant.id,
-        restaurantName: widget.restaurant.getDisplayName(
-          widget.isTraditionalChinese,
-        ),
+        restaurantName: widget.restaurant.getDisplayName(widget.isTraditionalChinese),
         dateTime: _selectedDateTime!,
         numberOfGuests: _numberOfGuests,
       );
-
-      if (booking == null) {
-        throw Exception('Failed to create booking');
-      }
-
+      if (booking == null) throw Exception('Failed to create booking');
       // Step 2: Schedule notification reminder
       // Show notification 2 hours before booking time
       final notificationTime = _selectedDateTime!.subtract(
         const Duration(hours: 2),
       );
-
       // Only schedule if notification time is in future
       if (notificationTime.isAfter(DateTime.now())) {
         await notificationService.scheduleBookingReminder(
@@ -395,32 +310,24 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           isTraditionalChinese: widget.isTraditionalChinese,
         );
       }
-
       // Step 3: Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              widget.isTraditionalChinese
-                  ? '預訂成功！您將在 2 小時前收到提醒。'
-                  : 'Booking confirmed! You\'ll receive a reminder 2 hours before.',
-            ),
+            content: Text(widget.isTraditionalChinese
+                ? '預訂成功！您將在 2 小時前收到提醒。'
+                : 'Booking confirmed! You\'ll receive a reminder 2 hours before.'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 4),
           ),
         );
       }
-
     } catch (e) {
       // Show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              widget.isTraditionalChinese
-                  ? '預訂失敗：$e'
-                  : 'Booking failed: $e',
-            ),
+            content: Text(widget.isTraditionalChinese ? '預訂失敗：$e' : 'Booking failed: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -438,6 +345,31 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     } else {
       return '${dateTime.day}/${dateTime.month}/${dateTime.year} '
              '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    }
+  }
+
+  // Toggle map type between normal, satellite, and terrain
+  void _toggleMapType() {
+    setState(() {
+      _currentMapType = _currentMapType == MapType.normal
+          ? MapType.satellite
+          : _currentMapType == MapType.satellite
+          ? MapType.terrain
+          : MapType.normal;
+    });
+  }
+
+  // Animate camera to restaurant location
+  void _centerOnRestaurant() {
+    if (_mapController != null && widget.restaurant.latitude != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(widget.restaurant.latitude!, widget.restaurant.longitude!),
+            zoom: 16,
+          ),
+        ),
+      );
     }
   }
 
@@ -462,7 +394,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           ),
         ],
       ),
-
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -487,7 +418,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                 child: const Icon(Icons.restaurant, size: 64),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -535,9 +465,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                         ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
                   /// Address with tap-to-navigate
                   Card(
                     child: ListTile(
@@ -548,9 +476,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       onTap: _openInMaps,
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   /// Contact Information
                   /// 
                   /// Each contact method is tappable and opens the
@@ -570,9 +496,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                         ],
                       ),
                     ),
-
                   const SizedBox(height: 16),
-
                   /// Keywords
                   if (keywords.isNotEmpty) ...[
                     Text(
@@ -591,43 +515,98 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     ),
                     const SizedBox(height: 16),
                   ],
-
-                  /// Map
-                  if (widget.restaurant.latitude != null &&
-                      widget.restaurant.longitude != null) ...[
-                    Text(
-                      widget.isTraditionalChinese ? '地圖' : 'Map',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  if (widget.restaurant.latitude != null && widget.restaurant.longitude != null) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(widget.isTraditionalChinese ? '地圖' : 'Map',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            // Map type toggle
+                            IconButton(
+                              icon: const Icon(Icons.layers),
+                              tooltip: widget.isTraditionalChinese ? '切換地圖類型' : 'Change map type',
+                              onPressed: _toggleMapType,
+                            ),
+                            // Centre on restaurant
+                            IconButton(
+                              icon: const Icon(Icons.my_location),
+                              tooltip: widget.isTraditionalChinese ? '定位餐廳' : 'Centre on restaurant',
+                              onPressed: _centerOnRestaurant,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 200,
+                      height: 300,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: GoogleMap(
-                          initialCameraPosition: CameraPosition(
-                            target: LatLng(
-                              widget.restaurant.latitude!,
-                              widget.restaurant.longitude!,
+                        child: Stack(
+                          children: [
+                            GoogleMap(
+                              initialCameraPosition: CameraPosition(
+                                target: LatLng(widget.restaurant.latitude!, widget.restaurant.longitude!),
+                                zoom: 15,
+                              ),
+                              mapType: _currentMapType,
+                              markers: {
+                                Marker(
+                                  markerId: MarkerId(widget.restaurant.id),
+                                  position: LatLng(widget.restaurant.latitude!, widget.restaurant.longitude!),
+                                  infoWindow: InfoWindow(
+                                    title: name,
+                                    snippet: address,
+                                  ),
+                                ),
+                              },
+                              onMapCreated: (controller) => _mapController = controller,
+                              myLocationButtonEnabled: false,
+                              myLocationEnabled: true,
+                              zoomControlsEnabled: false,
+                              compassEnabled: true,
+                              mapToolbarEnabled: false,
+                              minMaxZoomPreference: const MinMaxZoomPreference(12, 20),
                             ),
-                            zoom: 15,
-                          ),
-                          markers: {
-                            Marker(
-                              markerId: MarkerId(widget.restaurant.id),
-                              position: LatLng(
-                                widget.restaurant.latitude!,
-                                widget.restaurant.longitude!,
+                            // Custom zoom controls
+                            Positioned(
+                              right: 16,
+                              bottom: 80,
+                              child: Column(
+                                children: [
+                                  FloatingActionButton.small(
+                                    heroTag: 'zoom_in',
+                                    onPressed: () => _mapController?.animateCamera(CameraUpdate.zoomIn()),
+                                    child: const Icon(Icons.add),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  FloatingActionButton.small(
+                                    heroTag: 'zoom_out',
+                                    onPressed: () => _mapController?.animateCamera(CameraUpdate.zoomOut()),
+                                    child: const Icon(Icons.remove),
+                                  ),
+                                ],
                               ),
                             ),
-                          },
-                          onMapCreated: (controller) {
-                            _mapController = controller;
-                          },
-                          myLocationButtonEnabled: true,
-                          myLocationEnabled: true,
+                            // Open in maps button
+                            Positioned(
+                              left: 16,
+                              bottom: 16,
+                              child: ElevatedButton.icon(
+                                onPressed: _openInMaps,
+                                icon: const Icon(Icons.map, size: 18),
+                                label: Text(
+                                  widget.isTraditionalChinese ? '在地圖中打開' : 'Open in Maps',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -638,7 +617,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           ],
         ),
       ),
-
       /// Floating Book Button
       /// 
       /// Prominent call-to-action button for booking.

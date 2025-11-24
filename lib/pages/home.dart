@@ -27,8 +27,8 @@ import 'restaurant_detail.dart';
 /// - Works offline after initial load
 class FrontPage extends StatefulWidget {
   final bool isTraditionalChinese;
-
-  const FrontPage({this.isTraditionalChinese = false, super.key});
+  final ValueChanged<int>? onNavigate; // Public callback: ask shell to navigate
+  const FrontPage({this.isTraditionalChinese = false, this.onNavigate, super.key});
 
   @override
   State<FrontPage> createState() => _FrontPageState();
@@ -259,9 +259,7 @@ class _FrontPageState extends State<FrontPage> {
                     },
                   ),
                 ),
-
               const SizedBox(height: 24),
-
               // Featured header
               Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: Text(featuredHeading, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold))),
               const SizedBox(height: 12),
@@ -313,14 +311,18 @@ class _FrontPageState extends State<FrontPage> {
                     return AnimatedContainer(duration: const Duration(milliseconds: 250), margin: const EdgeInsets.symmetric(horizontal: 4), width: index == _currentIndex ? 12 : 8, height: index == _currentIndex ? 12 : 8, decoration: BoxDecoration(shape: BoxShape.circle, color: index == _currentIndex ? Theme.of(context).colorScheme.primary : Colors.grey.shade400));
                   })),
                 ]),
-
               const SizedBox(height: 24),
-
               // Browse button
-              Center(child: ElevatedButton.icon(icon: const Icon(Icons.restaurant_menu), label: Text(browseLabel), onPressed: () {
-                // Navigate to restaurants page (placeholder)
-              })),
-
+              Center(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.restaurant_menu),
+                  label: Text(browseLabel),
+                  onPressed: () {
+                    // Ask parent shell to switch to the restaurants tab (index 1)
+                    widget.onNavigate?.call(1);
+                  },
+                ),
+              ),
               const SizedBox(height: 24),
             ],
           ),
