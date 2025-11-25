@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../pages/login.dart';
 
 // Navigation drawer with theme and language toggles and in-drawer app icon.
 class AppNavDrawer extends StatelessWidget {
@@ -57,12 +58,29 @@ class AppNavDrawer extends StatelessWidget {
           ListTile(leading: const Icon(Icons.restaurant), title: Text(allLabel), onTap: () => onSelectItem(1)),
           ListTile(leading: const Icon(Icons.account_circle), title: Text(accountLabel), onTap: () => onSelectItem(2)),
           if (isLoggedIn)
-            ListTile(leading: const Icon(Icons.logout), title: Text(logoutLabel), onTap: () => onLoginStateChanged(false))
+            ListTile(
+                leading: const Icon(Icons.logout),
+                title: Text(logoutLabel),
+                onTap: () {
+                  Navigator.pop(context);
+                  onLoginStateChanged(false);
+                })
           else
-            ListTile(leading: const Icon(Icons.login), title: Text(loginLabel), onTap: () {
-              Navigator.pop(context);
-              onLoginStateChanged(false);
-            }),
+            ListTile(
+                leading: const Icon(Icons.login),
+                title: Text(loginLabel),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (context) => LoginPage(
+                      isTraditionalChinese: isTraditionalChinese,
+                      isDarkMode: isDarkMode,
+                      onThemeChanged: () => onThemeChanged(!isDarkMode),
+                      onLanguageChanged: () => onLanguageChanged(!isTraditionalChinese),
+                      onSkip: () => Navigator.of(context).pop(),
+                    ),
+                  ));
+                }),
           const Spacer(),
           // Theme toggle persisted by root via callback.
           SwitchListTile(value: isDarkMode, title: Text(themeLabel), secondary: const Icon(Icons.brightness_6), onChanged: onThemeChanged),

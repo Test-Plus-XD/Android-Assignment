@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import 'login.dart';
 
 /// Account Page with Proper Async Handling
 ///
@@ -78,10 +79,11 @@ class _AccountPageState extends State<AccountPage> {
     final String phoneLabel = widget.isTraditionalChinese ? '電話: ' : 'Phone: ';
     final String logoutLabel = widget.isTraditionalChinese ? '登出' : 'Logout';
     final String loginPrompt = widget.isTraditionalChinese ? '請先登入' : 'Please log in';
+    final String loginButtonLabel = widget.isTraditionalChinese ? '登入' : 'Login';
     final String loadingMessage = widget.isTraditionalChinese ? '載入中...' : 'Loading...';
     final String noProfileMessage = widget.isTraditionalChinese ? '沒有找到用戶資料' : 'No profile found';
 
-    // Early return if not logged in
+    // Early return if not logged in, showing a login prompt.
     if (!widget.isLoggedIn) {
       return Center(
         child: Column(
@@ -92,6 +94,21 @@ class _AccountPageState extends State<AccountPage> {
             Text(
               loginPrompt,
               style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => LoginPage(
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                    isDarkMode: widget.isDarkMode,
+                    onThemeChanged: widget.onThemeChanged,
+                    onLanguageChanged: widget.onLanguageChanged,
+                    onSkip: () => Navigator.of(context).pop(),
+                  ),
+                ));
+              },
+              child: Text(loginButtonLabel),
             ),
           ],
         ),
