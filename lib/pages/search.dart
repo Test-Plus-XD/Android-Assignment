@@ -114,21 +114,27 @@ class _SearchPageState extends State<SearchPage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+
+    // PagingController configuration for infinite_scroll_pagination 5.x
+    // The getNextPageKey function determines what the next page key should be
+    // For zero-indexed pagination (page 0, 1, 2...), we use (state.keys?.last ?? -1) + 1
+    // This ensures the first page key will be 0 (null ?? -1) + 1 = 0
     _pagingController = PagingController<int, Restaurant>(
       fetchPage: _fetchPage,
       getNextPageKey: (state) {
+        // If the last page is empty, there are no more pages to fetch
         if (state.lastPageIsEmpty) return null;
-        return state.nextIntPageKey;
+        // Calculate the next page key by incrementing the last key
+        // If no keys exist yet (first load), start from -1 so next key becomes 0
+        return (state.keys?.last ?? -1) + 1;
       },
     );
     _searchController.addListener(_onSearchChanged);
-
     _scrollController = ScrollController();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
     )..forward();
-
     _scrollController.addListener(() {
       if (_scrollController.position.userScrollDirection ==
           ScrollDirection.reverse) {
@@ -493,9 +499,7 @@ class _SearchPageState extends State<SearchPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isTraditionalChinese ? '搜尋' : 'Search'),
-      ),
+      //appBar: AppBar(title: Text(widget.isTraditionalChinese ? '搜尋' : 'Search'), ),
       body: Column(
         children: [
           SizeTransition(

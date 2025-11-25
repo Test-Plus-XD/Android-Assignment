@@ -250,38 +250,66 @@ class RestaurantKeywords {
 // User model
 class User {
   final String uid;
-  final String? displayName;
   final String? email;
+  final String? displayName;
   final String? photoURL;
+  final bool emailVerified;
   final String? phoneNumber;
+  final String? type;
+  final String? bio;
+  final Map<String, dynamic>? preferences;
+  final DateTime? createdAt;
+  final DateTime? modifiedAt;
+  final DateTime? lastLoginAt;
+  final int? loginCount;
 
   User({
     required this.uid,
-    this.displayName,
     this.email,
+    this.displayName,
     this.photoURL,
+    required this.emailVerified,
     this.phoneNumber,
+    this.type,
+    this.bio,
+    this.preferences,
+    this.createdAt,
+    this.modifiedAt,
+    this.lastLoginAt,
+    this.loginCount,
   });
 
   // Creates User from JSON
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      uid: json['uid'] ?? '',
-      displayName: json['displayName'] as String?,
+      uid: json['uid'] as String,
       email: json['email'] as String?,
+      displayName: json['displayName'] as String?,
       photoURL: json['photoURL'] as String?,
+      emailVerified: json['emailVerified'] as bool? ?? false,
       phoneNumber: json['phoneNumber'] as String?,
+      type: json['type'] as String?,
+      bio: json['bio'] as String?,
+      preferences: json['preferences'] as Map<String, dynamic>?,
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
+      modifiedAt: json['modifiedAt'] != null ? DateTime.parse(json['modifiedAt'] as String) : null,
+      lastLoginAt: json['lastLoginAt'] != null ? DateTime.parse(json['lastLoginAt'] as String) : null,
+      loginCount: json['loginCount'] as int?,
     );
   }
 
   // Converts User to JSON
-  Map<String, dynamic> toJson() {
+    Map<String, dynamic> toJson() {
     return {
       'uid': uid,
-      'displayName': displayName,
       'email': email,
+      'displayName': displayName,
       'photoURL': photoURL,
-      'phoneNumber': phoneNumber,
+      'emailVerified': emailVerified,
+      if (phoneNumber != null) 'phoneNumber': phoneNumber,
+      if (type != null) 'type': type,
+      if (bio != null) 'bio': bio,
+      if (preferences != null) 'preferences': preferences,
     };
   }
 }

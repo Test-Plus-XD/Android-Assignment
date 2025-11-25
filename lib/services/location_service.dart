@@ -21,13 +21,10 @@ import 'package:permission_handler/permission_handler.dart';
 class LocationService with ChangeNotifier {
   // Current user position - null if not yet fetched or permission denied
   Position? _currentPosition;
-  
   // Loading state for UI feedback
   bool _isLoading = false;
-  
   // Error message for permission denial or location errors
   String? _errorMessage;
-  
   // Permission status tracking
   bool _hasPermission = false;
 
@@ -39,7 +36,6 @@ class LocationService with ChangeNotifier {
   
   /// Get current latitude (convenience getter)
   double? get latitude => _currentPosition?.latitude;
-  
   /// Get current longitude (convenience getter)
   double? get longitude => _currentPosition?.longitude;
 
@@ -160,7 +156,7 @@ class LocationService with ChangeNotifier {
       const LocationSettings locationSettings = LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10, // Minimum distance (in metres) device must move before update
-        timeLimit: Duration(seconds: 10), // Maximum time to wait for location
+        timeLimit: Duration(seconds: 20), // Maximum time to wait for location
       );
 
       // Get current position
@@ -173,22 +169,13 @@ class LocationService with ChangeNotifier {
       _errorMessage = null;
       _setLoading(false);
       notifyListeners();
-
-      if (kDebugMode) {
-        print('LocationService: Position acquired - Lat: ${position.latitude}, Lng: ${position.longitude}');
-      }
-
+      if (kDebugMode)     print('LocationService: Position acquired - Lat: ${position.latitude}, Lng: ${position.longitude}');
       return position;
-
     } catch (e) {
       _errorMessage = 'Failed to get current location: $e';
       _setLoading(false);
       notifyListeners();
-      
-      if (kDebugMode) {
-        print('LocationService: Error getting position - $e');
-      }
-      
+      if (kDebugMode) print('LocationService: Error getting position - $e');
       return null;
     }
   }

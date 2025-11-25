@@ -67,11 +67,14 @@ class _FrontPageState extends State<FrontPage> {
       await restaurantService.searchRestaurants(
         query: '',
         isTraditionalChinese: widget.isTraditionalChinese,
-        hitsPerPage: 10,
+        hitsPerPage: 50, // Fetch more to have a good pool for random selection
       );
       if (mounted) {
         setState(() {
-          _cachedFeatured = restaurantService.searchResults;
+          final allResults = restaurantService.searchResults;
+          // Shuffle the list and take the first 10.
+          allResults.shuffle();
+          _cachedFeatured = allResults.take(10).toList();
           _loadingFeatured = false;
         });
       }
@@ -129,7 +132,7 @@ class _FrontPageState extends State<FrontPage> {
       await restaurantService.searchRestaurants(
         query: '',
         isTraditionalChinese: widget.isTraditionalChinese,
-        hitsPerPage: 10,
+        hitsPerPage: 100,
       );
 
       // Calculate distances and pick top 10 nearest

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models.dart' show User;
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 
@@ -183,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
       final user = authService.currentUser;
       if (user == null) return;
 
-      final profile = UserProfile(
+      final profile = User(
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
@@ -194,7 +195,6 @@ class _LoginPageState extends State<LoginPage> {
           'theme': widget.isDarkMode ? 'dark' : 'light',
         },
       );
-
       await userService.createUserProfile(profile);
     } catch (error) {
       // Profile creation failed but auth succeeded, user can continue

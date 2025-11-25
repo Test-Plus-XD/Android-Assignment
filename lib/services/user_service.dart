@@ -3,82 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import '../config.dart';
-
-/// User Profile Model
-/// 
-/// This matches your Firestore user schema and TypeScript UserProfile interface.
-/// In Flutter, we use classes instead of interfaces, but the concept is identical.
-class UserProfile {
-  final String uid;
-  final String? email;
-  final String? displayName;
-  final String? photoURL;
-  final bool emailVerified;
-  final String? phoneNumber;
-  final String? type;
-  final String? bio;
-  final Map<String, dynamic>? preferences;
-  final DateTime? createdAt;
-  final DateTime? modifiedAt;
-  final DateTime? lastLoginAt;
-  final int? loginCount;
-
-  UserProfile({
-    required this.uid,
-    this.email,
-    this.displayName,
-    this.photoURL,
-    required this.emailVerified,
-    this.phoneNumber,
-    this.type,
-    this.bio,
-    this.preferences,
-    this.createdAt,
-    this.modifiedAt,
-    this.lastLoginAt,
-    this.loginCount,
-  });
-
-  /// Create UserProfile from JSON
-  /// 
-  /// This converts the JSON response from your API into a Dart object.
-  /// Your API returns user data in this format from Firestore.
-  factory UserProfile.fromJson(Map<String, dynamic> json) {
-    return UserProfile(
-      uid: json['uid'] as String,
-      email: json['email'] as String?,
-      displayName: json['displayName'] as String?,
-      photoURL: json['photoURL'] as String?,
-      emailVerified: json['emailVerified'] as bool? ?? false,
-      phoneNumber: json['phoneNumber'] as String?,
-      type: json['type'] as String?,
-      bio: json['bio'] as String?,
-      preferences: json['preferences'] as Map<String, dynamic>?,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
-      modifiedAt: json['modifiedAt'] != null ? DateTime.parse(json['modifiedAt'] as String) : null,
-      lastLoginAt: json['lastLoginAt'] != null ? DateTime.parse(json['lastLoginAt'] as String) : null,
-      loginCount: json['loginCount'] as int?,
-    );
-  }
-
-  /// Convert UserProfile to JSON
-  /// 
-  /// This prepares the user data to send to your API.
-  /// We exclude certain fields that shouldn't be sent (like uid, createdAt).
-  Map<String, dynamic> toJson() {
-    return {
-      'uid': uid,
-      'email': email,
-      'displayName': displayName,
-      'photoURL': photoURL,
-      'emailVerified': emailVerified,
-      if (phoneNumber != null) 'phoneNumber': phoneNumber,
-      if (type != null) 'type': type,
-      if (bio != null) 'bio': bio,
-      if (preferences != null) 'preferences': preferences,
-    };
-  }
-}
+import '../models.dart';
 
 /// User Service - Flutter Implementation
 /// 
@@ -95,7 +20,7 @@ class UserService with ChangeNotifier {
   // Reference to AuthService to get authentication tokens
   final AuthService _authService;
   // Cached user profile - reduces API calls
-  UserProfile? _currentProfile;
+  User? _currentProfile;
   // Loading state for profile operations
   bool _isLoading = false;
   // Error message for UI display
@@ -108,20 +33,38 @@ class UserService with ChangeNotifier {
   }
 
   // GETTERS
-  UserProfile? get currentProfile => _currentProfile;
+  User? get currentProfile => _currentProfile;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
   /// Handle Authentication State Changes
-  /// 
+  ///
   /// When auth state changes, we need to:
   /// - Load profile if user logged in
+  /// - Create profile if it doesn't exist
   /// - Clear profile if user logged out
   void _onAuthChanged() {
     if (_authService.isLoggedIn && _authService.uid != null) {
-      // User just logged in, load their profile.
-      // We use a Future.microtask to schedule this work for after the current build cycle, preventing a "setState() or markNeedsBuild() called during build" error.
-      Future.microtask(() => getUserProfile(_authService.uid!));
+      // User just logged in, load their profile
+      // We use a Future.microtask to schedule this work for after the current build cycle,
+      // preventing a "setState() or markNeedsBuild() called during build" error
+      Future.microtask(() async {
+        final profile = await getUserProfile(_authService.uid!);
+        // If profile doesn't exist, create one automatically
+        if (profile == null && _authService.currentUser != null) {
+          if (kDebugMode) print('UserService: Profile not found, creating new profile...');
+          final newProfile = User(
+            uid: _authService.uid!,
+            email: _authService.currentUser!.email,
+            displayName: _authService.currentUser!.displayName,
+            photoURL: _authService.currentUser!.photoURL,
+            emailVerified: _authService.currentUser!.emailVerified,
+            phoneNumber: _authService.currentUser!.phoneNumber,
+            createdAt: DateTime.now(),
+          );
+          await createUserProfile(newProfile);
+        }
+      });
     } else {
       // User logged out, clear profile
       _currentProfile = null;
@@ -148,7 +91,7 @@ class UserService with ChangeNotifier {
   /// Your API.js authenticate middleware verifies the token and checks ownership.
   /// 
   /// This matches your Angular service's createUserProfile() method.
-  Future<bool> createUserProfile(UserProfile profile) async {
+  Future<bool> createUserProfile(User profile) async {
     try {
       _setLoading(true);
       
@@ -158,17 +101,20 @@ class UserService with ChangeNotifier {
         headers: headers,
         body: jsonEncode(profile.toJson()),
       );
-      
       if (response.statusCode == 201) {
         // Profile created successfully
         final data = jsonDecode(response.body);
+        // 1. Update the current profile with the newly created one.
+        _currentProfile = profile;
+        _errorMessage = null;
+        // 2. Print the log you were expecting.
         if (kDebugMode) print('UserService: Profile created with ID: ${data['id']}');
-        // Load the newly created profile
-        await getUserProfile(profile.uid);
+        // 3. Set loading to false and notify listeners.
         _setLoading(false);
+        notifyListeners(); // Manually notify listeners of the new profile.
         return true;
       } else if (response.statusCode == 409) {
-        // Profile already exists - this is okay, just load it
+        // Profile already exists - just load it
         if (kDebugMode) print('UserService: Profile already exists, loading...');
         await getUserProfile(profile.uid);
         _setLoading(false);
@@ -193,7 +139,7 @@ class UserService with ChangeNotifier {
   /// 
   /// Calls GET /API/Users/:uid to fetch a user profile from Firestore.
   /// Caches the result to reduce API calls.
-  Future<UserProfile?> getUserProfile(String uid) async {
+  Future<User?> getUserProfile(String uid) async {
     try {
       _setLoading(true);
 
@@ -202,7 +148,7 @@ class UserService with ChangeNotifier {
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        _currentProfile = UserProfile.fromJson(data);
+        _currentProfile = User.fromJson(data);
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
