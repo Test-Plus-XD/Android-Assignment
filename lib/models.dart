@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
+import 'config.dart';
 
 // Restaurant model with bilingual support
 class Restaurant {
@@ -72,6 +73,8 @@ class Restaurant {
     }
 
     final geoloc = json['_geoloc'] as Map?;
+    String? imageUrl = json['ImageUrl'] as String? ?? json['imageUrl'] as String? ?? json['Image'] as String?;
+    if (imageUrl == null || imageUrl.isEmpty) imageUrl = AppConfig.placeholderUrl;
 
     return Restaurant(
       id: json['objectID']?.toString() ?? json['id']?.toString() ?? '',
@@ -85,7 +88,7 @@ class Restaurant {
       longitude: toDouble(geoloc?['lng']) ?? toDouble(json['Longitude']) ?? toDouble(json['longitude']),
       keywordEn: toStringList(json['Keyword_EN'] ?? json['keyword_en']),
       keywordTc: toStringList(json['Keyword_TC'] ?? json['keyword_tc']),
-      imageUrl: json['ImageUrl'] as String? ?? json['imageUrl'] as String? ?? json['Image'] as String?,
+      imageUrl: imageUrl,
       menu: toMap(json['Menu'] ?? json['menu']),
       openingHours: toMap(json['Opening_Hours'] ?? json['openingHours']),
       seats: toInt(json['Seats'] ?? json['seats']),

@@ -21,7 +21,7 @@ class HitsPage {
 
 /// Restaurant service using Vercel API for search and CRUD operations
 class RestaurantService with ChangeNotifier {
-  static final String _searchEndpoint = AppConfig.getEndpoint('API/Search/Restaurants');
+  static final String _searchEndpoint = AppConfig.getEndpoint('API/Algolia/Restaurants');
   static final String _apiEndpoint = AppConfig.getEndpoint('API/Restaurants');
 
   final _searchResultsController = StreamController<List<Restaurant>>.broadcast();

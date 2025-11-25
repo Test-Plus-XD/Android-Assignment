@@ -58,7 +58,7 @@ dependencies:
   url_launcher: ^6.3.1                  # Open URLs, phone numbers, maps
   cached_network_image: ^3.4.1          # Image caching for better performance
 
-  # Tier 2: Polish and user experience enhancements (ready for future implementation)
+  # Tier 2: Polish and user experience enhancements
   # shimmer: ^3.0.0                     # Loading skeleton animations
   # connectivity_plus: ^6.1.1           # Network status detection
 

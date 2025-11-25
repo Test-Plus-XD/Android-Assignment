@@ -50,6 +50,8 @@ class AppConfig {
 
   // API passcode for authentication (matches .env)
   static const String apiPasscode = 'PourRice';
+  // Placeholder URL
+  static const String placeholderUrl = 'https://firebasestorage.googleapis.com/v0/b/cross-platform-assignmen-b97cc.firebasestorage.app/o/Placeholder.png?alt=media&token=2ceff686-bda6-43c8-ab7d-5551117569f1';
 
   /// Algolia Configuration
   /// 
