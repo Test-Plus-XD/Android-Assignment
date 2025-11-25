@@ -441,9 +441,7 @@ class _MainShellState extends State<MainShell> {
 
     final authService = context.read<AuthService>();
     void onLoginStateChanged(loggedIn) {
-      if (!loggedIn) {
-        authService.logout();
-      }
+      if (!loggedIn) authService.logout();
     }
 
     final pages = [
