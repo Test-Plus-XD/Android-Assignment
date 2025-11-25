@@ -37,10 +37,14 @@ class FrontPage extends StatefulWidget {
 class _FrontPageState extends State<FrontPage> {
   // Carousel index for featured restaurants
   int _currentIndex = 0;
-  // Loading flag for nearby restaurants
+  // Loading flag for nearby and featured restaurants
   bool _loadingNearby = false;
+  bool _loadingFeatured = false;
   // Nearby restaurants computed from GPS
   List<Restaurant> _nearbyRestaurants = [];
+  // Cached results
+  List<Restaurant> _cachedFeatured = [];
+  List<Restaurant> _cachedNearby = [];
 
   @override
   void initState() {
@@ -52,14 +56,30 @@ class _FrontPageState extends State<FrontPage> {
     });
   }
 
-  // Load featured restaurants (simple search)
+  // Load featured restaurants with caching
   Future<void> _loadFeaturedRestaurants() async {
-    final restaurantService = context.read<RestaurantService>();
-    await restaurantService.searchRestaurants(
-      query: '',
-      isTraditionalChinese: widget.isTraditionalChinese,
-      hitsPerPage: 10,
-    );
+    // Return cached if available and not explicitly refreshing
+    if (_cachedFeatured.isNotEmpty && !_loadingFeatured) return;
+    setState(() => _loadingFeatured = true);
+
+    try {
+      final restaurantService = context.read<RestaurantService>();
+      await restaurantService.searchRestaurants(
+        query: '',
+        isTraditionalChinese: widget.isTraditionalChinese,
+        hitsPerPage: 10,
+      );
+      if (mounted) {
+        setState(() {
+          _cachedFeatured = restaurantService.searchResults;
+          _loadingFeatured = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingFeatured = false);
+      }
+    }
   }
 
   // Load nearby restaurants via location service, compute distances and sort
@@ -127,10 +147,12 @@ class _FrontPageState extends State<FrontPage> {
         }
       }
       restaurantsWithDistance.sort((a, b) => a.value.compareTo(b.value));
-      setState(() {
-        _nearbyRestaurants = restaurantsWithDistance.take(10).map((e) => e.key).toList();
-        _loadingNearby = false;
-      });
+      if (mounted) {
+        setState(() {
+          _cachedNearby = restaurantsWithDistance.take(10).map((e) => e.key).toList();
+          _loadingNearby = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -140,9 +162,22 @@ class _FrontPageState extends State<FrontPage> {
                 : 'Error loading nearby restaurants'),
           ),
         );
+        setState(() => _loadingNearby = false);
       }
-      setState(() => _loadingNearby = false);
     }
+  }
+
+  // Refresh all data
+  Future<void> _refreshAll() async {
+    setState(() {
+      _loadingFeatured = true;
+      _loadingNearby = true;
+    });
+
+    await Future.wait([
+      _loadFeaturedRestaurants(),
+      _loadNearbyRestaurants(),
+    ]);
   }
 
   // Build small distance badge for a restaurant
@@ -267,38 +302,71 @@ class _FrontPageState extends State<FrontPage> {
               const SizedBox(height: 12),
 
               // Featured loading or carousel
-              if (restaurants.isEmpty)
-                const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator()))
-              else
-                Column(children: [
-                  CarouselSlider.builder(
-                    itemCount: restaurants.length,
-                    itemBuilder: (context, index, realIndex) {
-                      final restaurant = restaurants[index];
-                      final displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => RestaurantDetailPage(restaurant: restaurant, isTraditionalChinese: widget.isTraditionalChinese)));
-                        },
-                        child: Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                                child: CachedNetworkImage(
-                                  imageUrl: restaurant.imageUrl ?? '',
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(color: Colors.grey.shade300, child: const Center(child: CircularProgressIndicator())),
-                                  errorWidget: (context, url, error) => Container(color: Colors.grey.shade300, child: const Icon(Icons.restaurant, size: 48)),
+              if (_loadingFeatured && _cachedFeatured.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_cachedFeatured.isNotEmpty)
+                Column(
+                    children: [
+                      CarouselSlider.builder(
+                        itemCount: _cachedFeatured.length,
+                        itemBuilder: (context, index, realIndex) {
+                          final restaurant = _cachedFeatured[index];
+                          final displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RestaurantDetailPage(
+                                    restaurant: restaurant,
+                                    isTraditionalChinese: widget.isTraditionalChinese,
+                                  ),
                                 ),
+                              );
+                            },
+                            child: Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(12),
+                                      ),
+                                      child: CachedNetworkImage(
+                                        imageUrl: restaurant.imageUrl ?? '',
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(
+                                          color: Colors.grey.shade300,
+                                          child: const Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          color: Colors.grey.shade300,
+                                          child: const Icon(Icons.restaurant, size: 48),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Text(
+                                      displayName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Padding(padding: const EdgeInsets.all(12.0), child: Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                          ]),
-                        ),
-                      );
-                    },
+                          );
+                        },
                     options: CarouselOptions(
                       height: 220,
                       autoPlay: true,

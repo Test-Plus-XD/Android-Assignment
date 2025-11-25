@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import '../services/restaurant_service.dart';
 import '../models.dart';
@@ -14,6 +15,85 @@ class SearchPage extends StatefulWidget {
 
   @override
   State<SearchPage> createState() => _SearchPageState();
+}
+
+/// Filter option data class
+class _FilterOption {
+  final String value;
+  final String label;
+  _FilterOption(this.value, this.label);
+}
+
+/// Reusable filter dialog with proper state management
+class _FilterDialog extends StatefulWidget {
+  final String title;
+  final bool isTraditionalChinese;
+  final List<_FilterOption> options;
+  final Set<String> initialSelection;
+
+  const _FilterDialog({
+    required this.title,
+    required this.isTraditionalChinese,
+    required this.options,
+    required this.initialSelection,
+  });
+
+  @override
+  State<_FilterDialog> createState() => _FilterDialogState();
+}
+
+class _FilterDialogState extends State<_FilterDialog> {
+  late Set<String> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set<String>.from(widget.initialSelection);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: widget.options.map((option) {
+            final isSelected = _selected.contains(option.value);
+            return CheckboxListTile(
+              title: Text(option.label),
+              value: isSelected,
+              onChanged: (bool? checked) {
+                setState(() {
+                  if (checked == true) {
+                    _selected.add(option.value);
+                  } else {
+                    _selected.remove(option.value);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            setState(() => _selected.clear());
+          },
+          child: Text(widget.isTraditionalChinese ? '清除' : 'Clear'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _selected),
+          child: Text(widget.isTraditionalChinese ? '確認' : 'Apply'),
+        ),
+      ],
+    );
+  }
 }
 
 class _SearchPageState extends State<SearchPage> {
@@ -82,52 +162,19 @@ class _SearchPageState extends State<SearchPage> {
 
   /// Opens a dialogue for selecting district filters
   Future<void> _openDistrictFilter() async {
-    final districts = HongKongDistricts.withAllOption;
-    final selected = Set<String>.from(_selectedDistrictsEn);
+    final districts = HongKongDistricts.all;
+    final selectedCopy = Set<String>.from(_selectedDistrictsEn);
+
     final result = await showDialog<Set<String>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(widget.isTraditionalChinese ? '選擇地區' : 'Select District'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: districts.map((district) {
-              final label = district.getLabel(widget.isTraditionalChinese);
-              final isSelected = selected.contains(district.en);
-              return CheckboxListTile(
-                title: Text(label),
-                value: isSelected,
-                onChanged: (bool? checked) {
-                  // Updates the selected districts set based on checkbox state
-                  setState(() {
-                    if (checked == true) {
-                      selected.add(district.en);
-                    } else {
-                      selected.remove(district.en);
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
-          ),
-          TextButton(
-            onPressed: () { setState(() => selected.clear()); },
-            child: Text(widget.isTraditionalChinese ? '清除' : 'Clear'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, selected),
-            child: Text(widget.isTraditionalChinese ? '確認' : 'Apply'),
-          ),
-        ],
+      builder: (dialogContext) => _FilterDialog(
+        title: widget.isTraditionalChinese ? '選擇地區' : 'Select Districts',
+        isTraditionalChinese: widget.isTraditionalChinese,
+        options: districts.map((d) => _FilterOption(d.en, d.getLabel(widget.isTraditionalChinese))).toList(),
+        initialSelection: selectedCopy,
       ),
     );
-    // Applies the selected districts and refreshes the results
+
     if (result != null) {
       setState(() {
         _selectedDistrictsEn.clear();
@@ -139,54 +186,19 @@ class _SearchPageState extends State<SearchPage> {
 
   /// Opens a dialogue for selecting keyword/category filters
   Future<void> _openKeywordFilter() async {
-    final keywords = RestaurantKeywords.withAllOption;
-    final selected = Set<String>.from(_selectedKeywordsEn);
+    final keywords = RestaurantKeywords.all;
+    final selectedCopy = Set<String>.from(_selectedKeywordsEn);
+
     final result = await showDialog<Set<String>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(widget.isTraditionalChinese ? '選擇分類' : 'Select Category'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: keywords.map((keyword) {
-              final label = keyword.getLabel(widget.isTraditionalChinese);
-              final isSelected = selected.contains(keyword.en);
-              return CheckboxListTile(
-                title: Text(label),
-                value: isSelected,
-                onChanged: (bool? checked) {
-                  // Updates the selected keywords set based on checkbox state
-                  setState(() {
-                    if (checked == true) {
-                      selected.add(keyword.en);
-                    } else {
-                      selected.remove(keyword.en);
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() => selected.clear());
-            },
-            child: Text(widget.isTraditionalChinese ? '清除' : 'Clear'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, selected),
-            child: Text(widget.isTraditionalChinese ? '確認' : 'Apply'),
-          ),
-        ],
+      builder: (dialogContext) => _FilterDialog(
+        title: widget.isTraditionalChinese ? '選擇分類' : 'Select Categories',
+        isTraditionalChinese: widget.isTraditionalChinese,
+        options: keywords.map((k) => _FilterOption(k.en, k.getLabel(widget.isTraditionalChinese))).toList(),
+        initialSelection: selectedCopy,
       ),
     );
-    // Applies the selected keywords and refreshes the results
+
     if (result != null) {
       setState(() {
         _selectedKeywordsEn.clear();
@@ -299,64 +311,128 @@ class _SearchPageState extends State<SearchPage> {
     final displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
     final displayDistrict = restaurant.getDisplayDistrict(widget.isTraditionalChinese);
     final keywords = restaurant.getDisplayKeywords(widget.isTraditionalChinese);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Card(
         clipBehavior: Clip.hardEdge,
         child: InkWell(
-          onTap: () => Navigator.push(context, MaterialPageRoute(
-            builder: (_) => RestaurantDetailPage(
-              restaurant: restaurant,
-              isTraditionalChinese: widget.isTraditionalChinese,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RestaurantDetailPage(
+                restaurant: restaurant,
+                isTraditionalChinese: widget.isTraditionalChinese,
+              ),
             ),
-          )),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Restaurant image with error fallback
-            if (restaurant.imageUrl != null)
-              Image.network(
-                restaurant.imageUrl!,
+          ),
+          child: Stack(
+            children: [
+              // Background image
+              CachedNetworkImage(
+                imageUrl: restaurant.imageUrl ?? '',
                 height: 200,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    Container(height: 200, color: Colors.grey.shade300, child: const Icon(Icons.restaurant, size: 64)),
+                errorWidget: (context, error, stackTrace) => Container(
+                  height: 200,
+                  color: Colors.grey.shade300,
+                  child: const Icon(Icons.restaurant, size: 64),
+                ),
               ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Restaurant name
-                Text(displayName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 8),
-                // District location
-                Row(children: [
-                  Icon(Icons.location_on_outlined, size: 16, color: Theme.of(context).textTheme.bodySmall?.color),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text(displayDistrict, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyMedium)),
-                ]),
-                // Keywords/categories (up to 3)
-                if (keywords.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: keywords.take(3).map((k) =>
-                        Chip(label: Text(k, style: const TextStyle(fontSize: 12)), padding: EdgeInsets.zero, visualDensity: VisualDensity.compact)
-                    ).toList(),
+              // Gradient overlay
+              Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.7),
+                    ],
                   ),
-                ],
-                const SizedBox(height: 8),
-                // View details link
-                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  Text(widget.isTraditionalChinese ? '查看詳情' : 'View Details',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 4),
-                  Icon(Icons.arrow_forward, size: 16, color: Theme.of(context).colorScheme.primary),
-                ]),
-              ]),
-            ),
-          ]),
+                ),
+              ),
+              // Restaurant info overlay
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black,
+                              offset: Offset(1, 1),
+                              blurRadius: 3,
+                            ),
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              displayDistrict,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (keywords.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: keywords.take(3).map((k) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              k,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          )).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
