@@ -59,46 +59,53 @@ class RestaurantService with ChangeNotifier {
   }
 
   /// Perform search using Vercel API
-  Future<void> searchRestaurants({
+  Future<HitsPage> searchRestaurants({
     String query = '',
     List<String>? districtsEn,
     List<String>? keywordsEn,
     bool isTraditionalChinese = false,
     int page = 0,
     int hitsPerPage = 12,
+    bool isInitialSearch = true,
   }) async {
     _isLoading = true;
+    // On a new initial search, clear previous results first
+    if (isInitialSearch) clearResults();
     notifyListeners();
 
     try {
+      final int pageToFetch = isInitialSearch ? 0 : page;
       final uri = Uri.parse(_searchEndpoint).replace(queryParameters: {
         if (query.isNotEmpty) 'query': query,
         if (districtsEn != null && districtsEn.isNotEmpty) 'districts': districtsEn.join(','),
         if (keywordsEn != null && keywordsEn.isNotEmpty) 'keywords': keywordsEn.join(','),
-        'language': isTraditionalChinese ? 'TC' : 'EN',
-        'page': page.toString(),
+        //'language': isTraditionalChinese ? 'TC' : 'EN',
+        'page': pageToFetch.toString(),
         'hitsPerPage': hitsPerPage.toString(),
       });
-
       if (kDebugMode) print('RestaurantService: Searching → $uri');
-
       final response = await http.get(uri, headers: _getHeaders());
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final hits = (data['hits'] as List).map((hit) => Restaurant.fromJson(hit)).toList();
-        
-        _searchResults = hits;
+        final hits = (data['hits'] as List)
+            .map((hit) => Restaurant.fromJson(hit))
+            .toList();
+        _searchResults = isInitialSearch ? List<Restaurant>.from(hits) : [..._searchResults, ...hits]; // Create a fresh list instance
         _totalHits = data['nbHits'] as int;
         _currentPage = data['page'] as int;
         _totalPages = data['nbPages'] as int;
 
         final isLastPage = _currentPage >= _totalPages - 1;
         final nextPageKey = isLastPage ? null : _currentPage + 1;
+        final hitsPage = HitsPage(hits, _currentPage, nextPageKey);
+        //final hitsPage = HitsPage(_searchResults, _currentPage, nextPageKey);
 
-        _searchResultsController.add(_searchResults);
+        //_searchResultsController.add(_searchResults);
+        _searchResultsController.add(List<Restaurant>.from(_searchResults)); // Emit new instance
         _metadataController.add(SearchMetadata(_totalHits));
-        _pagesController.add(HitsPage(_searchResults, _currentPage, nextPageKey));
+        //_pagesController.add(hitsPage);
+        _pagesController.add(HitsPage(List<Restaurant>.from(_searchResults), _currentPage, nextPageKey));
 
         _errorMessage = null;
         _isLoading = false;
@@ -108,6 +115,7 @@ class RestaurantService with ChangeNotifier {
           print('RestaurantService: Got ${_searchResults.length} results');
           print('Page $_currentPage of $_totalPages, $_totalHits total hits');
         }
+        return hitsPage;
       } else {
         throw Exception('Search failed with status: ${response.statusCode}');
       }
@@ -117,6 +125,7 @@ class RestaurantService with ChangeNotifier {
       _searchResults = [];
       notifyListeners();
       if (kDebugMode) print('RestaurantService Error: $e');
+      rethrow;
     }
   }
 

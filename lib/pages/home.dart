@@ -149,7 +149,10 @@ class _FrontPageState extends State<FrontPage> {
       restaurantsWithDistance.sort((a, b) => a.value.compareTo(b.value));
       if (mounted) {
         setState(() {
-          _cachedNearby = restaurantsWithDistance.take(10).map((e) => e.key).toList();
+          // Create the list of nearby restaurants from the sorted list.
+          final nearby = restaurantsWithDistance.take(10).map((e) => e.key).toList();
+          _cachedNearby = nearby;
+          _nearbyRestaurants = nearby;
           _loadingNearby = false;
         });
       }

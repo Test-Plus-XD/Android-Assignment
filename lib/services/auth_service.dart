@@ -236,9 +236,7 @@ class AuthService with ChangeNotifier {
       _handleAuthError(error);
       return false;
     } catch (error) {
-      if (kDebugMode) {
-        print('AuthService: Unexpected error during Google Sign-In: $error');
-      }
+      if (kDebugMode) print('AuthService: Unexpected error during Google Sign-In: $error');
       _errorMessage = 'Google sign-in failed: $error';
       _setLoading(false);
       notifyListeners();

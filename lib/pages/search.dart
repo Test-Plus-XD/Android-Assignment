@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
@@ -96,7 +97,7 @@ class _FilterDialogState extends State<_FilterDialog> {
   }
 }
 
-class _SearchPageState extends State<SearchPage> {
+class _SearchPageState extends State<SearchPage> with TickerProviderStateMixin {
   late final TextEditingController _searchController;
   late final PagingController<int, Restaurant> _pagingController;
   final Set<String> _selectedDistrictsEn = {};
@@ -104,22 +105,61 @@ class _SearchPageState extends State<SearchPage> {
   DateTime? _lastSearchTime;
   static const int _resultsPerPage = 12;
 
+  // Added for scroll-to-hide functionality
+  late final ScrollController _scrollController;
+  late final AnimationController _animationController;
+  bool _showSearch = true;
+
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
-    // Initialises the paging controller with fetchPage and getNextPageKey functions
     _pagingController = PagingController<int, Restaurant>(
       fetchPage: _fetchPage,
       getNextPageKey: (state) {
-        // Returns null if the last page is empty (indicating no more pages)
         if (state.lastPageIsEmpty) return null;
-        // Otherwise, returns the next page key
         return state.nextIntPageKey;
       },
     );
     _searchController.addListener(_onSearchChanged);
+
+    _scrollController = ScrollController();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..forward();
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.userScrollDirection ==
+          ScrollDirection.reverse) {
+        if (_showSearch) {
+          setState(() {
+            _showSearch = false;
+            _animationController.reverse();
+          });
+        }
+      }
+      if (_scrollController.position.userScrollDirection ==
+          ScrollDirection.forward) {
+        if (!_showSearch) {
+          setState(() {
+            _showSearch = true;
+            _animationController.forward();
+          });
+        }
+      }
+    });
   }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _pagingController.dispose();
+    _scrollController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
 
   /// Handles search input changes with debouncing
   void _onSearchChanged() {
@@ -128,34 +168,43 @@ class _SearchPageState extends State<SearchPage> {
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_lastSearchTime != null &&
           DateTime.now().difference(_lastSearchTime!) >= const Duration(milliseconds: 300)) {
+        // This is an initial search, so we call it directly here to reset the state.
+        context.read<RestaurantService>().searchRestaurants(
+          query: _searchController.text.trim(),
+          districtsEn: _selectedDistrictsEn.isEmpty ? null : _selectedDistrictsEn.toList(),
+          keywordsEn: _selectedKeywordsEn.isEmpty ? null : _selectedKeywordsEn.toList(),
+          isTraditionalChinese: widget.isTraditionalChinese,
+          isInitialSearch: true, // Force page to 0 and clear results
+          hitsPerPage: _resultsPerPage,
+        );
         _pagingController.refresh();
       }
     });
   }
 
+
   /// Fetches a page of restaurants from the API and returns the items directly
   Future<List<Restaurant>> _fetchPage(int pageKey) async {
     try {
       final restaurantService = context.read<RestaurantService>();
-      // Performs the search with current filters and query
+      //1. Perform the search with current filters and query
       await restaurantService.searchRestaurants(
         query: _searchController.text.trim(),
         districtsEn: _selectedDistrictsEn.isEmpty ? null : _selectedDistrictsEn.toList(),
         keywordsEn: _selectedKeywordsEn.isEmpty ? null : _selectedKeywordsEn.toList(),
         isTraditionalChinese: widget.isTraditionalChinese,
-        page: pageKey,
+        page: pageKey ?? 0,
         hitsPerPage: _resultsPerPage,
+        isInitialSearch: false, // Let PagingController handle the page number
       );
-      // Retrieves the page results from the stream
-      final hitsPage = await restaurantService.pagesStream.first;
-      if (kDebugMode) print('Fetched page ${hitsPage.pageKey}: ${hitsPage.items.length} items');
-      // Returns the list of items directly; the controller handles pagination logic
-      return hitsPage.items;
+      // 2. The searchResults property on your service holds the latest list
+      final hits = restaurantService.searchResults;
+      if (kDebugMode) print('Fetched page $pageKey: ${hits.length} items');
+      // 3. Return the list of items. The PagingController will automatically detect if this is the last page if hits.length < _resultsPerPage.
+      return hits;
     } catch (error) {
-      if (kDebugMode) {
-        print('Error fetching page $pageKey: $error');
-      }
-      // Re-throws error so the controller can handle it
+      if (kDebugMode) print('Error fetching page $pageKey: $error');
+      // Re-throw the error so the PagingController can display an error tile
       rethrow;
     }
   }
@@ -180,6 +229,7 @@ class _SearchPageState extends State<SearchPage> {
         _selectedDistrictsEn.clear();
         _selectedDistrictsEn.addAll(result);
       });
+      context.read<RestaurantService>().clearResults(); // Clear previous results and reset the page count
       _pagingController.refresh();
     }
   }
@@ -204,6 +254,7 @@ class _SearchPageState extends State<SearchPage> {
         _selectedKeywordsEn.clear();
         _selectedKeywordsEn.addAll(result);
       });
+      context.read<RestaurantService>().clearResults(); // Clear previous results and reset the page count
       _pagingController.refresh();
     }
   }
@@ -215,6 +266,7 @@ class _SearchPageState extends State<SearchPage> {
       _selectedKeywordsEn.clear();
       _searchController.clear();
     });
+    context.read<RestaurantService>().clearResults(); // Clear previous results and reset the page count
     _pagingController.refresh();
   }
 
@@ -439,79 +491,129 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    _pagingController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: widget.isTraditionalChinese ? '搜尋名稱或地址' : 'Search name or address',
-            border: InputBorder.none,
-            hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(153)),
-          ),
-          textInputAction: TextInputAction.search,
-        ),
+        title: Text(widget.isTraditionalChinese ? '搜尋' : 'Search'),
       ),
       body: Column(
         children: [
-          _buildFilterChips(),
+          SizeTransition(
+            sizeFactor: _animationController,
+            axisAlignment: -1.0,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: widget.isTraditionalChinese
+                          ? '搜尋名稱或地址'
+                          : 'Search name or address',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyLarge
+                              ?.color
+                              ?.withAlpha(153)),
+                    ),
+                    textInputAction: TextInputAction.search,
+                  ),
+                ),
+                _buildFilterChips(),
+                Container(
+                  height: 1,
+                  color: Colors.green,
+                ),
+              ],
+            ),
+          ),
           Expanded(
-            // Uses PagingListener to handle the paging state
             child: PagingListener<int, Restaurant>(
               controller: _pagingController,
               builder: (context, state, fetchNextPage) {
                 return PagedListView<int, Restaurant>(
+                  scrollController: _scrollController,
                   state: state,
                   fetchNextPage: fetchNextPage,
                   builderDelegate: PagedChildBuilderDelegate<Restaurant>(
-                    itemBuilder: (context, restaurant, index) => _buildRestaurantCard(restaurant),
-                    // Loading indicator for first page
-                    firstPageProgressIndicatorBuilder: (_) => const Center(child: CircularProgressIndicator()),
-                    // Loading indicator for subsequent pages
-                    newPageProgressIndicatorBuilder: (_) => const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
-                    // Empty state when no results found
+                    itemBuilder: (context, restaurant, index) =>
+                        _buildRestaurantCard(restaurant),
+                    firstPageProgressIndicatorBuilder: (_) =>
+                    const Center(child: CircularProgressIndicator()),
+                    newPageProgressIndicatorBuilder: (_) => const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator())),
                     noItemsFoundIndicatorBuilder: (_) => Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
-                          const SizedBox(height: 16),
-                          Text(widget.isTraditionalChinese ? '沒有找到餐廳' : 'No restaurants found', style: Theme.of(context).textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          Text(widget.isTraditionalChinese ? '嘗試調整您的搜尋或篩選條件' : 'Try adjusting your search or filters', style: Theme.of(context).textTheme.bodyMedium),
-                          if (_selectedDistrictsEn.isNotEmpty ||
-                              _selectedKeywordsEn.isNotEmpty ||
-                              _searchController.text.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: OutlinedButton(
-                                onPressed: _clearAllFilters,
-                                child: Text(widget.isTraditionalChinese ? '清除篩選' : 'Clear Filters'),
-                              ),
-                            ),
-                        ]),
+                        child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off,
+                                  size: 64, color: Colors.grey.shade400),
+                              const SizedBox(height: 16),
+                              Text(
+                                  widget.isTraditionalChinese
+                                      ? '沒有找到餐廳'
+                                      : 'No restaurants found',
+                                  style:
+                                  Theme.of(context).textTheme.titleLarge),
+                              const SizedBox(height: 8),
+                              Text(
+                                  widget.isTraditionalChinese
+                                      ? '嘗試調整您的搜尋或篩選條件'
+                                      : 'Try adjusting your search or filters',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium),
+                              if (_selectedDistrictsEn.isNotEmpty ||
+                                  _selectedKeywordsEn.isNotEmpty ||
+                                  _searchController.text.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 16),
+                                  child: OutlinedButton(
+                                    onPressed: _clearAllFilters,
+                                    child: Text(widget.isTraditionalChinese
+                                        ? '清除篩選'
+                                        : 'Clear Filters'),
+                                  ),
+                                ),
+                            ]),
                       ),
                     ),
-                    // Error state for first page load failure
                     firstPageErrorIndicatorBuilder: (_) => Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-                          const SizedBox(height: 16),
-                          Text(widget.isTraditionalChinese ? '載入失敗' : 'Failed to load', style: Theme.of(context).textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          Text(widget.isTraditionalChinese ? '請檢查您的網路連接' : 'Please check your internet connection', style: Theme.of(context).textTheme.bodyMedium),
-                          const SizedBox(height: 16),
-                          ElevatedButton(onPressed: () => _pagingController.refresh(), child: Text(widget.isTraditionalChinese ? '重試' : 'Retry')),
-                        ]),
+                        child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline,
+                                  size: 64, color: Colors.red.shade300),
+                              const SizedBox(height: 16),
+                              Text(
+                                  widget.isTraditionalChinese
+                                      ? '載入失敗'
+                                      : 'Failed to load',
+                                  style:
+                                  Theme.of(context).textTheme.titleLarge),
+                              const SizedBox(height: 8),
+                              Text(
+                                  widget.isTraditionalChinese
+                                      ? '請檢查您的網路連接'
+                                      : 'Please check your internet connection',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                  onPressed: () => _pagingController.refresh(),
+                                  child: Text(widget.isTraditionalChinese
+                                      ? '重試'
+                                      : 'Retry')),
+                            ]),
                       ),
                     ),
                   ),
