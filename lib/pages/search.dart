@@ -6,22 +6,21 @@ import '../services/restaurant_service.dart';
 import '../models.dart';
 import 'restaurant_detail.dart';
 
-class RestaurantsPage extends StatefulWidget {
+/// Widget for searching and displaying restaurants with filtering capabilities
+class SearchPage extends StatefulWidget {
   final bool isTraditionalChinese;
 
-  const RestaurantsPage({this.isTraditionalChinese = false, super.key});
+  const SearchPage({this.isTraditionalChinese = false, super.key});
 
   @override
-  State<RestaurantsPage> createState() => _RestaurantsPageState();
+  State<SearchPage> createState() => _SearchPageState();
 }
 
-class _RestaurantsPageState extends State<RestaurantsPage> {
+class _SearchPageState extends State<SearchPage> {
   late final TextEditingController _searchController;
   late final PagingController<int, Restaurant> _pagingController;
-
-  String? _selectedDistrictEn;
-  String? _selectedKeywordEn;
-
+  final Set<String> _selectedDistrictsEn = {};
+  final Set<String> _selectedKeywordsEn = {};
   DateTime? _lastSearchTime;
   static const int _resultsPerPage = 12;
 
@@ -29,67 +28,63 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    // Initialises the paging controller with fetchPage and getNextPageKey functions
     _pagingController = PagingController<int, Restaurant>(
+      fetchPage: _fetchPage,
       getNextPageKey: (state) {
-        if (state.lastPageIsEmpty) {
-          return null;
-        }
+        // Returns null if the last page is empty (indicating no more pages)
+        if (state.lastPageIsEmpty) return null;
+        // Otherwise, returns the next page key
         return state.nextIntPageKey;
       },
-      fetchPage: (pageKey) => _fetchPage(pageKey),
     );
-
     _searchController.addListener(_onSearchChanged);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _pagingController.refresh();
-    });
   }
 
+  /// Handles search input changes with debouncing
   void _onSearchChanged() {
     _lastSearchTime = DateTime.now();
+    // Delays refresh by 300ms to avoid excessive API calls whilst typing
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_lastSearchTime != null &&
-          DateTime.now().difference(_lastSearchTime!) >=
-              const Duration(milliseconds: 300)) {
+          DateTime.now().difference(_lastSearchTime!) >= const Duration(milliseconds: 300)) {
         _pagingController.refresh();
       }
     });
   }
 
+  /// Fetches a page of restaurants from the API and returns the items directly
   Future<List<Restaurant>> _fetchPage(int pageKey) async {
     try {
       final restaurantService = context.read<RestaurantService>();
-
+      // Performs the search with current filters and query
       await restaurantService.searchRestaurants(
         query: _searchController.text.trim(),
-        districtEn: _selectedDistrictEn,
-        keywordEn: _selectedKeywordEn,
+        districtsEn: _selectedDistrictsEn.isEmpty ? null : _selectedDistrictsEn.toList(),
+        keywordsEn: _selectedKeywordsEn.isEmpty ? null : _selectedKeywordsEn.toList(),
         isTraditionalChinese: widget.isTraditionalChinese,
         page: pageKey,
         hitsPerPage: _resultsPerPage,
       );
-
+      // Retrieves the page results from the stream
       final hitsPage = await restaurantService.pagesStream.first;
-
-      if (kDebugMode) {
-        print('Fetched page ${hitsPage.pageKey}: ${hitsPage.items.length} items');
-      }
-
+      if (kDebugMode) print('Fetched page ${hitsPage.pageKey}: ${hitsPage.items.length} items');
+      // Returns the list of items directly; the controller handles pagination logic
       return hitsPage.items;
     } catch (error) {
       if (kDebugMode) {
         print('Error fetching page $pageKey: $error');
       }
+      // Re-throws error so the controller can handle it
       rethrow;
     }
   }
 
+  /// Opens a dialogue for selecting district filters
   Future<void> _openDistrictFilter() async {
     final districts = HongKongDistricts.withAllOption;
-    final selectedEn = _selectedDistrictEn ?? 'All Districts';
-
-    final result = await showDialog<String>(
+    final selected = Set<String>.from(_selectedDistrictsEn);
+    final result = await showDialog<Set<String>>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(widget.isTraditionalChinese ? '選擇地區' : 'Select District'),
@@ -98,38 +93,55 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
             mainAxisSize: MainAxisSize.min,
             children: districts.map((district) {
               final label = district.getLabel(widget.isTraditionalChinese);
-              return RadioListTile<String>(
+              final isSelected = selected.contains(district.en);
+              return CheckboxListTile(
                 title: Text(label),
-                value: district.en,
-                groupValue: selectedEn,
-                onChanged: (value) => Navigator.pop(context, value),
+                value: isSelected,
+                onChanged: (bool? checked) {
+                  // Updates the selected districts set based on checkbox state
+                  setState(() {
+                    if (checked == true) {
+                      selected.add(district.en);
+                    } else {
+                      selected.remove(district.en);
+                    }
+                  });
+                },
               );
             }).toList(),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () { setState(() => selected.clear()); },
+            child: Text(widget.isTraditionalChinese ? '清除' : 'Clear'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, selected),
+            child: Text(widget.isTraditionalChinese ? '確認' : 'Apply'),
+          ),
         ],
       ),
     );
-
+    // Applies the selected districts and refreshes the results
     if (result != null) {
       setState(() {
-        if (result == 'All Districts') {
-          _selectedDistrictEn = null;
-        } else {
-          _selectedDistrictEn = result;
-        }
+        _selectedDistrictsEn.clear();
+        _selectedDistrictsEn.addAll(result);
       });
       _pagingController.refresh();
     }
   }
 
+  /// Opens a dialogue for selecting keyword/category filters
   Future<void> _openKeywordFilter() async {
     final keywords = RestaurantKeywords.withAllOption;
-    final selectedEn = _selectedKeywordEn ?? 'All Categories';
-
-    final result = await showDialog<String>(
+    final selected = Set<String>.from(_selectedKeywordsEn);
+    final result = await showDialog<Set<String>>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(widget.isTraditionalChinese ? '選擇分類' : 'Select Category'),
@@ -138,68 +150,63 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
             mainAxisSize: MainAxisSize.min,
             children: keywords.map((keyword) {
               final label = keyword.getLabel(widget.isTraditionalChinese);
-              return RadioListTile<String>(
+              final isSelected = selected.contains(keyword.en);
+              return CheckboxListTile(
                 title: Text(label),
-                value: keyword.en,
-                groupValue: selectedEn,
-                onChanged: (value) => Navigator.pop(context, value),
+                value: isSelected,
+                onChanged: (bool? checked) {
+                  // Updates the selected keywords set based on checkbox state
+                  setState(() {
+                    if (checked == true) {
+                      selected.add(keyword.en);
+                    } else {
+                      selected.remove(keyword.en);
+                    }
+                  });
+                },
               );
             }).toList(),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() => selected.clear());
+            },
+            child: Text(widget.isTraditionalChinese ? '清除' : 'Clear'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, selected),
+            child: Text(widget.isTraditionalChinese ? '確認' : 'Apply'),
+          ),
         ],
       ),
     );
-
+    // Applies the selected keywords and refreshes the results
     if (result != null) {
       setState(() {
-        if (result == 'All Categories') {
-          _selectedKeywordEn = null;
-        } else {
-          _selectedKeywordEn = result;
-        }
+        _selectedKeywordsEn.clear();
+        _selectedKeywordsEn.addAll(result);
       });
       _pagingController.refresh();
     }
   }
 
-  void _clearDistrict() {
-    setState(() => _selectedDistrictEn = null);
-    _pagingController.refresh();
-  }
-
-  void _clearKeyword() {
-    setState(() => _selectedKeywordEn = null);
-    _pagingController.refresh();
-  }
-
+  /// Clears all active filters and search query
   void _clearAllFilters() {
     setState(() {
-      _selectedDistrictEn = null;
-      _selectedKeywordEn = null;
+      _selectedDistrictsEn.clear();
+      _selectedKeywordsEn.clear();
       _searchController.clear();
     });
     _pagingController.refresh();
   }
 
-  String get _selectedDistrictLabel {
-    if (_selectedDistrictEn == null) {
-      return widget.isTraditionalChinese ? '所有地區' : 'All Districts';
-    }
-    final district = HongKongDistricts.findByEn(_selectedDistrictEn!);
-    return district?.getLabel(widget.isTraditionalChinese) ?? _selectedDistrictEn!;
-  }
-
-  String get _selectedKeywordLabel {
-    if (_selectedKeywordEn == null) {
-      return widget.isTraditionalChinese ? '所有分類' : 'All Categories';
-    }
-    final keyword = RestaurantKeywords.findByEn(_selectedKeywordEn!);
-    return keyword?.getLabel(widget.isTraditionalChinese) ?? _selectedKeywordEn!;
-  }
-
+  /// Builds the filter chips UI showing active filters
   Widget _buildFilterChips() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -207,41 +214,79 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
         spacing: 8,
         runSpacing: 8,
         children: [
+          // District filter chip
           FilterChip(
-            label: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.location_on_outlined, size: 18),
-              const SizedBox(width: 4),
-              Text(_selectedDistrictLabel),
-              if (_selectedDistrictEn != null) ...[
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_on_outlined, size: 18),
                 const SizedBox(width: 4),
-                GestureDetector(onTap: _clearDistrict, child: const Icon(Icons.close, size: 16)),
+                Text(_selectedDistrictsEn.isEmpty
+                    ? (widget.isTraditionalChinese ? '所有地區' : 'All Districts')
+                    : '${_selectedDistrictsEn.length} ${widget.isTraditionalChinese ? "個地區" : "districts"}'),
               ],
-            ]),
-            selected: _selectedDistrictEn != null,
+            ),
+            selected: _selectedDistrictsEn.isNotEmpty,
             onSelected: (_) => _openDistrictFilter(),
           ),
+          // Individual district chips for each selected district
+          if (_selectedDistrictsEn.isNotEmpty)
+            ..._selectedDistrictsEn.map((districtEn) {
+              final district = HongKongDistricts.findByEn(districtEn);
+              final label = district?.getLabel(widget.isTraditionalChinese) ?? districtEn;
+              return Chip(
+                label: Text(label, style: const TextStyle(fontSize: 12)),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                onDeleted: () {
+                  // Removes the selected district and refreshes results
+                  setState(() => _selectedDistrictsEn.remove(districtEn));
+                  _pagingController.refresh();
+                },
+              );
+            }),
+          // Keyword/category filter chip
           FilterChip(
-            label: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.category_outlined, size: 18),
-              const SizedBox(width: 4),
-              Text(_selectedKeywordLabel),
-              if (_selectedKeywordEn != null) ...[
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.category_outlined, size: 18),
                 const SizedBox(width: 4),
-                GestureDetector(onTap: _clearKeyword, child: const Icon(Icons.close, size: 16)),
+                Text(_selectedKeywordsEn.isEmpty
+                    ? (widget.isTraditionalChinese ? '所有分類' : 'All Categories')
+                    : '${_selectedKeywordsEn.length} ${widget.isTraditionalChinese ? "個分類" : "categories"}'),
               ],
-            ]),
-            selected: _selectedKeywordEn != null,
+            ),
+            selected: _selectedKeywordsEn.isNotEmpty,
             onSelected: (_) => _openKeywordFilter(),
           ),
-          if (_selectedDistrictEn != null ||
-              _selectedKeywordEn != null ||
+          // Individual keyword chips for each selected keyword
+          if (_selectedKeywordsEn.isNotEmpty)
+            ..._selectedKeywordsEn.map((keywordEn) {
+              final keyword = RestaurantKeywords.findByEn(keywordEn);
+              final label = keyword?.getLabel(widget.isTraditionalChinese) ?? keywordEn;
+              return Chip(
+                label: Text(label, style: const TextStyle(fontSize: 12)),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                onDeleted: () {
+                  // Removes the selected keyword and refreshes results
+                  setState(() => _selectedKeywordsEn.remove(keywordEn));
+                  _pagingController.refresh();
+                },
+              );
+            }),
+          // Clear all filters button (only shown when filters are active)
+          if (_selectedDistrictsEn.isNotEmpty ||
+              _selectedKeywordsEn.isNotEmpty ||
               _searchController.text.isNotEmpty)
             ActionChip(
-              label: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.close, size: 18),
-                const SizedBox(width: 4),
-                Text(widget.isTraditionalChinese ? '清除所有' : 'Clear All'),
-              ]),
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.close, size: 18),
+                  const SizedBox(width: 4),
+                  Text(widget.isTraditionalChinese ? '清除所有' : 'Clear All'),
+                ],
+              ),
               onPressed: _clearAllFilters,
             ),
         ],
@@ -249,11 +294,11 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
     );
   }
 
+  /// Builds a card widget for displaying a single restaurant
   Widget _buildRestaurantCard(Restaurant restaurant) {
     final displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
     final displayDistrict = restaurant.getDisplayDistrict(widget.isTraditionalChinese);
     final keywords = restaurant.getDisplayKeywords(widget.isTraditionalChinese);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Card(
@@ -266,6 +311,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
             ),
           )),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Restaurant image with error fallback
             if (restaurant.imageUrl != null)
               Image.network(
                 restaurant.imageUrl!,
@@ -278,15 +324,18 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Restaurant name
                 Text(displayName,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 8),
+                // District location
                 Row(children: [
                   Icon(Icons.location_on_outlined, size: 16, color: Theme.of(context).textTheme.bodySmall?.color),
                   const SizedBox(width: 4),
                   Expanded(child: Text(displayDistrict, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyMedium)),
                 ]),
+                // Keywords/categories (up to 3)
                 if (keywords.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -298,6 +347,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                   ),
                 ],
                 const SizedBox(height: 8),
+                // View details link
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   Text(widget.isTraditionalChinese ? '查看詳情' : 'View Details',
                       style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
@@ -328,7 +378,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
           decoration: InputDecoration(
             hintText: widget.isTraditionalChinese ? '搜尋名稱或地址' : 'Search name or address',
             border: InputBorder.none,
-            hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6)),
+            hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(153)),
           ),
           textInputAction: TextInputAction.search,
         ),
@@ -337,6 +387,7 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
         children: [
           _buildFilterChips(),
           Expanded(
+            // Uses PagingListener to handle the paging state
             child: PagingListener<int, Restaurant>(
               controller: _pagingController,
               builder: (context, state, fetchNextPage) {
@@ -345,8 +396,11 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                   fetchNextPage: fetchNextPage,
                   builderDelegate: PagedChildBuilderDelegate<Restaurant>(
                     itemBuilder: (context, restaurant, index) => _buildRestaurantCard(restaurant),
+                    // Loading indicator for first page
                     firstPageProgressIndicatorBuilder: (_) => const Center(child: CircularProgressIndicator()),
+                    // Loading indicator for subsequent pages
                     newPageProgressIndicatorBuilder: (_) => const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
+                    // Empty state when no results found
                     noItemsFoundIndicatorBuilder: (_) => Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
@@ -356,14 +410,20 @@ class _RestaurantsPageState extends State<RestaurantsPage> {
                           Text(widget.isTraditionalChinese ? '沒有找到餐廳' : 'No restaurants found', style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 8),
                           Text(widget.isTraditionalChinese ? '嘗試調整您的搜尋或篩選條件' : 'Try adjusting your search or filters', style: Theme.of(context).textTheme.bodyMedium),
-                          if (_selectedDistrictEn != null || _selectedKeywordEn != null || _searchController.text.isNotEmpty)
+                          if (_selectedDistrictsEn.isNotEmpty ||
+                              _selectedKeywordsEn.isNotEmpty ||
+                              _searchController.text.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 16),
-                              child: OutlinedButton(onPressed: _clearAllFilters, child: Text(widget.isTraditionalChinese ? '清除篩選' : 'Clear Filters')),
+                              child: OutlinedButton(
+                                onPressed: _clearAllFilters,
+                                child: Text(widget.isTraditionalChinese ? '清除篩選' : 'Clear Filters'),
+                              ),
                             ),
                         ]),
                       ),
                     ),
+                    // Error state for first page load failure
                     firstPageErrorIndicatorBuilder: (_) => Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),

@@ -10,16 +10,14 @@ import '../services/booking_service.dart';
 import '../services/notification_service.dart';
 import '../models.dart';
 
-/// Restaurant Detail Page - Complete Native Android Integration
+/// Restaurant Detail Page - Native Android Integration
 /// 
 /// This page demonstrates multiple native Android features working together:
 /// - Google Maps integration for location display
 /// - Share functionality using Android's share sheet
 /// - URL launching for phone/email/maps
 /// - Date/time picker for bookings
-/// - Local notifications for reminders
-/// 
-/// This is the kind of polished experience users expect from native apps.
+/// - Local notifications for reminders (still in progress)
 class RestaurantDetailPage extends StatefulWidget {
   final Restaurant restaurant;
   final bool isTraditionalChinese;
@@ -82,7 +80,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       
       // Build share text with restaurant details
       final shareText = widget.isTraditionalChinese
-          ? '我啱啱發現咗間好正斗嘅素食餐廳！\n\n$name\n$address'
+          ? '我啱啱發現咗呢間好正斗嘅素食餐廳！\n\n$name\n$address'
           : 'I found this great vegan restaurant!\n\n$name\n$address';
       // Open Android share sheet
       await Share.share(
@@ -107,7 +105,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// Android recognises this and opens the appropriate app.
   Future<void> _makePhoneCall(String phoneNumber) async {
     final uri = Uri.parse('tel:$phoneNumber');
-    
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
@@ -117,6 +114,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     }
   }
 
+
   /// Open email client
   /// 
   /// Launches user's email app with recipient pre-filled.
@@ -124,7 +122,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// URL Scheme: mailto:restaurant@example.com
   Future<void> _sendEmail(String email) async {
     final uri = Uri.parse('mailto:$email');
-    
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
@@ -144,13 +141,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// - inAppWebView: Open in app (requires WebView setup)
   Future<void> _openWebsite(String url) async {
     final uri = Uri.parse(url);
-    
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開網站' : 'Could not open website')),
-        );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開網站' : 'Could not open website')),
+      );
     }
   }
 
@@ -165,7 +161,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     if (widget.restaurant.latitude == null || widget.restaurant.longitude == null) return;
     final name = widget.restaurant.getDisplayName(widget.isTraditionalChinese);
     final uri = Uri.parse('geo:0,0?q=${widget.restaurant.latitude},${widget.restaurant.longitude}($name)');
-    
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
@@ -198,8 +193,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
+              // Date and time picker
               children: [
-                // Date and time picker
                 Text(
                   widget.isTraditionalChinese ? '日期和時間' : 'Date and Time',
                   style: Theme.of(context).textTheme.titleSmall,
@@ -373,11 +368,73 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     }
   }
 
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {VoidCallback? onTap, IconData? actionIcon}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: InkWell(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            if (actionIcon != null) Icon(actionIcon, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = widget.restaurant.getDisplayName(widget.isTraditionalChinese);
+    final nameEn = widget.restaurant.nameEn ?? name;
+    final nameTc = widget.restaurant.nameTc ?? name;
     final address = widget.restaurant.getDisplayAddress(widget.isTraditionalChinese);
+    final addressEn = widget.restaurant.addressEn ?? address;
+    final addressTc = widget.restaurant.addressTc ?? address;
     final district = widget.restaurant.getDisplayDistrict(widget.isTraditionalChinese);
+    final districtEn = widget.restaurant.districtEn ?? district;
+    final districtTc = widget.restaurant.districtTc ?? district;
     final keywords = widget.restaurant.getDisplayKeywords(widget.isTraditionalChinese);
     final distanceText = _getDistanceText();
 
@@ -423,7 +480,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  /// Restaurant Name and Distance
+                  /// Restaurant Distance
                   Row(
                     children: [
                       Expanded(
@@ -466,15 +523,58 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  /// Restaurant name
+                  _buildInfoCard(
+                    icon: Icons.store,
+                    title: widget.isTraditionalChinese ? '餐廳資料' : 'Restaurant Info',
+                    children: [
+                      _buildInfoRow(
+                        widget.isTraditionalChinese ? '英文名稱' : 'English Name',
+                        nameEn,
+                      ),
+                      _buildInfoRow(
+                        widget.isTraditionalChinese ? '中文名稱' : 'Chinese Name',
+                        nameTc,
+                      ),
+                      if (widget.restaurant.seats != null)
+                        _buildInfoRow(
+                          widget.isTraditionalChinese ? '座位數量' : 'Seats',
+                          widget.restaurant.seats.toString(),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   /// Address with tap-to-navigate
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.location_on),
-                      title: Text(address),
-                      subtitle: Text(district),
-                      trailing: const Icon(Icons.arrow_forward),
-                      onTap: _openInMaps,
-                    ),
+                  _buildInfoCard(
+                    icon: Icons.location_on,
+                    title: widget.isTraditionalChinese ? '地址資訊' : 'Location',
+                    children: [
+                      _buildInfoRow(
+                        widget.isTraditionalChinese ? '英文地址' : 'English Address',
+                        addressEn,
+                        onTap: _openInMaps,
+                        actionIcon: Icons.map,
+                      ),
+                      _buildInfoRow(
+                        widget.isTraditionalChinese ? '中文地址' : 'Chinese Address',
+                        addressTc,
+                        onTap: _openInMaps,
+                        actionIcon: Icons.map,
+                      ),
+                      _buildInfoRow(
+                        widget.isTraditionalChinese ? '英文地區' : 'District (EN)',
+                        districtEn,
+                      ),
+                      _buildInfoRow(
+                        widget.isTraditionalChinese ? '中文地區' : 'District (TC)',
+                        districtTc,
+                      ),
+                      if (widget.restaurant.latitude != null && widget.restaurant.longitude != null)
+                        _buildInfoRow(
+                          widget.isTraditionalChinese ? '座標' : 'Coordinates',
+                          '${widget.restaurant.latitude!.toStringAsFixed(6)}, ${widget.restaurant.longitude!.toStringAsFixed(6)}',
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   /// Contact Information
@@ -482,39 +582,52 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                   /// Each contact method is tappable and opens the
                   /// appropriate native app. This is exactly how users
                   /// expect contact info to work on Android.
-                  if (widget.restaurant.latitude != null)
-                    Card(
-                      child: Column(
-                        children: [
-                          if (widget.restaurant.latitude != null)
-                            ListTile(
-                              leading: const Icon(Icons.phone),
-                              title: Text('Phone number placeholder'),
-                              onTap: () => _makePhoneCall('+85212345678'),
-                            ),
-                          // Add email and website similarly
-                        ],
-                      ),
+                  if (widget.restaurant.contacts != null && widget.restaurant.contacts!.isNotEmpty)
+                    _buildInfoCard(
+                      icon: Icons.contact_phone,
+                      title: widget.isTraditionalChinese ? '聯絡方式' : 'Contact',
+                      children: [
+                        if (widget.restaurant.contacts!['phone'] != null)
+                          _buildInfoRow(
+                            widget.isTraditionalChinese ? '電話' : 'Phone',
+                            widget.restaurant.contacts!['phone'].toString(),
+                            onTap: () => _makePhoneCall(widget.restaurant.contacts!['phone'].toString()),
+                            actionIcon: Icons.phone,
+                          ),
+                        if (widget.restaurant.contacts!['email'] != null)
+                          _buildInfoRow(
+                            widget.isTraditionalChinese ? '電郵' : 'Email',
+                            widget.restaurant.contacts!['email'].toString(),
+                            onTap: () => _sendEmail(widget.restaurant.contacts!['email'].toString()),
+                            actionIcon: Icons.email,
+                          ),
+                        if (widget.restaurant.contacts!['website'] != null)
+                          _buildInfoRow(
+                            widget.isTraditionalChinese ? '網站' : 'Website',
+                            widget.restaurant.contacts!['website'].toString(),
+                            onTap: () => _openWebsite(widget.restaurant.contacts!['website'].toString()),
+                            actionIcon: Icons.language,
+                          ),
+                      ],
                     ),
                   const SizedBox(height: 16),
                   /// Keywords
-                  if (keywords.isNotEmpty) ...[
-                    Text(
-                      widget.isTraditionalChinese ? '特色' : 'Features',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  if (keywords.isNotEmpty)
+                    _buildInfoCard(
+                      icon: Icons.local_offer,
+                      title: widget.isTraditionalChinese ? '特色' : 'Features',
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: keywords
+                              .map((keyword) => Chip(label: Text(keyword)))
+                              .toList(),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: keywords.map((keyword) => Chip(
-                        label: Text(keyword),
-                      )).toList(),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                  const SizedBox(height: 12),
+                  /// Map
                   if (widget.restaurant.latitude != null && widget.restaurant.longitude != null) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

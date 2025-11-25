@@ -451,7 +451,7 @@ class _MainShellState extends State<MainShell> {
         isTraditionalChinese: widget.isTraditionalChinese,
         onNavigate: (index) => setState(() => currentIndex = index),
       ),
-      RestaurantsPage(isTraditionalChinese: widget.isTraditionalChinese),
+      SearchPage(isTraditionalChinese: widget.isTraditionalChinese),
       AccountPage(
         isDarkMode: widget.isDarkMode,
         isTraditionalChinese: widget.isTraditionalChinese,

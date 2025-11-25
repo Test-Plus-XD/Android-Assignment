@@ -42,21 +42,21 @@ class Restaurant {
   // Creates Restaurant from JSON (handles both Algolia and API responses)
   factory Restaurant.fromJson(Map<String, dynamic> json) {
     // Helper to safely convert value to double
-    double? _toDouble(dynamic value) {
+    double? toDouble(dynamic value) {
       if (value is num) return value.toDouble();
       if (value is String) return double.tryParse(value);
       return null;
     }
 
     // Helper to safely convert value to int
-    int? _toInt(dynamic value) {
+    int? toInt(dynamic value) {
       if (value is num) return value.toInt();
       if (value is String) return int.tryParse(value);
       return null;
     }
 
     // Helper to safely cast list of strings
-    List<String>? _toStringList(dynamic value) {
+    List<String>? toStringList(dynamic value) {
       if (value is List) {
         return value.map((e) => e.toString()).toList();
       }
@@ -64,7 +64,7 @@ class Restaurant {
     }
 
     // Helper to safely cast map
-    Map<String, dynamic>? _toMap(dynamic value) {
+    Map<String, dynamic>? toMap(dynamic value) {
       if (value is Map) {
         return Map<String, dynamic>.from(value);
       }
@@ -81,15 +81,15 @@ class Restaurant {
       addressTc: json['Address_TC'] as String? ?? json['address_tc'] as String?,
       districtEn: json['District_EN'] as String? ?? json['district_en'] as String?,
       districtTc: json['District_TC'] as String? ?? json['district_tc'] as String?,
-      latitude: _toDouble(geoloc?['lat']) ?? _toDouble(json['Latitude']) ?? _toDouble(json['latitude']),
-      longitude: _toDouble(geoloc?['lng']) ?? _toDouble(json['Longitude']) ?? _toDouble(json['longitude']),
-      keywordEn: _toStringList(json['Keyword_EN'] ?? json['keyword_en']),
-      keywordTc: _toStringList(json['Keyword_TC'] ?? json['keyword_tc']),
+      latitude: toDouble(geoloc?['lat']) ?? toDouble(json['Latitude']) ?? toDouble(json['latitude']),
+      longitude: toDouble(geoloc?['lng']) ?? toDouble(json['Longitude']) ?? toDouble(json['longitude']),
+      keywordEn: toStringList(json['Keyword_EN'] ?? json['keyword_en']),
+      keywordTc: toStringList(json['Keyword_TC'] ?? json['keyword_tc']),
       imageUrl: json['ImageUrl'] as String? ?? json['imageUrl'] as String? ?? json['Image'] as String?,
-      menu: _toMap(json['Menu'] ?? json['menu']),
-      openingHours: _toMap(json['Opening_Hours'] ?? json['openingHours']),
-      seats: _toInt(json['Seats'] ?? json['seats']),
-      contacts: _toMap(json['Contacts'] ?? json['contacts']),
+      menu: toMap(json['Menu'] ?? json['menu']),
+      openingHours: toMap(json['Opening_Hours'] ?? json['openingHours']),
+      seats: toInt(json['Seats'] ?? json['seats']),
+      contacts: toMap(json['Contacts'] ?? json['contacts']),
     );
   }
 

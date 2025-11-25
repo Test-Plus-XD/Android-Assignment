@@ -1,33 +1,55 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:algolia_helper_flutter/algolia_helper_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models.dart';
 
-/// Search metadata containing result count
+// Search metadata containing result count
 class SearchMetadata {
   final int nbHits;
   const SearchMetadata(this.nbHits);
+  factory SearchMetadata.fromResponse(SearchResponse response) {
+    return SearchMetadata(response.nbHits);
+  }
 }
 
-/// Page of results for infinite scroll
+// Page of results for infinite scroll
 class HitsPage {
   final List<Restaurant> items;
   final int pageKey;
   final int? nextPageKey;
   const HitsPage(this.items, this.pageKey, this.nextPageKey);
+
+  factory HitsPage.fromResponse(SearchResponse response) {
+    final items = response.hits.map((hit) => Restaurant.fromJson(hit)).toList();
+    // Debug: log pagination info
+    if (kDebugMode) print('Algolia response → page: ${response.page}, nbPages: ${response.nbPages}, hits this page: ${response.hits.length}, totalHits: ${response.nbHits}');
+    // Compute next page key more defensively, treat `response.page` as zero-based.
+    final isLastPage = (response.page >= response.nbPages - 1);
+    final int? nextPageKey = isLastPage ? null : response.page + 1;
+    if (kDebugMode) print('Computed nextPageKey = $nextPageKey (isLastPage: $isLastPage)');
+    return HitsPage(items, response.page, nextPageKey);
+  }
 }
 
-/// Restaurant service using Vercel API for search and CRUD operations
+// Restaurant service managing Algolia search and REST API operations
 class RestaurantService with ChangeNotifier {
-  static final String _searchEndpoint = AppConfig.getEndpoint('API/Search/Restaurants');
+  // Algolia configuration
+  static final String _algoliaAppId = AppConfig.algoliaAppId;
+  static final String _algoliaSearchKey = AppConfig.algoliaSearchKey;
+  static final String _algoliaIndexName = AppConfig.algoliaIndexName;
+  // REST API configuration
+  //static final String _apiBaseUrl = AppConfig.apiBaseUrl;
+  //static final String _apiEndpoint = '$_apiBaseUrl/API/Restaurants';
   static final String _apiEndpoint = AppConfig.getEndpoint('API/Restaurants');
+  // Algolia search components
+  late final HitsSearcher _hitsSearcher;
+  // Stream subscriptions
+  StreamSubscription<SearchResponse>? _responsesSubscription;
 
-  final _searchResultsController = StreamController<List<Restaurant>>.broadcast();
-  final _metadataController = StreamController<SearchMetadata>.broadcast();
-  final _pagesController = StreamController<HitsPage>.broadcast();
-
+  // Cached state
   List<Restaurant> _searchResults = [];
   int _totalHits = 0;
   int _currentPage = 0;
@@ -35,6 +57,7 @@ class RestaurantService with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Getters for cached state
   List<Restaurant> get searchResults => _searchResults;
   int get totalHits => _totalHits;
   int get currentPage => _currentPage;
@@ -42,27 +65,59 @@ class RestaurantService with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Stream<List<Restaurant>> get responsesStream => _searchResultsController.stream;
-  Stream<SearchMetadata> get metadataStream => _metadataController.stream;
-  Stream<HitsPage> get pagesStream => _pagesController.stream;
+  // Reactive streams
+  Stream<SearchResponse> get responsesStream => _hitsSearcher.responses;
+  Stream<SearchMetadata> get metadataStream =>
+      _hitsSearcher.responses.map(SearchMetadata.fromResponse);
+  Stream<HitsPage> get pagesStream =>
+      _hitsSearcher.responses.map(HitsPage.fromResponse);
 
   RestaurantService() {
-    if (kDebugMode) print('RestaurantService: Initialised with Vercel API');
+    _initialiseAlgolia();
+    _setupStreamListeners();
   }
 
-  Map<String, String> _getHeaders({String? authToken}) {
-    return {
-      'Content-Type': 'application/json',
-      'X-API-Passcode': AppConfig.apiPasscode,
-      if (authToken != null) 'Authorization': 'Bearer $authToken',
-    };
+  // Initialises Algolia searcher
+  void _initialiseAlgolia() {
+    _hitsSearcher = HitsSearcher(
+      applicationID: _algoliaAppId,
+      apiKey: _algoliaSearchKey,
+      indexName: _algoliaIndexName,
+    );
+    if (kDebugMode) print('RestaurantService: Algolia initialised. AppId=$_algoliaAppId, Index=$_algoliaIndexName');
   }
 
-  /// Perform search using Vercel API
+  // Sets up reactive listeners for search responses
+  void _setupStreamListeners() {
+    _responsesSubscription = _hitsSearcher.responses.listen(
+          (response) {
+        _searchResults = response.hits
+            .map((hit) => Restaurant.fromJson(hit))
+            .toList();
+        _totalHits = response.nbHits;
+        _currentPage = response.page;
+        _totalPages = response.nbPages;
+        _isLoading = false;
+        _errorMessage = null;
+        notifyListeners();
+
+        if (kDebugMode) print('∘ RestaurantService: Received response → page=$_currentPage, total pages=$_totalPages, total hits=$_totalHits');
+      },
+      onError: (error) {
+        _errorMessage = 'Search error: $error';
+        _isLoading = false;
+        _searchResults = [];
+        notifyListeners();
+        if (kDebugMode) print('RestaurantService Error: $error');
+      },
+    );
+  }
+
+  // Performs search with query, district and keyword filters
   Future<void> searchRestaurants({
     String query = '',
-    List<String>? districtsEn,
-    List<String>? keywordsEn,
+    String? districtEn,
+    String? keywordEn,
     bool isTraditionalChinese = false,
     int page = 0,
     int hitsPerPage = 12,
@@ -70,56 +125,32 @@ class RestaurantService with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      final uri = Uri.parse(_searchEndpoint).replace(queryParameters: {
-        if (query.isNotEmpty) 'query': query,
-        if (districtsEn != null && districtsEn.isNotEmpty) 'districts': districtsEn.join(','),
-        if (keywordsEn != null && keywordsEn.isNotEmpty) 'keywords': keywordsEn.join(','),
-        'language': isTraditionalChinese ? 'TC' : 'EN',
-        'page': page.toString(),
-        'hitsPerPage': hitsPerPage.toString(),
-      });
+    // Build facet filters
+    final List<String> facetFilters = [];
+    if (districtEn != null && districtEn.isNotEmpty) facetFilters.add('District_EN:$districtEn');
+    if (keywordEn != null && keywordEn.isNotEmpty) facetFilters.add('Keyword_EN:$keywordEn');
 
-      if (kDebugMode) print('RestaurantService: Searching → $uri');
-
-      final response = await http.get(uri, headers: _getHeaders());
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final hits = (data['hits'] as List).map((hit) => Restaurant.fromJson(hit)).toList();
-        
-        _searchResults = hits;
-        _totalHits = data['nbHits'] as int;
-        _currentPage = data['page'] as int;
-        _totalPages = data['nbPages'] as int;
-
-        final isLastPage = _currentPage >= _totalPages - 1;
-        final nextPageKey = isLastPage ? null : _currentPage + 1;
-
-        _searchResultsController.add(_searchResults);
-        _metadataController.add(SearchMetadata(_totalHits));
-        _pagesController.add(HitsPage(_searchResults, _currentPage, nextPageKey));
-
-        _errorMessage = null;
-        _isLoading = false;
-        notifyListeners();
-
-        if (kDebugMode) {
-          print('RestaurantService: Got ${_searchResults.length} results');
-          print('Page $_currentPage of $_totalPages, $_totalHits total hits');
-        }
-      } else {
-        throw Exception('Search failed with status: ${response.statusCode}');
-      }
-    } catch (e) {
-      _errorMessage = 'Search error: $e';
-      _isLoading = false;
-      _searchResults = [];
-      notifyListeners();
-      if (kDebugMode) print('RestaurantService Error: $e');
-    }
+    // Build state with page = 0 when new search is triggered
+    _hitsSearcher.applyState(
+          (state) => state.copyWith(
+        query: query,
+        page: page,
+        hitsPerPage: hitsPerPage,
+        facetFilters: facetFilters.isEmpty ? null : facetFilters,
+      ),
+    );
+    if (kDebugMode) print('∘RestaurantService: searchRestaurants called → query="$query", page=$page, hitsPerPage=$hitsPerPage, filters=$facetFilters');
   }
 
+  // Loads specific page (for infinite scroll)
+  void loadPage(int page) {
+    _isLoading = true;
+    notifyListeners();
+    _hitsSearcher.applyState((state) => state.copyWith(page: page));
+    if (kDebugMode) print('∘RestaurantService: loadPage called → page=$page');
+  }
+
+  // Clears search results and resets state
   void clearResults() {
     _searchResults = [];
     _totalHits = 0;
@@ -127,16 +158,28 @@ class RestaurantService with ChangeNotifier {
     _totalPages = 0;
     _errorMessage = null;
     _isLoading = false;
+    _hitsSearcher.applyState((state) => state.copyWith(query: '', page: 0, facetFilters: null));
     notifyListeners();
     if (kDebugMode) print('RestaurantService: Results cleared');
   }
 
+  // Clears error message
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
 
-  /// Get single restaurant by ID
+  // === REST API CRUD Operations ===
+  /// Get HTTP headers with API passcode
+  Map<String, String> _getHeaders({String? authToken}) {
+    return {
+      'Content-Type': 'application/json',
+      'X-API-Passcode': AppConfig.apiPasscode,
+      if (authToken != null) 'Authorisation': 'Bearer $authToken',
+    };
+  }
+
+  // Gets single restaurant by ID from REST API
   Future<Restaurant?> getRestaurantById(String id) async {
     try {
       final url = Uri.parse('$_apiEndpoint/${Uri.encodeComponent(id)}');
@@ -176,7 +219,7 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  /// Create restaurant (requires authentication)
+  /// Create new restaurant (requires authentication)
   Future<String?> createRestaurant(Restaurant restaurant, String authToken) async {
     try {
       final url = Uri.parse(_apiEndpoint);
@@ -244,9 +287,8 @@ class RestaurantService with ChangeNotifier {
 
   @override
   void dispose() {
-    _searchResultsController.close();
-    _metadataController.close();
-    _pagesController.close();
+    _responsesSubscription?.cancel();
+    _hitsSearcher.dispose();
     super.dispose();
     if (kDebugMode) print('RestaurantService: Disposed');
   }

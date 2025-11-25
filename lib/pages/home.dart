@@ -156,7 +156,9 @@ class _FrontPageState extends State<FrontPage> {
 
     final distanceText = locationService.formatDistance(distance);
     Color badgeColor;
-    if (distance < 500) badgeColor = Colors.green; else if (distance < 2000) badgeColor = Colors.orange; else badgeColor = Colors.grey;
+    if (distance < 500) {
+      badgeColor = Colors.green;
+    } else if (distance < 2000) badgeColor = Colors.orange; else badgeColor = Colors.grey;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
