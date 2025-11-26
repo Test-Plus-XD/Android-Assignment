@@ -4,7 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/restaurant_service.dart';
 import '../services/location_service.dart';
 import '../services/booking_service.dart';
 import '../services/notification_service.dart';
@@ -12,7 +11,7 @@ import '../models.dart';
 
 /// Restaurant Detail Page - Native Android Integration
 /// 
-/// This page demonstrates multiple native Android features working together:
+/// This page uses multiple native Android features working together:
 /// - Information panels presented in a responsive GridView
 /// - Google Maps integration for location display
 /// - Cached network image for the restaurant (performance-conscious)
@@ -46,7 +45,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   // Map type and controls visibility
   MapType _currentMapType = MapType.normal;
   // Map type toggle states
-  bool _showMapControls = true;
+  final bool _showMapControls = true;
 
   @override
   void dispose() {

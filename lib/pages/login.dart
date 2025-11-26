@@ -408,11 +408,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     constraints: const BoxConstraints(maxWidth: 500),
                     child: FadeTransition(
                       opacity: _fadeAnimation,
-                      child: Card(
-                        elevation: 8,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
+                      //child: Card(elevation: 8,shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24),),
                         child: Padding(
                           padding: const EdgeInsets.all(32.0),
                           child: Form(
@@ -640,7 +636,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             ),
                           ),
                         ),
-                      ),
+                      //),
                     ),
                   ),
                 ),
