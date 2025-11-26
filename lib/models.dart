@@ -248,6 +248,59 @@ class RestaurantKeywords {
   }
 }
 
+/// User preferences model
+///
+/// Provides structured access to user preference fields with default values
+class UserPreferences {
+  final String language;
+  final bool notifications;
+  final String theme;
+
+  UserPreferences({
+    required this.language,
+    required this.notifications,
+    required this.theme,
+  });
+
+  /// Creates UserPreferences from JSON with fallback defaults
+  factory UserPreferences.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return UserPreferences(
+        language: 'EN',
+        notifications: false,
+        theme: 'light',
+      );
+    }
+    return UserPreferences(
+      language: json['language'] as String? ?? 'EN',
+      notifications: json['notifications'] as bool? ?? false,
+      theme: json['theme'] as String? ?? 'light',
+    );
+  }
+
+  /// Converts UserPreferences to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'language': language,
+      'notifications': notifications,
+      'theme': theme,
+    };
+  }
+
+  /// Creates a copy with updated fields
+  UserPreferences copyWith({
+    String? language,
+    bool? notifications,
+    String? theme,
+  }) {
+    return UserPreferences(
+      language: language ?? this.language,
+      notifications: notifications ?? this.notifications,
+      theme: theme ?? this.theme,
+    );
+  }
+}
+
 // User model
 class User {
   final String uid;
@@ -280,6 +333,11 @@ class User {
     this.loginCount,
   });
 
+  /// Gets structured preferences with default values
+  UserPreferences getPreferences() {
+    return UserPreferences.fromJson(preferences);
+  }
+
   // Creates User from JSON
   factory User.fromJson(Map<String, dynamic> json) {
     // Helper to safely parse a DateTime string
@@ -307,7 +365,7 @@ class User {
   }
 
   // Converts User to JSON
-    Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson() {
     return {
       'uid': uid,
       'email': email,

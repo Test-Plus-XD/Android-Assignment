@@ -3,12 +3,17 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import '../models.dart';
 import 'login.dart';
 
-/// Account Page with Modern Aesthetic
-///
-/// Displays comprehensive user profile information in a visually appealing layout
-/// with sections for personal info, account status, preferences, and statistics.
+/// Account Page with Edit Functionality
+//
+/// Features:
+/// - Displays comprehensive user profile information
+/// - Inline editing with field-by-field controls
+/// - Dark mode support with proper text colours
+/// - Type selection popup
+/// - Preferences editing with structured sub-fields
 class AccountPage extends StatefulWidget {
   final bool isDarkMode;
   final bool isTraditionalChinese;
@@ -33,6 +38,15 @@ class AccountPage extends StatefulWidget {
 
 class _AccountPageState extends State<AccountPage> {
   bool _hasAttemptedLoad = false;
+  bool _isEditing = false;
+  // Text editing controllers
+  final TextEditingController _displayNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _bioController = TextEditingController();
+  // Editable fields
+  String? _editedType;
+  UserPreferences? _editedPreferences;
 
   @override
   void initState() {
@@ -40,6 +54,15 @@ class _AccountPageState extends State<AccountPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProfileIfNeeded();
     });
+  }
+
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _bioController.dispose();
+    super.dispose();
   }
 
   /// Loads user profile if not already loaded
@@ -56,6 +79,96 @@ class _AccountPageState extends State<AccountPage> {
         _hasAttemptedLoad = true;
       });
       userService.getUserProfile(authService.uid!);
+    }
+  }
+
+  /// Initialises edit mode with current user data
+  void _startEditing() {
+    final userService = context.read<UserService>();
+    final user = userService.currentProfile;
+    if (user == null) return;
+
+    setState(() {
+      _isEditing = true;
+      // Populate controllers with current values
+      _displayNameController.text = user.displayName ?? '';
+      _emailController.text = user.email ?? '';
+      _phoneController.text = user.phoneNumber ?? '';
+      _bioController.text = user.bio ?? '';
+      _editedType = user.type ?? '';
+      // Auto-fetch preferences on first edit
+      _editedPreferences = user.getPreferences();
+    });
+  }
+
+  /// Saves all edited fields
+  Future<void> _saveChanges() async {
+    final authService = context.read<AuthService>();
+    final userService = context.read<UserService>();
+
+    if (authService.uid == null) return;
+
+    // Validate type is set
+    if (_editedType == null || _editedType!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese
+                ? '請選擇帳戶類型'
+                : 'Please select account type',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Prepare updates map
+    final Map<String, dynamic> updates = {};
+
+    // Add changed fields
+    if (_displayNameController.text.isNotEmpty) updates['displayName'] = _displayNameController.text;
+    if (_emailController.text.isNotEmpty) updates['email'] = _emailController.text;
+    if (_phoneController.text.isNotEmpty) updates['phoneNumber'] = _phoneController.text;
+    if (_bioController.text.isNotEmpty) updates['bio'] = _bioController.text;
+    if (_editedType != null && _editedType!.isNotEmpty) updates['type'] = _editedType;
+    if (_editedPreferences != null) updates['preferences'] = _editedPreferences!.toJson();
+
+    // Save to API
+    final success = await userService.updateUserProfile(
+      authService.uid!,
+      updates,
+    );
+
+    if (success) {
+      setState(() {
+        _isEditing = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese
+                  ? '個人資料已更新'
+                  : 'Profile updated successfully',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userService.errorMessage ??
+                  (widget.isTraditionalChinese ? '更新失敗' : 'Update failed'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -90,8 +203,19 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  /// Builds info row within a card
-  Widget _buildInfoRow(String label, String value, {IconData? icon}) {
+  /// Builds info row with edit capability
+  Widget _buildInfoRow(
+      String label,
+      String value, {
+        IconData? icon,
+        bool editable = false,
+        TextEditingController? controller,
+        VoidCallback? onEdit,
+      }) {
+    // Dark mode text colour support
+    final labelColour = widget.isDarkMode ? Colors.white : Colors.grey.shade600;
+    final valueColour = widget.isDarkMode ? Colors.white70 : Colors.black87;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: Row(
@@ -101,7 +225,7 @@ class _AccountPageState extends State<AccountPage> {
             Icon(
               icon,
               size: 18,
-              color: Colors.grey.shade600,
+              color: labelColour,
             ),
             const SizedBox(width: 12),
           ],
@@ -111,7 +235,7 @@ class _AccountPageState extends State<AccountPage> {
               label,
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey.shade600,
+                color: labelColour,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -119,13 +243,53 @@ class _AccountPageState extends State<AccountPage> {
           const SizedBox(width: 16),
           Expanded(
             flex: 3,
-            child: Text(
-              value,
-              style: const TextStyle(
+            child: _isEditing && editable && controller != null
+                ? TextField(
+              controller: controller,
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
+                color: valueColour,
               ),
               textAlign: TextAlign.end,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 4,
+                  horizontal: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                suffixIcon: const Icon(Icons.edit, size: 16),
+              ),
+            )
+                : Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: valueColour,
+                    ),
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                if (_isEditing && editable && onEdit != null) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: onEdit,
+                    child: Icon(
+                      Icons.edit,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -133,29 +297,36 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  /// Builds status badge
+  /// Builds status badge with improved contrast
   Widget _buildStatusBadge(String label, Color color, IconData icon) {
+    // Improved contrast colours for dark mode
+    final badgeColour = widget.isDarkMode
+        ? (label.contains('Verified') || label.contains('已驗證')
+        ? const Color(0xFF4CAF50) // Brighter green for dark mode
+        : const Color(0xFFFF9800)) // Brighter orange for dark mode
+        : color;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: badgeColour.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
+          color: badgeColour.withValues(alpha: 0.5),
+          width: 1.5,
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, size: 14, color: badgeColour),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              color: color,
+              color: badgeColour,
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -187,7 +358,7 @@ class _AccountPageState extends State<AccountPage> {
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey.shade600,
+                  color: widget.isDarkMode ? Colors.white70 : Colors.grey.shade600,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -196,6 +367,157 @@ class _AccountPageState extends State<AccountPage> {
         ),
       ),
     );
+  }
+
+  /// Shows type selection popup
+  Future<void> _showTypeSelector() async {
+    final types = ['Diner', 'Restaurant'];
+    final typeLabels = widget.isTraditionalChinese
+        ? {'Diner': '食客', 'Restaurant': '商戶'}
+        : {'Diner': 'Diner', 'Restaurant': 'Restaurant'};
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.isTraditionalChinese ? '選擇帳戶類型' : 'Select Account Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: types.map((type) {
+            return RadioListTile<String>(
+              title: Text(typeLabels[type] ?? type),
+              value: type,
+              groupValue: _editedType,
+              onChanged: (value) {
+                Navigator.pop(context, value);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+
+    if (selected != null) {
+      setState(() {
+        _editedType = selected;
+      });
+    }
+  }
+
+  /// Shows preferences editor popup
+  Future<void> _showPreferencesEditor() async {
+    final prefs = _editedPreferences ?? UserPreferences.fromJson(null);
+
+    String tempLanguage = prefs.language;
+    bool tempNotifications = prefs.notifications;
+    String tempTheme = prefs.theme;
+
+    final result = await showDialog<UserPreferences>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            widget.isTraditionalChinese ? '編輯偏好設定' : 'Edit Preferences',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Language selection
+                Text(
+                  widget.isTraditionalChinese ? '語言' : 'Language',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                RadioListTile<String>(
+                  title: const Text('English'),
+                  value: 'EN',
+                  groupValue: tempLanguage,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      tempLanguage = value!;
+                    });
+                  },
+                ),
+                RadioListTile<String>(
+                  title: const Text('繁體中文'),
+                  value: 'TC',
+                  groupValue: tempLanguage,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      tempLanguage = value!;
+                    });
+                  },
+                ),
+                const Divider(),
+
+                // Notifications toggle
+                SwitchListTile(
+                  title: Text(
+                    widget.isTraditionalChinese ? '通知' : 'Notifications',
+                  ),
+                  value: tempNotifications,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      tempNotifications = value;
+                    });
+                  },
+                ),
+                const Divider(),
+
+                // Theme selection
+                Text(
+                  widget.isTraditionalChinese ? '主題' : 'Theme',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                RadioListTile<String>(
+                  title: Text(widget.isTraditionalChinese ? '淺色' : 'Light'),
+                  value: 'light',
+                  groupValue: tempTheme,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      tempTheme = value!;
+                    });
+                  },
+                ),
+                RadioListTile<String>(
+                  title: Text(widget.isTraditionalChinese ? '深色' : 'Dark'),
+                  value: 'dark',
+                  groupValue: tempTheme,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      tempTheme = value!;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final updatedPrefs = UserPreferences(
+                  language: tempLanguage,
+                  notifications: tempNotifications,
+                  theme: tempTheme,
+                );
+                Navigator.pop(context, updatedPrefs);
+              },
+              child: Text(widget.isTraditionalChinese ? '確認' : 'OK'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _editedPreferences = result;
+      });
+    }
   }
 
   @override
@@ -223,6 +545,7 @@ class _AccountPageState extends State<AccountPage> {
     final loginCountLabel = widget.isTraditionalChinese ? '登入次數' : 'Login Count';
 
     final editProfileLabel = widget.isTraditionalChinese ? '編輯個人資料' : 'Edit Profile';
+    final saveChangesLabel = widget.isTraditionalChinese ? '儲存變更' : 'Save Changes';
     final logoutLabel = widget.isTraditionalChinese ? '登出' : 'Logout';
 
     final loginPrompt = widget.isTraditionalChinese ? '請先登入' : 'Please log in';
@@ -380,6 +703,13 @@ class _AccountPageState extends State<AccountPage> {
           );
         }
 
+        // Get preferences for display
+        final prefs = _editedPreferences ?? user.getPreferences();
+        final typeDisplay = _editedType ?? user.type ?? '';
+        final typeLabels = widget.isTraditionalChinese
+            ? {'Diner': '食客', '': '無'}
+            : {'Diner': 'Diner', '': 'None'};
+
         // Display profile
         return SingleChildScrollView(
           child: Column(
@@ -489,23 +819,51 @@ class _AccountPageState extends State<AccountPage> {
                   children: [
                     _buildInfoRow(uidLabel, user.uid, icon: Icons.fingerprint),
                     const Divider(height: 1),
-                    _buildInfoRow(emailLabel, user.email ?? 'N/A', icon: Icons.email),
-                    if (user.displayName != null) ...[
-                      const Divider(height: 1),
-                      _buildInfoRow(displayNameLabel, user.displayName!, icon: Icons.badge),
-                    ],
-                    if (user.phoneNumber != null) ...[
-                      const Divider(height: 1),
-                      _buildInfoRow(phoneLabel, user.phoneNumber!, icon: Icons.phone),
-                    ],
-                    if (user.type != null) ...[
-                      const Divider(height: 1),
-                      _buildInfoRow(accountTypeLabel, user.type!, icon: Icons.category),
-                    ],
-                    if (user.bio != null) ...[
-                      const Divider(height: 1),
-                      _buildInfoRow(bioLabel, user.bio!, icon: Icons.description),
-                    ],
+                    _buildInfoRow(
+                      emailLabel,
+                      user.email ?? 'N/A',
+                      icon: Icons.email,
+                      editable: true,
+                      controller: _emailController,
+                    ),
+                    const Divider(height: 1),
+                    _buildInfoRow(
+                      displayNameLabel,
+                      _displayNameController.text.isEmpty
+                          ? (user.displayName ?? 'N/A')
+                          : _displayNameController.text,
+                      icon: Icons.badge,
+                      editable: true,
+                      controller: _displayNameController,
+                    ),
+                    const Divider(height: 1),
+                    _buildInfoRow(
+                      phoneLabel,
+                      _phoneController.text.isEmpty
+                          ? (user.phoneNumber ?? 'N/A')
+                          : _phoneController.text,
+                      icon: Icons.phone,
+                      editable: true,
+                      controller: _phoneController,
+                    ),
+                    const Divider(height: 1),
+                    _buildInfoRow(
+                      accountTypeLabel,
+                      typeDisplay.isEmpty ? 'N/A' : (typeLabels[typeDisplay] ?? typeDisplay),
+                      icon: Icons.category,
+                      editable: true,
+                      onEdit: _showTypeSelector,
+                    ),
+                    const Divider(height: 1),
+                    _buildInfoRow(
+                      bioLabel,
+                      _bioController.text.isEmpty
+                          ? (user.bio ?? 'N/A')
+                          : _bioController.text,
+                      icon: Icons.description,
+                      editable: true,
+                      controller: _bioController,
+                    ),
                   ],
                 ),
               ),
@@ -538,27 +896,41 @@ class _AccountPageState extends State<AccountPage> {
               ),
 
               // Preferences section
-              if (user.preferences != null && user.preferences!.isNotEmpty) ...[
-                _buildSectionHeader(preferencesTitle, Icons.settings),
-                Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: user.preferences!.entries.map((entry) {
-                      final isLast = entry.key == user.preferences!.keys.last;
-                      return Column(
-                        children: [
-                          _buildInfoRow(
-                            entry.key,
-                            entry.value.toString(),
-                            icon: Icons.tune,
-                          ),
-                          if (!isLast) const Divider(height: 1),
-                        ],
-                      );
-                    }).toList(),
-                  ),
+              _buildSectionHeader(preferencesTitle, Icons.settings),
+              Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    _buildInfoRow(
+                      widget.isTraditionalChinese ? '語言' : 'Language',
+                      prefs.language == 'EN' ? 'English' : '繁體中文',
+                      icon: Icons.language,
+                      editable: true,
+                      onEdit: _showPreferencesEditor,
+                    ),
+                    const Divider(height: 1),
+                    _buildInfoRow(
+                      widget.isTraditionalChinese ? '通知' : 'Notifications',
+                      prefs.notifications
+                          ? (widget.isTraditionalChinese ? '啟用' : 'Enabled')
+                          : (widget.isTraditionalChinese ? '停用' : 'Disabled'),
+                      icon: Icons.notifications,
+                      editable: true,
+                      onEdit: _showPreferencesEditor,
+                    ),
+                    const Divider(height: 1),
+                    _buildInfoRow(
+                      widget.isTraditionalChinese ? '主題' : 'Theme',
+                      prefs.theme == 'light'
+                          ? (widget.isTraditionalChinese ? '淺色' : 'Light')
+                          : (widget.isTraditionalChinese ? '深色' : 'Dark'),
+                      icon: Icons.palette,
+                      editable: true,
+                      onEdit: _showPreferencesEditor,
+                    ),
+                  ],
                 ),
-              ],
+              ),
 
               // Actions section
               _buildSectionHeader(actionsTitle, Icons.touch_app),
@@ -567,19 +939,9 @@ class _AccountPageState extends State<AccountPage> {
                 child: Column(
                   children: [
                     FilledButton.tonalIcon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              widget.isTraditionalChinese
-                                  ? '編輯功能即將推出'
-                                  : 'Edit feature coming soon',
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.edit),
-                      label: Text(editProfileLabel),
+                      onPressed: _isEditing ? _saveChanges : _startEditing,
+                      icon: Icon(_isEditing ? Icons.save : Icons.edit),
+                      label: Text(_isEditing ? saveChangesLabel : editProfileLabel),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(double.infinity, 48),
                       ),
