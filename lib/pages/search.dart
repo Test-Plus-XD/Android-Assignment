@@ -28,15 +28,17 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   /// Scroll controller to coordinate scrolling behavior
   final ScrollController _scrollController = ScrollController();
-
   /// Text controller for search input field
   final TextEditingController _searchController = TextEditingController();
 
   /// Pagination controller using version 5 API
   ///
-  /// KEY FIX: The getNextPageKey now explicitly handles the empty state
-  /// to ensure page 0 is fetched first, not page 1.
+  /// The getNextPageKey now explicitly handles the empty state to ensure page 0 is fetched first, not page 1.
   late final PagingController<int, Restaurant> _pagingController;
+
+  // Search bar visibility state
+  bool _isSearchBarVisible = true;
+  double _lastScrollOffset = 0.0;
 
   /// Selected filters - now using Sets for multi-selection
   /// Using Set<String> allows for efficient add/remove/contains operations
@@ -45,10 +47,8 @@ class _SearchPageState extends State<SearchPage> {
 
   /// Current search query
   String _currentQuery = '';
-
   /// Number of results to fetch per page
   static const int _pageSize = 12;
-
   /// Card height for restaurant cards (used for consistent sizing)
   static const double _cardHeight = 220.0;
 
@@ -57,8 +57,8 @@ class _SearchPageState extends State<SearchPage> {
     super.initState();
 
     /// Initialise the paging controller with corrected page key logic
-    ///
-    /// CRITICAL FIX: The getNextPageKey callback now properly handles
+    //
+    /// The getNextPageKey callback now properly handles
     /// the initial state where keys is empty. Previously, nextIntPageKey
     /// might have returned 1 instead of 0 on first fetch after refresh.
     _pagingController = PagingController<int, Restaurant>(
@@ -74,10 +74,32 @@ class _SearchPageState extends State<SearchPage> {
       },
       fetchPage: (pageKey) => _fetchPage(pageKey),
     );
+    // Scroll listener for hiding/showing search bar
+    _scrollController.addListener(_onScroll);
+  }
+
+  // Handles scroll events to show/hide search bar
+  void _onScroll() {
+    final currentOffset = _scrollController.offset;
+    final difference = currentOffset - _lastScrollOffset;
+
+    // Only update if scrolled more than 5 pixels to avoid jitter
+    if (difference.abs() > 5) {
+      final shouldHide = difference > 0 && currentOffset > 50;
+      final shouldShow = difference < 0 || currentOffset <= 50;
+
+      if (shouldHide && _isSearchBarVisible) {
+        setState(() => _isSearchBarVisible = false);
+      } else if (shouldShow && !_isSearchBarVisible) {
+        setState(() => _isSearchBarVisible = true);
+      }
+
+      _lastScrollOffset = currentOffset;
+    }
   }
 
   /// Fetches a page of restaurants from the API
-  ///
+  //
   /// This method converts the selected filter Sets to Lists for the API call,
   /// then returns the list of restaurants for the requested page.
   Future<List<Restaurant>> _fetchPage(int pageKey) async {
@@ -735,76 +757,87 @@ class _SearchPageState extends State<SearchPage> {
 
     return Column(
       children: [
-        // Search bar with modern styling
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: searchHint,
-              hintStyle: TextStyle(color: Colors.grey.shade500),
-              prefixIcon: Icon(
-                Icons.search,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  _searchController.clear();
-                  _performSearch();
-                },
-              )
-                  : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(28),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(28),
-                borderSide: BorderSide(
-                  color: Colors.grey.shade300,
-                  width: 1,
+        // Animated container wrapping both search bar and filters
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: _isSearchBarVisible ? null : 0,
+          curve: Curves.easeInOut,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: _isSearchBarVisible ? 1.0 : 0.0,
+            child: Column(
+              children: [
+                // Search bar
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: searchHint,
+                      hintStyle: TextStyle(color: Colors.grey.shade500),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          _performSearch();
+                        },
+                      )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide(
+                          color: Colors.grey.shade300,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey.shade900
+                          : Colors.grey.shade50,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                    ),
+                    onSubmitted: (_) => _performSearch(),
+                    onChanged: (_) => setState(() {}),
+                    textInputAction: TextInputAction.search,
+                  ),
                 ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(28),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 2,
-                ),
-              ),
-              filled: true,
-              fillColor: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey.shade900
-                  : Colors.grey.shade50,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 16,
-              ),
+                // Filter section
+                _buildFilterSection(),
+              ],
             ),
-            onSubmitted: (_) => _performSearch(),
-            onChanged: (_) => setState(() {}),
-            textInputAction: TextInputAction.search,
           ),
         ),
+        const Divider(height: 0.4),
 
-        // Filter section
-        _buildFilterSection(),
-
-        const Divider(height: 1),
-
-        // Results list with infinite scroll pagination
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
@@ -814,30 +847,36 @@ class _SearchPageState extends State<SearchPage> {
             child: PagingListener<int, Restaurant>(
               controller: _pagingController,
               builder: (context, state, fetchNextPage) {
-                // Using PagedListView for single-column layout
                 return PagedListView<int, Restaurant>(
                   state: state,
                   fetchNextPage: fetchNextPage,
+                  scrollController: _scrollController,
                   padding: const EdgeInsets.symmetric(vertical: 8),
-
                   builderDelegate: PagedChildBuilderDelegate<Restaurant>(
                     itemBuilder: (context, restaurant, index) {
                       return _buildRestaurantCard(restaurant);
                     },
 
-                    // Loading indicator for first page
+                    // Replace CircularProgressIndicator with Eclipse.gif
                     firstPageProgressIndicatorBuilder: (_) => SizedBox(
                       height: MediaQuery.of(context).size.height * 0.5,
-                      child: const Center(
-                        child: CircularProgressIndicator(),
+                      child: Center(
+                        child: Image.asset(
+                          'assets/images/Eclipse.gif',
+                          width: 80,
+                          height: 80,
+                        ),
                       ),
                     ),
 
-                    // Loading indicator for subsequent pages
                     newPageProgressIndicatorBuilder: (_) => Container(
                       padding: const EdgeInsets.all(24),
                       alignment: Alignment.center,
-                      child: const CircularProgressIndicator(),
+                      child: Image.asset(
+                        'assets/images/Eclipse.gif',
+                        width: 60,
+                        height: 60,
+                      ),
                     ),
 
                     // Empty state
@@ -1000,6 +1039,8 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _pagingController.dispose();
     super.dispose();
   }

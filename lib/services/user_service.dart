@@ -81,7 +81,7 @@ class UserService with ChangeNotifier {
     return {
       'Content-Type': 'application/json',
       'X-API-Passcode': AppConfig.apiPasscode,
-      if (token != null) 'Authorisation': 'Bearer $token',
+      if (token != null) 'Authorization': 'Bearer $token',
     };
   }
 

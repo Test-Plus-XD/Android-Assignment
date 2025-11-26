@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:flutter/services.dart' show rootBundle;
 import 'config.dart';
 
@@ -281,6 +282,13 @@ class User {
 
   // Creates User from JSON
   factory User.fromJson(Map<String, dynamic> json) {
+    // Helper to safely parse a DateTime string
+    DateTime? toDateTime(dynamic value) {
+      if (value is String) return DateTime.tryParse(value);
+      // If the data is from Firestore, it might be a Timestamp
+      if (value is Timestamp) return value.toDate();
+      return null;
+    }
     return User(
       uid: json['uid'] as String,
       email: json['email'] as String?,
@@ -290,10 +298,10 @@ class User {
       phoneNumber: json['phoneNumber'] as String?,
       type: json['type'] as String?,
       bio: json['bio'] as String?,
-      preferences: json['preferences'] as Map<String, dynamic>?,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
-      modifiedAt: json['modifiedAt'] != null ? DateTime.parse(json['modifiedAt'] as String) : null,
-      lastLoginAt: json['lastLoginAt'] != null ? DateTime.parse(json['lastLoginAt'] as String) : null,
+      preferences: json['preferences'] is Map<String, dynamic> ? Map<String, dynamic>.from(json['preferences']): null,
+      createdAt: toDateTime(json['createdAt']) != null ? DateTime.parse(json['createdAt'] as String) : null,
+      modifiedAt: toDateTime(json['modifiedAt']) != null ? DateTime.parse(json['modifiedAt'] as String) : null,
+      lastLoginAt: toDateTime(json['lastLoginAt']) != null ? DateTime.parse(json['lastLoginAt'] as String) : null,
       loginCount: json['loginCount'] as int?,
     );
   }
