@@ -40,6 +40,302 @@ This application provides users with a comprehensive platform to:
 - Toggle between English and Traditional Chinese languages
 - Switch between light and dark themes
 
+### Detailed Features
+
+#### 1. Authentication & User Management
+
+**Multiple Sign-In Methods**:
+- **Email/Password Authentication**: Traditional login with Firebase Auth
+- **Google OAuth**: One-tap sign-in using Android's native Google Sign-In
+- **Guest Mode**: "Skip for now" option to browse without authentication
+
+**User Profile Management** (`pages/account.dart`):
+- **Inline Editing Mode**: Click edit button to modify profile fields
+- **Editable Fields**:
+  - Display Name
+  - Email address
+  - Phone number
+  - Bio/description
+  - User type (selection popup)
+  - Preferences (structured sub-fields)
+- **Profile Statistics**: Display login count, account creation date, last login
+- **Photo Display**: User profile photo from Firebase/Google account
+- **Dark Mode Support**: Proper text colors for both themes
+
+**Password Management**:
+- Password visibility toggle (eye icon)
+- Forgot password dialog with email reset
+- Password strength validation on registration
+
+#### 2. Restaurant Discovery
+
+**Home Page** (`pages/home.dart`):
+- **Featured Restaurants Carousel**:
+  - Auto-playing carousel with 10 randomly selected restaurants
+  - Smooth transitions between slides
+  - Tap to view restaurant details
+  - Visual indicator showing current slide position
+  - Cached images for performance
+
+- **Nearby Restaurants**:
+  - GPS-based location detection
+  - Calculates 10 closest restaurants using Haversine formula
+  - Distance badges with color coding:
+    - Green: < 1km (Very Close)
+    - Orange: 1-5km (Close)
+    - Red: > 5km (Far)
+  - Horizontal scrollable list with restaurant cards
+  - Automatic location permission request
+
+- **Pull-to-Refresh**: Swipe down to reload all data from API
+
+**Search Page** (`pages/search.dart`):
+- **Full-Text Search**:
+  - Powered by Algolia search engine
+  - Real-time search as you type
+  - Searches across restaurant names, addresses, keywords
+  - Bilingual search support (English & Traditional Chinese)
+
+- **Infinite Scroll Pagination**:
+  - Loads 12 results per page
+  - Automatically fetches next page when scrolling to bottom
+  - Loading indicators during data fetch
+  - "No more results" message at end
+
+- **Advanced Filtering**:
+  - **District Filter**: Multi-select from 18 Hong Kong districts
+  - **Keyword Filter**: Multi-select dietary preferences
+    - Vegan
+    - Vegetarian
+    - Plant-Based
+    - Organic
+    - Raw Food
+    - And more...
+  - Filters work in combination with search query
+  - Active filter chips displayed above results
+
+- **Auto-Hiding Search Bar**:
+  - Search bar hides when scrolling down (more screen space)
+  - Reappears when scrolling up or at top of page
+  - Smooth animation transitions
+
+#### 3. Restaurant Details
+
+**Restaurant Detail Page** (`pages/restaurant_detail.dart`):
+
+- **Information Panels** (Responsive Grid Layout):
+  - **Basic Info**: Name, address, district, keywords
+  - **Contact Information**: Phone, email, website
+  - **Opening Hours**: Day-by-day schedule with special hours
+  - **Menu Information**: Menu URL or description
+  - **Seating Capacity**: Total available seats
+
+- **Google Maps Integration**:
+  - Embedded interactive map showing restaurant location
+  - Custom marker for restaurant position
+  - Map type toggle (Normal, Satellite, Terrain, Hybrid)
+  - Zoom controls
+  - Pan and zoom gestures
+  - Tap to open in Google Maps app for directions
+
+- **Distance Display**:
+  - Shows distance from user's current location
+  - Format: "1.2km away" or "Distance unavailable"
+
+- **Action Buttons**:
+  - **Call**: Opens phone dialer with pre-filled number
+  - **Email**: Opens email client with restaurant email
+  - **Website**: Opens browser with restaurant website
+  - **Directions**: Opens Google Maps with navigation
+  - **Share**: Native Android share sheet
+
+- **Share Functionality**:
+  - Shares restaurant name and address
+  - Bilingual share text (English/Chinese)
+  - Native Android share sheet integration
+  - Share via WhatsApp, SMS, Email, etc.
+
+- **Booking System**:
+  - Date/time picker for reservation
+  - Guest count selector (1-20 people)
+  - Special requests text field
+  - Creates booking record in backend API
+  - Schedules local notification reminder
+
+#### 4. Booking Management
+
+**Booking Features**:
+- **Create Reservations**: Select date, time, party size
+- **Booking Status Tracking**:
+  - Pending: Awaiting restaurant confirmation
+  - Confirmed: Restaurant accepted booking
+  - Completed: Visit finished
+  - Cancelled: Booking cancelled
+
+- **Payment Status**:
+  - Unpaid: No payment required/made
+  - Paid: Payment processed
+  - Refunded: Payment returned
+
+- **Local Notifications**:
+  - Scheduled reminder 1 hour before booking
+  - Notification shows restaurant name, date/time
+  - Notification channel: "Booking Reminders"
+  - Tapping notification opens app
+  - Persistent across app restarts (RECEIVE_BOOT_COMPLETED)
+
+#### 5. Theme System
+
+**Professional Vegan Green Aesthetic**:
+
+**Light Theme**:
+- **Primary Color**: Forest Green (#2E7D32)
+- **Secondary Color**: Light Green (#66BB6A)
+- **Surface Color**: Very Light Green Tint (#F1F8E9)
+- **Background**: Pure White
+- **Philosophy**: Fresh, bright greens evoking nature and health
+- **Accessibility**: All colors pass WCAG contrast standards
+
+**Dark Theme**:
+- **Primary Color**: Light Green (#66BB6A)
+- **Secondary Color**: Lighter Green (#81C784)
+- **Surface Color**: Dark Forest Green (#1B5E20)
+- **Background**: Very Dark Green-Black (#0D1F0E)
+- **Philosophy**: Deep, rich greens maintaining brand identity
+- **Accessibility**: WCAG compliant contrast ratios
+
+**Theme Components**:
+- **Material Design 3**: Latest design system with modern aesthetics
+- **AppBar**: Themed background and foreground colors
+- **Cards**: Rounded corners (12px), elevation 2, themed colors
+- **Buttons**: Rounded corners (8px), themed backgrounds
+- **Bottom Navigation**: Themed with selection highlighting
+- **Persistent**: Theme preference saved to SharedPreferences
+- **Toggle**: Switch in navigation drawer
+
+**Dynamic Theming**:
+- App logo changes based on theme (App-Light.png / App-Dark.png)
+- All UI components respond to theme changes
+- Text colors automatically adjust for readability
+- Icons and illustrations adapt to theme
+
+#### 6. Internationalization (i18n)
+
+**Bilingual Support**:
+- **English**: Default language
+- **Traditional Chinese**: Full Hong Kong localization
+
+**Translated Elements**:
+- All UI labels and buttons
+- Navigation menu items
+- Error messages and alerts
+- Form placeholders and validation
+- Restaurant data (names, addresses, keywords)
+- Search results and filters
+- Booking confirmations
+- Share messages
+
+**Language Switching**:
+- Toggle in navigation drawer
+- Instant UI update (no restart required)
+- Preference saved to SharedPreferences
+- Icon indicator: 🇬🇧|🇭🇰 or 英|繁
+
+**Implementation Pattern**:
+```dart
+final title = isTraditionalChinese ? '主頁' : 'Home';
+```
+
+#### 7. Navigation & UI/UX
+
+**Bottom Navigation Bar**:
+- **3 Main Sections**:
+  - Home (主頁): Featured and nearby restaurants
+  - Search (搜尋): Full search and filters
+  - Account (帳戶): User profile management
+- **Icons**: Material Design icons
+- **Themed**: Responds to light/dark mode
+- **Badge Support**: Could show notification count
+
+**Navigation Drawer**:
+- **Header**: App logo that changes with theme
+- **Menu Items**:
+  - Home
+  - All Restaurants (goes to Search)
+  - My Account
+  - Login/Register (if not logged in)
+  - Logout (if logged in)
+- **Settings**:
+  - Dark Mode toggle switch
+  - Language toggle switch
+- **Persistent State**: Drawer state maintained across navigation
+
+**Responsive Design**:
+- **Max Width Constraint**: 600px for large screens
+- **Grid Layouts**: Adapt to screen size
+- **Scrollable Content**: Prevents overflow on small screens
+- **Card-Based Design**: Consistent spacing and elevation
+
+**Loading States**:
+- **Circular Progress Indicators**: During async operations
+- **Skeleton Screens**: Could be added with shimmer package
+- **Pull-to-Refresh**: Material Design refresh indicator
+- **Infinite Scroll**: Loading indicator at bottom of lists
+
+**Error Handling**:
+- **SnackBar Messages**: Bottom sheet for errors/success
+- **Retry Mechanisms**: Failed API calls can be retried
+- **Offline Support**: Cached images work offline
+- **Empty States**: Helpful messages when no data
+
+#### 8. Performance Optimizations
+
+**Image Caching**:
+- **CachedNetworkImage**: Automatic image caching
+- **Placeholder Images**: Show while loading
+- **Error Placeholders**: Fallback for failed loads
+- **Memory Efficient**: Automatic cache cleanup
+
+**Data Caching**:
+- **Home Page**: Featured/nearby lists cached until refresh
+- **Search Results**: Paginated results cached
+- **SharedPreferences**: Local storage for settings
+
+**Lazy Loading**:
+- **Infinite Scroll**: Load results on demand
+- **Pagination**: 12 results per page
+- **Efficient Queries**: Only fetch needed data
+
+**Animations**:
+- **Smooth Transitions**: 300ms fade animations
+- **Carousel Auto-Play**: Smooth slide transitions
+- **Search Bar Toggle**: Animated show/hide
+- **Page Transitions**: Material Design navigation animations
+
+#### 9. Native Android Integration
+
+**Permissions**:
+- **Location**: ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION
+- **Internet**: INTERNET
+- **Notifications**: POST_NOTIFICATIONS (Android 13+)
+- **Alarms**: SCHEDULE_EXACT_ALARM
+- **Boot**: RECEIVE_BOOT_COMPLETED
+
+**Native Features**:
+- **Google Maps**: Embedded maps with full interaction
+- **GPS Location**: Real-time location tracking
+- **Phone Dialer**: tel: URI scheme
+- **Email Client**: mailto: URI scheme
+- **Web Browser**: https: URI scheme
+- **Share Sheet**: Native Android sharing
+- **Local Notifications**: Background notification scheduling
+
+**Android-Specific Optimizations**:
+- **MultiDex**: Support for large app size
+- **Desugaring**: Java 8+ APIs on older Android versions
+- **Firebase Analytics**: User behavior tracking
+- **Google Services**: Integrated via Gradle plugin
+
 ### Version
 - **Current Version**: 1.0.0+1
 - **Flutter SDK**: ^3.9.2
