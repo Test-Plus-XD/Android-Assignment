@@ -11,14 +11,15 @@
 3. [Technology Stack](#technology-stack)
 4. [Architecture & Design Patterns](#architecture--design-patterns)
 5. [Development Workflows](#development-workflows)
-6. [Code Conventions](#code-conventions)
-7. [Key Components](#key-components)
-8. [Data Layer & APIs](#data-layer--apis)
-9. [Native Android Features](#native-android-features)
-10. [Testing Strategy](#testing-strategy)
-11. [Common Development Tasks](#common-development-tasks)
-12. [Important Constraints](#important-constraints)
-13. [Troubleshooting](#troubleshooting)
+6. [Scripts & Build Configuration](#scripts--build-configuration)
+7. [Code Conventions](#code-conventions)
+8. [Key Components](#key-components)
+9. [Data Layer & APIs](#data-layer--apis)
+10. [Native Android Features](#native-android-features)
+11. [Testing Strategy](#testing-strategy)
+12. [Common Development Tasks](#common-development-tasks)
+13. [Important Constraints](#important-constraints)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -360,6 +361,518 @@ flutter build apk --release
 
 # Android App Bundle (For Google Play)
 flutter build appbundle --release
+```
+
+---
+
+## Scripts & Build Configuration
+
+This section provides detailed information about all build scripts, automation workflows, and configuration files used in the project.
+
+### CI/CD Pipeline
+
+#### GitHub Actions Workflow (`.github/workflows/dart.yml`)
+
+**Purpose**: Automated continuous integration for linting and testing on every push/pull request to the main branch.
+
+**Workflow Configuration**:
+```yaml
+name: Dart
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+```
+
+**Workflow Steps**:
+1. **Checkout Code**: Uses `actions/checkout@v4`
+2. **Setup Dart SDK**: Uses `dart-lang/setup-dart@9a04e6d73cca37bd455e0608d7e5092f881fd603`
+3. **Install Dependencies**: Runs `dart pub get`
+4. **Static Analysis**: Runs `dart analyze` to check for errors and warnings
+5. **Run Tests**: Executes `dart test` for unit and widget tests
+
+**Usage Notes**:
+- Runs on `ubuntu-latest` runner
+- Does not perform formatting checks (commented out)
+- Consider using `flutter analyze` and `flutter test` for Flutter-specific projects
+
+**Triggering the Workflow**:
+```bash
+# Automatically triggers on:
+git push origin main
+# Or when creating/updating a pull request to main
+```
+
+---
+
+### Android Build Configuration
+
+#### Gradle Build System
+
+The project uses **Gradle 8.12** with **Kotlin DSL** for build scripts.
+
+#### Root Build Configuration (`android/build.gradle.kts`)
+
+**Key Components**:
+
+1. **Google Services Plugin**:
+   ```kotlin
+   id("com.google.gms.google-services") version "4.4.4" apply false
+   ```
+   Required for Firebase integration.
+
+2. **Repository Configuration**:
+   ```kotlin
+   allprojects {
+       repositories {
+           google()
+           mavenCentral()
+       }
+   }
+   ```
+
+3. **Custom Build Directory**:
+   - Redirects build output to `../../build` (Flutter project structure)
+   - Ensures Flutter and Gradle builds coexist properly
+
+4. **Clean Task**:
+   ```bash
+   ./gradlew clean  # Deletes all build artifacts
+   ```
+
+#### Settings Configuration (`android/settings.gradle.kts`)
+
+**Key Components**:
+
+1. **Flutter SDK Integration**:
+   - Reads `flutter.sdk` from `local.properties`
+   - Includes Flutter Gradle plugin from Flutter SDK
+
+2. **Plugin Management**:
+   ```kotlin
+   plugins {
+       id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+       id("com.android.application") version "8.9.1" apply false
+       id("org.jetbrains.kotlin.android") version "2.2.21" apply false
+   }
+   ```
+
+3. **Gradle Plugin Repositories**:
+   - Google Maven Repository
+   - Maven Central
+   - Gradle Plugin Portal
+
+#### App Build Configuration (`android/app/build.gradle.kts`)
+
+**Applied Plugins**:
+```kotlin
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
+}
+```
+
+**Key Dependencies**:
+
+1. **Core Library Desugaring** (for Java 8+ APIs on older Android versions):
+   ```kotlin
+   coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+   ```
+
+2. **Firebase BOM** (Bill of Materials):
+   ```kotlin
+   implementation(platform("com.google.firebase:firebase-bom:34.6.0"))
+   implementation("com.google.firebase:firebase-analytics")
+   ```
+   - Ensures compatible Firebase library versions
+   - No version numbers needed for individual Firebase libraries
+
+**Android Configuration**:
+
+1. **Application Namespace**:
+   ```kotlin
+   namespace = "com.example.android_assignment"
+   ```
+
+2. **SDK Versions**:
+   - `compileSdk`: Dynamically set by Flutter
+   - `minSdk`: Dynamically set by Flutter
+   - `targetSdk`: Dynamically set by Flutter
+
+3. **Java/Kotlin Compatibility**:
+   ```kotlin
+   compileOptions {
+       sourceCompatibility = JavaVersion.VERSION_17
+       targetCompatibility = JavaVersion.VERSION_17
+       isCoreLibraryDesugaringEnabled = true
+   }
+   kotlinOptions {
+       jvmTarget = JavaVersion.VERSION_17.toString()
+   }
+   ```
+
+4. **Default Configuration**:
+   ```kotlin
+   defaultConfig {
+       applicationId = "com.example.android_assignment"
+       multiDexEnabled = true  // Required for 64K+ method count
+   }
+   ```
+
+5. **Build Types**:
+   - **Debug**: Uses default debug signing config
+   - **Release**: Currently uses debug keys (TODO: Add production signing config)
+
+**Important Notes**:
+- MultiDex is enabled to support large dependency count
+- Release builds currently use debug signing (NOT production-ready)
+- Core library desugaring allows modern Java APIs on Android 5.0+
+
+#### Gradle Properties (`android/gradle.properties`)
+
+**JVM Configuration**:
+```properties
+org.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=4G -XX:ReservedCodeCacheSize=512m -XX:+HeapDumpOnOutOfMemoryError
+android.useAndroidX=true
+android.enableJetifier=true
+```
+
+**Memory Allocation**:
+- **Heap Size**: 8GB (`-Xmx8G`) - Handles large builds
+- **Metaspace**: 4GB - For class metadata
+- **Code Cache**: 512MB - For JIT compiled code
+- **Heap Dump**: Enabled on OOM for debugging
+
+**Jetifier**: Converts legacy support libraries to AndroidX
+
+#### Gradle Wrapper (`android/gradle/wrapper/gradle-wrapper.properties`)
+
+**Gradle Version**:
+```properties
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.12-all.zip
+```
+
+**Running Gradle Commands**:
+```bash
+cd android
+./gradlew tasks           # List all available tasks
+./gradlew assembleDebug   # Build debug APK
+./gradlew assembleRelease # Build release APK
+./gradlew clean           # Clean build artifacts
+./gradlew dependencies    # Show dependency tree
+```
+
+---
+
+### Flutter/Dart Configuration
+
+#### Dependency Management (`pubspec.yaml`)
+
+**Project Metadata**:
+```yaml
+name: android_assignment
+version: 1.0.0+1
+publish_to: 'none'  # Private package
+```
+
+**SDK Requirements**:
+```yaml
+environment:
+  sdk: ^3.9.2
+```
+
+**Key Dependency Categories**:
+
+1. **State Management**:
+   - `provider: ^6.1.2`
+
+2. **Firebase Services**:
+   - `firebase_core: ^3.8.1`
+   - `firebase_auth: ^5.3.3`
+   - `cloud_firestore: ^5.5.2`
+   - `google_sign_in: ^6.2.2`
+
+3. **Search Integration**:
+   - `algoliasearch: ^1.41.1`
+   - `algolia_helper_flutter: ^1.5.0`
+
+4. **Native Android Features**:
+   - `flutter_local_notifications: ^18.0.1`
+   - `geolocator: ^13.0.2`
+   - `google_maps_flutter: ^2.13.1`
+   - `permission_handler: ^11.3.1`
+   - `share_plus: ^10.1.2`
+   - `url_launcher: ^6.3.1`
+
+5. **UI/UX Enhancements**:
+   - `carousel_slider: ^5.1.1`
+   - `cached_network_image: ^3.4.1`
+   - `shared_preferences: ^2.5.3`
+
+6. **Utilities**:
+   - `http: ^1.2.2`
+   - `intl: ^0.20.2`
+   - `timezone: ^0.9.4`
+   - `auto_updater: ^1.0.0`
+
+**Asset Configuration**:
+```yaml
+flutter:
+  assets:
+    - assets/vegetarian_restaurants_hk.json
+    - assets/sample_users.json
+    - assets/sample_restaurants.json
+    - assets/sample_reviews.json
+    - assets/images/Placeholder.png
+    - assets/images/Google.png
+    - assets/images/App-Light.png
+    - assets/images/App-Dark.png
+    - assets/images/Eclipse.gif
+  uses-material-design: true
+```
+
+**Managing Dependencies**:
+```bash
+# Install dependencies
+flutter pub get
+
+# Upgrade to latest compatible versions
+flutter pub upgrade
+
+# Check for outdated packages
+flutter pub outdated
+
+# Add a new dependency
+flutter pub add package_name
+
+# Remove a dependency
+flutter pub remove package_name
+```
+
+#### Linter Configuration (`analysis_options.yaml`)
+
+**Lint Rules**:
+```yaml
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # Custom rules can be added here
+    # avoid_print: false
+    # prefer_single_quotes: true
+```
+
+**Running Static Analysis**:
+```bash
+# Analyze entire project
+flutter analyze
+
+# Auto-fix issues where possible
+dart fix --apply
+
+# Show available fixes without applying
+dart fix --dry-run
+```
+
+---
+
+### Android Platform Configuration
+
+#### Android Manifest (`android/app/src/main/AndroidManifest.xml`)
+
+**Required Permissions**:
+```xml
+<!-- Location Services -->
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+<!-- Network -->
+<uses-permission android:name="android.permission.INTERNET"/>
+
+<!-- Notifications (Android 13+) -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+```
+
+**Application Configuration**:
+```xml
+<application
+    android:label="android_assignment"
+    android:name="${applicationName}"
+    android:icon="@mipmap/ic_launcher">
+```
+
+**Main Activity Configuration**:
+- `launchMode="singleTop"` - Prevents multiple instances
+- `android:exported="true"` - Can be launched by other apps
+- `android:showWhenLocked="true"` - Show on lock screen (for notifications)
+- `android:turnScreenOn="true"` - Wake screen for notifications
+- `android:configChanges` - Handles configuration changes without restart
+
+**Google Maps API Key**:
+```xml
+<meta-data
+    android:name="com.google.android.geo.API_KEY"
+    android:value="AIzaSyAun6GtoyZqdkzO55Cbc5DHIO-xL2oYlRI" />
+```
+
+**Important Security Note**:
+- API keys should be stored in environment variables or secure vaults in production
+- Current key is exposed in version control (acceptable for development only)
+
+---
+
+### Web Platform Configuration
+
+#### PWA Manifest (`web/manifest.json`)
+
+**Application Metadata**:
+```json
+{
+    "name": "android_assignment",
+    "short_name": "android_assignment",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0175C2",
+    "theme_color": "#0175C2",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false
+}
+```
+
+**Icon Configuration**:
+- Regular icons: 192x192, 512x512
+- Maskable icons: 192x192, 512x512 (for Android adaptive icons)
+
+#### Web Entry Point (`web/index.html`)
+
+**Key Features**:
+- Base href placeholder: `$FLUTTER_BASE_HREF` (replaced during build)
+- iOS web app meta tags for mobile browser compatibility
+- Async Flutter bootstrap loading
+- Favicon and manifest linking
+
+**Building for Web**:
+```bash
+# Debug build
+flutter build web
+
+# Release build (optimized)
+flutter build web --release
+
+# With base href
+flutter build web --release --base-href /app/
+```
+
+---
+
+### Common Build Commands
+
+#### Flutter Commands
+```bash
+# Development
+flutter run                          # Run on connected device
+flutter run --release                # Run in release mode
+flutter run -d chrome                # Run in Chrome browser
+flutter run -d <device_id>           # Run on specific device
+
+# Building
+flutter build apk                    # Debug APK
+flutter build apk --release          # Release APK
+flutter build appbundle --release    # Android App Bundle (for Play Store)
+flutter build web --release          # Web build
+
+# Cleaning
+flutter clean                        # Remove build artifacts
+flutter pub cache repair             # Repair package cache
+
+# Analysis & Testing
+flutter analyze                      # Static analysis
+flutter test                         # Run all tests
+flutter test --coverage              # Generate coverage report
+flutter doctor                       # Check environment setup
+```
+
+#### Gradle Commands (from `android/` directory)
+```bash
+# Building
+./gradlew assembleDebug              # Build debug APK
+./gradlew assembleRelease            # Build release APK
+./gradlew bundleRelease              # Build app bundle
+
+# Cleaning
+./gradlew clean                      # Clean build
+
+# Information
+./gradlew tasks                      # List all tasks
+./gradlew dependencies               # Show dependency tree
+./gradlew app:dependencies           # App module dependencies
+
+# Signing
+./gradlew signingReport              # Show signing configs
+```
+
+---
+
+### Build Troubleshooting
+
+#### Gradle Issues
+
+**OutOfMemoryError**:
+```bash
+# Increase heap size in gradle.properties
+org.gradle.jvmargs=-Xmx8G
+```
+
+**Dependency Conflicts**:
+```bash
+# View dependency tree
+./gradlew app:dependencies
+
+# Force dependency resolution
+./gradlew app:dependencies --configuration releaseRuntimeClasspath
+```
+
+**Plugin Version Conflicts**:
+```bash
+# Clean and rebuild
+flutter clean
+cd android && ./gradlew clean
+cd ..
+flutter pub get
+flutter build apk
+```
+
+#### Flutter Issues
+
+**Plugin Registration Errors**:
+```bash
+flutter clean
+flutter pub get
+cd android && ./gradlew clean
+cd ..
+flutter run
+```
+
+**Cached Build Issues**:
+```bash
+# Nuclear option - clean everything
+flutter clean
+rm -rf build/
+rm -rf android/build/
+rm -rf android/app/build/
+rm pubspec.lock
+flutter pub get
+```
+
+**Gradle Daemon Issues**:
+```bash
+cd android
+./gradlew --stop  # Stop all Gradle daemons
 ```
 
 ---
@@ -960,6 +1473,6 @@ This document provides comprehensive guidance for understanding and working with
 
 ---
 
-**Last Updated**: 2025-11-26
+**Last Updated**: 2025-12-13
 **Maintained By**: Development Team
 **For**: AI Assistants (Claude, GPT, etc.)
