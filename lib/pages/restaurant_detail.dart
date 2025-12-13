@@ -1,13 +1,22 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 import '../services/location_service.dart';
 import '../services/booking_service.dart';
 import '../services/notification_service.dart';
+import '../services/auth_service.dart';
+import '../services/user_service.dart';
+import '../services/chat_service.dart';
+import '../config.dart';
 import '../models.dart';
+import 'chat.dart';
+import 'store.dart';
 
 /// Restaurant Detail Page - Native Android Integration
 /// 
@@ -42,6 +51,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   int _numberOfGuests = 1;
   // Loading states
   bool _isBooking = false;
+  bool _isClaiming = false;
   // Map type and controls visibility
   MapType _currentMapType = MapType.normal;
   // Map type toggle states
@@ -73,6 +83,241 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     if (primary != null && primary.trim().isNotEmpty) return primary;
     if (fallback != null && fallback.trim().isNotEmpty) return fallback;
     return widget.isTraditionalChinese ? '未提供' : 'Not provided';
+  }
+
+  /// Checks if current user can claim this restaurant
+  bool _canClaimRestaurant() {
+    final authService = context.read<AuthService>();
+    final userService = context.read<UserService>();
+    final user = userService.currentProfile;
+
+    // Must be logged in
+    if (!authService.isLoggedIn || user == null) return false;
+    // User type must be Restaurant
+    if (!user.isRestaurantOwner) return false;
+    // User must not already own a restaurant
+    if (user.hasClaimedRestaurant) return false;
+    // Restaurant must not already have an owner
+    if (widget.restaurant.ownerId != null && widget.restaurant.ownerId!.isNotEmpty) return false;
+
+    return true;
+  }
+
+  /// Shows claim confirmation dialog with bilingual support
+  Future<void> _showClaimDialog() async {
+    final name = widget.isTraditionalChinese
+        ? _getDisplayValue(widget.restaurant.nameTc, widget.restaurant.nameEn)
+        : _getDisplayValue(widget.restaurant.nameEn, widget.restaurant.nameTc);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.isTraditionalChinese ? '認領餐廳' : 'Claim Restaurant'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.isTraditionalChinese
+                  ? '您確定要認領「$name」嗎？'
+                  : 'Are you sure you want to claim "$name"?',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              widget.isTraditionalChinese
+                  ? '認領後您將成為此餐廳的管理者，可以編輯餐廳資訊和管理預訂。'
+                  : 'After claiming, you will become the manager of this restaurant and can edit its information and manage bookings.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(widget.isTraditionalChinese ? '確認認領' : 'Confirm Claim'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _claimRestaurant();
+    }
+  }
+
+  /// Claims the restaurant with comprehensive error handling
+  Future<void> _claimRestaurant() async {
+    final authService = context.read<AuthService>();
+    final userService = context.read<UserService>();
+    final user = userService.currentProfile;
+
+    // Validation checks with bilingual error messages
+    if (!authService.isLoggedIn || user == null) {
+      _showClaimError(widget.isTraditionalChinese ? '請先登入' : 'Please log in first');
+      return;
+    }
+
+    if (!user.isRestaurantOwner) {
+      _showClaimError(widget.isTraditionalChinese
+          ? '您沒有權限認領此餐廳'
+          : 'You are not authorized to claim this restaurant');
+      return;
+    }
+
+    if (user.hasClaimedRestaurant) {
+      _showClaimError(widget.isTraditionalChinese
+          ? '您已經擁有另一間餐廳'
+          : 'You already own another restaurant');
+      return;
+    }
+
+    if (widget.restaurant.ownerId != null && widget.restaurant.ownerId!.isNotEmpty) {
+      _showClaimError(widget.isTraditionalChinese
+          ? '此餐廳已被認領'
+          : 'This restaurant has already been claimed');
+      return;
+    }
+
+    setState(() => _isClaiming = true);
+
+    try {
+      final token = await authService.idToken;
+      if (token == null) {
+        _showClaimError(widget.isTraditionalChinese
+            ? '無法獲取身份驗證令牌'
+            : 'Failed to get authentication token');
+        setState(() => _isClaiming = false);
+        return;
+      }
+
+      // Call claim API endpoint
+      final response = await http.post(
+        Uri.parse(AppConfig.getClaimEndpoint(widget.restaurant.id)),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Passcode': AppConfig.apiPasscode,
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Refresh user profile to get updated restaurantId
+        await userService.getUserProfile(authService.uid!);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.isTraditionalChinese
+                    ? '認領成功！正在跳轉到店舖管理頁面...'
+                    : 'Claim successful! Redirecting to store management...',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Navigate to store page after delay
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(
+                      title: Text(widget.isTraditionalChinese ? '我的店舖' : 'My Store'),
+                    ),
+                    body: StorePage(
+                      isTraditionalChinese: widget.isTraditionalChinese,
+                      isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                    ),
+                  ),
+                ),
+              );
+            }
+          });
+        }
+      } else {
+        // Parse error response
+        String errorMsg;
+        try {
+          final errorData = jsonDecode(response.body);
+          errorMsg = errorData['error'] ?? errorData['message'] ?? 'Unknown error';
+        } catch (_) {
+          errorMsg = 'Server error: ${response.statusCode}';
+        }
+
+        // Map common errors to bilingual messages
+        if (errorMsg.contains('already claimed') || errorMsg.contains('owner')) {
+          _showClaimError(widget.isTraditionalChinese ? '此餐廳已被認領' : 'This restaurant has already been claimed');
+        } else if (errorMsg.contains('already own')) {
+          _showClaimError(widget.isTraditionalChinese ? '您已經擁有另一間餐廳' : 'You already own another restaurant');
+        } else if (errorMsg.contains('not found')) {
+          _showClaimError(widget.isTraditionalChinese ? '找不到此餐廳' : 'Restaurant not found');
+        } else if (errorMsg.contains('unauthorized') || errorMsg.contains('permission')) {
+          _showClaimError(widget.isTraditionalChinese ? '您沒有權限認領此餐廳' : 'You are not authorized to claim this restaurant');
+        } else {
+          _showClaimError(widget.isTraditionalChinese ? '認領失敗,請重試' : 'Claim failed, please try again');
+        }
+      }
+    } catch (error) {
+      if (kDebugMode) print('Claim error: $error');
+      _showClaimError(widget.isTraditionalChinese ? '認領失敗,請重試' : 'Claim failed, please try again');
+    } finally {
+      if (mounted) {
+        setState(() => _isClaiming = false);
+      }
+    }
+  }
+
+  /// Shows claim error snackbar
+  void _showClaimError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Opens the chat page for this restaurant
+  void _openChat() {
+    final authService = context.read<AuthService>();
+
+    if (!authService.isLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese ? '請先登入以使用聊天功能' : 'Please log in to use chat',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final roomId = 'restaurant-${widget.restaurant.id}';
+    final roomName = widget.isTraditionalChinese
+        ? _getDisplayValue(widget.restaurant.nameTc, widget.restaurant.nameEn)
+        : _getDisplayValue(widget.restaurant.nameEn, widget.restaurant.nameTc);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatPage(
+          roomId: roomId,
+          roomName: roomName,
+          isTraditionalChinese: widget.isTraditionalChinese,
+        ),
+      ),
+    );
   }
 
   /// Share restaurant details
@@ -560,6 +805,25 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       appBar: AppBar(
         title: Text(name),
         actions: [
+          // Chat button for contacting restaurant
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: widget.isTraditionalChinese ? '聊天' : 'Chat',
+            onPressed: _openChat,
+          ),
+          // Claim button (only shown if eligible)
+          if (_canClaimRestaurant())
+            IconButton(
+              icon: _isClaiming
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_business),
+              tooltip: widget.isTraditionalChinese ? '認領餐廳' : 'Claim Restaurant',
+              onPressed: _isClaiming ? null : _showClaimDialog,
+            ),
           // Share button in app bar for easy access
           IconButton(
             icon: const Icon(Icons.share),

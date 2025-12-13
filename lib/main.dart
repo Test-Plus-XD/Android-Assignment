@@ -9,11 +9,16 @@ import 'services/location_service.dart';
 import 'services/notification_service.dart';
 import 'services/restaurant_service.dart';
 import 'services/user_service.dart';
+import 'services/chat_service.dart';
+import 'services/gemini_service.dart';
+import 'services/review_service.dart';
 import 'pages/home.dart';
 import 'pages/search.dart';
 import 'pages/account.dart';
 import 'pages/login.dart';
+import 'pages/store.dart';
 import 'widgets/drawer.dart';
+import 'widgets/gemini_chat.dart';
 import 'firebase_options.dart';
 import 'config.dart';
 
@@ -161,6 +166,29 @@ class PourRiceApp extends StatelessWidget {
           ),
           update: (context, authService, previous) =>
               previous ?? BookingService(authService),
+        ),
+
+        // ChatService - needs AuthService for user identification
+        ChangeNotifierProxyProvider<AuthService, ChatService>(
+          create: (context) => ChatService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? ChatService(authService),
+        ),
+
+        // GeminiService - independent AI chat service
+        ChangeNotifierProvider(
+          create: (_) => GeminiService(),
+        ),
+
+        // ReviewService - needs AuthService for authenticated requests
+        ChangeNotifierProxyProvider<AuthService, ReviewService>(
+          create: (context) => ReviewService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? ReviewService(authService),
         ),
       ],
       child: const AppRoot(),
@@ -399,10 +427,11 @@ class _AppRootState extends State<AppRoot> {
   }
 }
 
-/// Main Shell
-/// 
+/// Main Shell with dynamic navigation based on user type
+///
 /// The main navigation structure of the app.
-/// Contains bottom navigation and drawer.
+/// Contains bottom navigation, drawer, and Gemini AI FAB.
+/// Navigation items change based on user type (Diner vs Restaurant).
 class MainShell extends StatefulWidget {
   final bool isDarkMode;
   final bool isTraditionalChinese;
@@ -435,30 +464,108 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pageTitles = widget.isTraditionalChinese
-        ? ['主頁', '餐廳列表', '我的帳戶']
-        : ['Home', 'Restaurants', 'My Account'];
+    final authService = context.watch<AuthService>();
+    final userService = context.watch<UserService>();
+    final user = userService.currentProfile;
 
-    final authService = context.read<AuthService>();
+    // Determines if current user is a restaurant owner
+    final isRestaurantOwner = user?.isRestaurantOwner ?? false;
+
     void onLoginStateChanged(loggedIn) {
       if (!loggedIn) authService.logout();
     }
 
-    final pages = [
-      FrontPage(
-        isTraditionalChinese: widget.isTraditionalChinese,
-        onNavigate: (index) => setState(() => currentIndex = index),
-      ),
-      SearchPage(isTraditionalChinese: widget.isTraditionalChinese),
-      AccountPage(
-        isDarkMode: widget.isDarkMode,
-        isTraditionalChinese: widget.isTraditionalChinese,
-        onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
-        onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
-        isLoggedIn: authService.isLoggedIn,
-        onLoginStateChanged: onLoginStateChanged,
-      ),
-    ];
+    // Dynamic page titles based on user type
+    List<String> pageTitles;
+    List<Widget> pages;
+    List<BottomNavigationBarItem> navItems;
+
+    if (isRestaurantOwner) {
+      // Restaurant owner navigation: Home, Restaurants, Store, Account
+      pageTitles = widget.isTraditionalChinese
+          ? ['主頁', '餐廳列表', '我的店舖', '我的帳戶']
+          : ['Home', 'Restaurants', 'My Store', 'My Account'];
+
+      pages = [
+        FrontPage(
+          isTraditionalChinese: widget.isTraditionalChinese,
+          onNavigate: (index) => setState(() => currentIndex = index),
+        ),
+        SearchPage(isTraditionalChinese: widget.isTraditionalChinese),
+        StorePage(
+          isTraditionalChinese: widget.isTraditionalChinese,
+          isDarkMode: widget.isDarkMode,
+        ),
+        AccountPage(
+          isDarkMode: widget.isDarkMode,
+          isTraditionalChinese: widget.isTraditionalChinese,
+          onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
+          onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
+          isLoggedIn: authService.isLoggedIn,
+          onLoginStateChanged: onLoginStateChanged,
+        ),
+      ];
+
+      navItems = [
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.home),
+          label: widget.isTraditionalChinese ? '主頁' : 'Home',
+        ),
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.restaurant),
+          label: widget.isTraditionalChinese ? '餐廳' : 'Restaurants',
+        ),
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.store),
+          label: widget.isTraditionalChinese ? '店舖' : 'Store',
+        ),
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.account_circle),
+          label: widget.isTraditionalChinese ? '帳戶' : 'Account',
+        ),
+      ];
+    } else {
+      // Diner navigation: Home, Restaurants, Account (standard)
+      pageTitles = widget.isTraditionalChinese
+          ? ['主頁', '餐廳列表', '我的帳戶']
+          : ['Home', 'Restaurants', 'My Account'];
+
+      pages = [
+        FrontPage(
+          isTraditionalChinese: widget.isTraditionalChinese,
+          onNavigate: (index) => setState(() => currentIndex = index),
+        ),
+        SearchPage(isTraditionalChinese: widget.isTraditionalChinese),
+        AccountPage(
+          isDarkMode: widget.isDarkMode,
+          isTraditionalChinese: widget.isTraditionalChinese,
+          onThemeChanged: () => widget.onThemeChanged(!widget.isDarkMode),
+          onLanguageChanged: () => widget.onLanguageChanged(!widget.isTraditionalChinese),
+          isLoggedIn: authService.isLoggedIn,
+          onLoginStateChanged: onLoginStateChanged,
+        ),
+      ];
+
+      navItems = [
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.home),
+          label: widget.isTraditionalChinese ? '主頁' : 'Home',
+        ),
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.restaurant),
+          label: widget.isTraditionalChinese ? '餐廳' : 'Restaurants',
+        ),
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.account_circle),
+          label: widget.isTraditionalChinese ? '帳戶' : 'Account',
+        ),
+      ];
+    }
+
+    // Ensure currentIndex is within bounds when user type changes
+    if (currentIndex >= pages.length) {
+      currentIndex = 0;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -473,27 +580,24 @@ class _MainShellState extends State<MainShell> {
         isLoggedIn: authService.isLoggedIn,
         onLoginStateChanged: onLoginStateChanged,
       ),
-      body: IndexedStack(
-        index: currentIndex,
-        children: pages,
+      body: Stack(
+        children: [
+          // Main content
+          IndexedStack(
+            index: currentIndex,
+            children: pages,
+          ),
+          // Gemini AI FAB at bottom-left (accessible without login)
+          GeminiChatWidget(
+            isTraditionalChinese: widget.isTraditionalChinese,
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: _onNavTapped,
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.home),
-            label: widget.isTraditionalChinese ? '主頁' : 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.restaurant),
-            label: widget.isTraditionalChinese ? '餐廳' : 'Restaurants',
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.account_circle),
-            label: widget.isTraditionalChinese ? '帳戶' : 'Account',
-          ),
-        ],
+        type: BottomNavigationBarType.fixed,
+        items: navItems,
       ),
     );
   }

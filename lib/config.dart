@@ -53,6 +53,26 @@ class AppConfig {
   // Placeholder URL
   static const String placeholderUrl = 'https://firebasestorage.googleapis.com/v0/b/cross-platform-assignmen-b97cc.firebasestorage.app/o/Placeholder.png?alt=media&token=2ceff686-bda6-43c8-ab7d-5551117569f1';
 
+  // Socket.IO server URL for real-time chat
+  static const String socketServerUrl = 'https://railway-socket-production.up.railway.app';
+
+  // Gemini AI API endpoints
+  static String get geminiChatEndpoint => getEndpoint('API/Gemini/chat');
+  static String get geminiGenerateEndpoint => getEndpoint('API/Gemini/generate');
+  static String get geminiRestaurantEndpoint => getEndpoint('API/Gemini/restaurant-description');
+
+  // Reviews API endpoint
+  static String get reviewsEndpoint => getEndpoint('API/Reviews');
+
+  // Chat API endpoints for message persistence
+  static String getChatRoomEndpoint(String roomId) => getEndpoint('API/Chat/Rooms/$roomId/Messages');
+
+  // Image upload endpoint
+  static String get imageUploadEndpoint => getEndpoint('API/Images/upload');
+
+  // Restaurant claim endpoint
+  static String getClaimEndpoint(String restaurantId) => getEndpoint('API/Restaurants/$restaurantId/claim');
+
   /// Algolia Configuration
   /// 
   /// These settings come from your Algolia dashboard.

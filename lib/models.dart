@@ -21,6 +21,8 @@ class Restaurant {
   final Map<String, dynamic>? openingHours;
   final int? seats;
   final Map<String, dynamic>? contacts;
+  // Owner ID field for restaurant claiming feature
+  final String? ownerId;
 
   Restaurant({
     required this.id,
@@ -39,6 +41,7 @@ class Restaurant {
     this.openingHours,
     this.seats,
     this.contacts,
+    this.ownerId,
   });
 
   // Creates Restaurant from JSON (handles both Algolia and API responses)
@@ -94,6 +97,7 @@ class Restaurant {
       openingHours: toMap(json['Opening_Hours'] ?? json['openingHours']),
       seats: toInt(json['Seats'] ?? json['seats']),
       contacts: toMap(json['Contacts'] ?? json['contacts']),
+      ownerId: json['ownerId'] as String?,
     );
   }
 
@@ -116,6 +120,7 @@ class Restaurant {
       'Opening_Hours': openingHours,
       'Seats': seats,
       'Contacts': contacts,
+      if (ownerId != null) 'ownerId': ownerId,
     };
   }
 
@@ -316,6 +321,8 @@ class User {
   final DateTime? modifiedAt;
   final DateTime? lastLoginAt;
   final int? loginCount;
+  // Restaurant ID field for claimed restaurants
+  final String? restaurantId;
 
   User({
     required this.uid,
@@ -331,7 +338,17 @@ class User {
     this.modifiedAt,
     this.lastLoginAt,
     this.loginCount,
+    this.restaurantId,
   });
+
+  // Checks if user is a restaurant owner type
+  bool get isRestaurantOwner => type?.toLowerCase() == 'restaurant';
+
+  // Checks if user is a diner type
+  bool get isDiner => type?.toLowerCase() == 'diner';
+
+  // Checks if user has claimed a restaurant
+  bool get hasClaimedRestaurant => restaurantId != null && restaurantId!.isNotEmpty;
 
   /// Gets structured preferences with default values
   UserPreferences getPreferences() {
@@ -361,6 +378,7 @@ class User {
       modifiedAt: toDateTime(json['modifiedAt']) != null ? DateTime.parse(json['modifiedAt'] as String) : null,
       lastLoginAt: toDateTime(json['lastLoginAt']) != null ? DateTime.parse(json['lastLoginAt'] as String) : null,
       loginCount: json['loginCount'] as int?,
+      restaurantId: json['restaurantId'] as String?,
     );
   }
 
@@ -376,12 +394,14 @@ class User {
       if (type != null) 'type': type,
       if (bio != null) 'bio': bio,
       if (preferences != null) 'preferences': preferences,
+      if (restaurantId != null) 'restaurantId': restaurantId,
     };
   }
 }
 
-// Review model
+// Review model with enhanced fields for images and timestamps
 class Review {
+  final String? id;
   final String review;
   final String language;
   final String restaurantNameEn;
@@ -389,8 +409,17 @@ class Review {
   final String uid;
   final String? displayName;
   final String? photoURL;
+  // Optional image URL for review photos
+  final String? imageUrl;
+  // Rating value (1-5 stars)
+  final int? rating;
+  // Restaurant ID reference
+  final String? restaurantId;
+  // Review creation timestamp
+  final DateTime? dateTime;
 
   Review({
+    this.id,
     required this.review,
     required this.language,
     required this.restaurantNameEn,
@@ -398,19 +427,54 @@ class Review {
     required this.uid,
     this.displayName,
     this.photoURL,
+    this.imageUrl,
+    this.rating,
+    this.restaurantId,
+    this.dateTime,
   });
 
-  // Creates Review from JSON
+  // Creates Review from JSON with enhanced field handling
   factory Review.fromJson(Map<String, dynamic> json) {
+    // Helper to parse DateTime from various formats
+    DateTime? parseDateTime(dynamic value) {
+      if (value == null) return null;
+      if (value is String) return DateTime.tryParse(value);
+      if (value is Timestamp) return value.toDate();
+      return null;
+    }
+
     return Review(
-      review: json['review'] ?? '',
+      id: json['id'] as String?,
+      review: json['review'] ?? json['comment'] ?? '',
       language: json['language'] ?? '',
-      restaurantNameEn: json['Name_EN'] ?? '',
-      restaurantNameTc: json['Name_TC'] ?? '',
-      uid: json['uid'] ?? '',
+      restaurantNameEn: json['Name_EN'] ?? json['restaurantNameEn'] ?? '',
+      restaurantNameTc: json['Name_TC'] ?? json['restaurantNameTc'] ?? '',
+      uid: json['uid'] ?? json['userId'] ?? '',
       displayName: json['displayName'] as String?,
       photoURL: json['photoURL'] as String?,
+      imageUrl: json['imageUrl'] as String?,
+      rating: json['rating'] as int?,
+      restaurantId: json['restaurantId'] as String?,
+      dateTime: parseDateTime(json['dateTime'] ?? json['createdAt']),
     );
+  }
+
+  // Converts Review to JSON for API requests
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'review': review,
+      'language': language,
+      'Name_EN': restaurantNameEn,
+      'Name_TC': restaurantNameTc,
+      'uid': uid,
+      if (displayName != null) 'displayName': displayName,
+      if (photoURL != null) 'photoURL': photoURL,
+      if (imageUrl != null) 'imageUrl': imageUrl,
+      if (rating != null) 'rating': rating,
+      if (restaurantId != null) 'restaurantId': restaurantId,
+      if (dateTime != null) 'dateTime': dateTime!.toIso8601String(),
+    };
   }
 }
 
@@ -419,4 +483,103 @@ Future<List<Review>> loadReviewsFromAssets() async {
   final String jsonString = await rootBundle.loadString('assets/sample_reviews.json');
   final List<dynamic> reviewList = json.decode(jsonString) as List<dynamic>;
   return reviewList.map((e) => Review.fromJson(e as Map<String, dynamic>)).toList();
+}
+
+// Chat message model for real-time messaging via Socket.IO
+class ChatMessage {
+  final String? id;
+  final String roomId;
+  final String senderId;
+  final String senderName;
+  final String content;
+  final DateTime timestamp;
+  // Indicates if message contains an image URL
+  final bool isImage;
+  // Optional sender photo URL
+  final String? senderPhotoUrl;
+
+  ChatMessage({
+    this.id,
+    required this.roomId,
+    required this.senderId,
+    required this.senderName,
+    required this.content,
+    required this.timestamp,
+    this.isImage = false,
+    this.senderPhotoUrl,
+  });
+
+  // Creates ChatMessage from JSON response
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    // Helper to parse DateTime from various formats
+    DateTime parseTimestamp(dynamic value) {
+      if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+      if (value is Timestamp) return value.toDate();
+      if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+      return DateTime.now();
+    }
+
+    return ChatMessage(
+      id: json['id'] as String?,
+      roomId: json['roomId'] as String? ?? '',
+      senderId: json['senderId'] as String? ?? json['userId'] as String? ?? '',
+      senderName: json['senderName'] as String? ?? json['displayName'] as String? ?? 'Anonymous',
+      content: json['content'] as String? ?? json['message'] as String? ?? '',
+      timestamp: parseTimestamp(json['timestamp'] ?? json['createdAt']),
+      isImage: json['isImage'] as bool? ?? _isImageUrl(json['content'] as String? ?? ''),
+      senderPhotoUrl: json['senderPhotoUrl'] as String? ?? json['photoURL'] as String?,
+    );
+  }
+
+  // Converts ChatMessage to JSON for API/Socket requests
+  Map<String, dynamic> toJson() {
+    return {
+      if (id != null) 'id': id,
+      'roomId': roomId,
+      'senderId': senderId,
+      'senderName': senderName,
+      'content': content,
+      'timestamp': timestamp.toIso8601String(),
+      'isImage': isImage,
+      if (senderPhotoUrl != null) 'senderPhotoUrl': senderPhotoUrl,
+    };
+  }
+
+  // Helper to detect if content is an image URL
+  static bool _isImageUrl(String content) {
+    final lowerContent = content.toLowerCase();
+    return lowerContent.startsWith('http') &&
+           (lowerContent.contains('.jpg') ||
+            lowerContent.contains('.jpeg') ||
+            lowerContent.contains('.png') ||
+            lowerContent.contains('.gif') ||
+            lowerContent.contains('firebasestorage'));
+  }
+}
+
+// Gemini AI conversation message for maintaining chat history
+class GeminiMessage {
+  final String role;
+  final String content;
+
+  GeminiMessage({
+    required this.role,
+    required this.content,
+  });
+
+  // Creates message from JSON
+  factory GeminiMessage.fromJson(Map<String, dynamic> json) {
+    return GeminiMessage(
+      role: json['role'] as String? ?? 'user',
+      content: json['parts'] as String? ?? json['content'] as String? ?? '',
+    );
+  }
+
+  // Converts to JSON for API request
+  Map<String, dynamic> toJson() {
+    return {
+      'role': role,
+      'parts': content,
+    };
+  }
 }
