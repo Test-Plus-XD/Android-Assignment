@@ -19,6 +19,7 @@ import '../widgets/reviews/review_form.dart';
 import '../widgets/menu/menu_item_card.dart';
 import '../widgets/menu/menu_list.dart';
 import '../widgets/menu/menu_item_form.dart';
+import '../widgets/ai/gemini_chat_button.dart';
 
 /// Restaurant Detail Page - Native Android Integration
 /// 
@@ -634,6 +635,13 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       appBar: AppBar(
         title: Text(name),
         actions: [
+          // AI Assistant button
+          GeminiChatIconButton(
+            isTraditionalChinese: widget.isTraditionalChinese,
+            restaurantName: name,
+            restaurantCuisine: widget.restaurant.keywordEn?.join(', '),
+            restaurantDistrict: widget.restaurant.districtEn,
+          ),
           // Chat button
           IconButton(
             icon: const Icon(Icons.chat_bubble_outline),

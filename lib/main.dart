@@ -13,6 +13,7 @@ import 'services/review_service.dart';
 import 'services/menu_service.dart';
 import 'services/image_service.dart';
 import 'services/chat_service.dart';
+import 'services/gemini_service.dart';
 import 'pages/home.dart';
 import 'pages/search.dart';
 import 'pages/account.dart';
@@ -245,6 +246,11 @@ class PourRiceApp extends StatelessWidget {
           ),
           update: (context, authService, previous) =>
               previous ?? ChatService(authService),
+        ),
+
+        // GeminiService - AI assistant (no auth required)
+        ChangeNotifierProvider(
+          create: (_) => GeminiService(),
         ),
       ],
       child: const AppRoot(),

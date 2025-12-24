@@ -6,7 +6,8 @@
       "Bash(Remove-Item -Force)",
       "Bash(find:*)",
       "Bash(test:*)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(cat:*)"
     ]
   }
 }

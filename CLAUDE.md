@@ -2253,6 +2253,131 @@ Complete implementation of real-time chat functionality with Socket.IO integrati
 
 ---
 
+#### Priority 5: AI Assistant (Google Gemini)
+
+Complete implementation of AI-powered assistant using Google Gemini 2.5 for restaurant recommendations, Q&A, and dining suggestions.
+
+**Models Created:**
+- `GeminiChatHistory` - Chat history item for conversation tracking (role, content)
+- `GeminiGenerateRequest` - Request model for text generation with configurable parameters (prompt, model, temperature, maxTokens, topP, topK)
+- `GeminiGenerateResponse` - Response model with result and token usage statistics
+- `GeminiChatRequest` - Request model for conversational chat with history
+- `GeminiChatResponse` - Response model with result and updated conversation history
+- `GeminiRestaurantDescriptionRequest` - Request model for AI-generated restaurant descriptions
+- `GeminiRestaurantDescriptionResponse` - Response model with generated description and restaurant data
+
+**Service Implemented:**
+- `lib/services/gemini_service.dart` (~300 lines)
+  - **Core Methods**:
+    - `generate(prompt, {model, temperature, maxTokens, topP, topK})` - Generate text from prompt
+    - `chat(message, {history, model, useInternalHistory})` - Conversational chat with maintained history
+    - `generateRestaurantDescription({name, cuisine, district, keywords, language})` - AI-generated restaurant marketing copy
+  - **Helper Methods**:
+    - `askAboutRestaurant(question, restaurantName, {cuisine, district})` - Context-aware restaurant Q&A
+    - `getDiningRecommendation(preferences)` - Personalized dining suggestions
+    - `suggestRestaurants({district, cuisine, dietaryPreference, priceRange})` - Restaurant recommendations
+  - **State Management**:
+    - `conversationHistory` - Maintained conversation state
+    - `clearHistory()` - Reset conversation
+    - `addToHistory(role, content)` - Manual history management
+  - Full error handling and loading states
+  - No authentication required (public endpoints)
+
+**Widgets Created:**
+- `lib/widgets/ai/gemini_chat_button.dart`
+  - `GeminiChatButton` - Animated floating action button with gradient icon
+  - `GeminiChatIconButton` - Compact icon button for toolbars
+  - Pulsing scale animation for attention
+  - Restaurant context support
+  - Bilingual labels (EN/TC)
+
+- `lib/widgets/ai/suggestion_chips.dart`
+  - `SuggestionChips` - Horizontal scrollable list of suggested questions
+  - `CompactSuggestionChips` - Compact version with send action
+  - Context-aware suggestions (restaurant-specific or general)
+  - Different suggestion sets for different contexts
+  - Bilingual question templates
+
+**Pages Created:**
+- `lib/pages/gemini_chat_page.dart` (~400 lines)
+  - Full-screen conversational AI interface
+  - Message list with user/AI distinction
+  - Bubble-style chat UI with gradient AI avatar
+  - Suggestion chips for quick interaction
+  - Real-time message input with send button
+  - Loading states during AI processing
+  - Clear conversation functionality
+  - Restaurant context awareness
+  - Welcome message on page load
+  - Auto-scroll to bottom on new messages
+  - Bilingual support throughout
+
+**Integration:**
+- Updated `lib/pages/restaurant_detail.dart`:
+  - Added `GeminiChatIconButton` to AppBar actions
+  - Passes restaurant context (name, cuisine, district)
+  - Positioned before chat and share buttons
+  - Bilingual support
+
+- Registered `GeminiService` as provider in `lib/main.dart`:
+  - Added as `ChangeNotifierProvider` (no auth dependency)
+  - Independent service for AI features
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app`
+- **Endpoints**:
+  - `POST /API/Gemini/generate` - Generate text content
+  - `POST /API/Gemini/chat` - Conversational chat with history
+  - `POST /API/Gemini/restaurant-description` - Generate restaurant descriptions
+- All endpoints require `x-api-passcode: PourRice` header
+- No authentication required (public AI features)
+- Default model: `gemini-2.5-flash-lite-preview-09-2025`
+- Follows API.md specification exactly
+
+**Features:**
+- AI-powered text generation with configurable parameters
+- Conversational chat with maintained context/history
+- Restaurant-specific Q&A with context awareness
+- General vegetarian/vegan dining recommendations
+- Suggested questions for quick interaction
+- Restaurant description generation
+- Dining suggestion based on preferences
+- Multi-turn conversations with history
+- Gradient UI design for AI branding
+- Animated floating button for engagement
+- Context-aware responses (general or restaurant-specific)
+- Token usage tracking
+- Error handling with user-friendly messages
+- Loading states for all async operations
+- Empty states with helpful prompts
+- Bilingual support (EN/TC) throughout
+- Material Design 3 components
+- Smooth animations and transitions
+
+**Use Cases:**
+1. **Restaurant Discovery**: "Recommend vegan restaurants in Central"
+2. **Menu Inquiries**: "What are the signature dishes at this restaurant?"
+3. **Dietary Advice**: "What plant-based protein options are available?"
+4. **Operating Info**: "What are the opening hours?"
+5. **Price Guidance**: "What is the price range here?"
+6. **Occasion Planning**: "Is this suitable for a business lunch?"
+7. **General Recommendations**: Ask about any aspect of vegetarian/vegan dining
+
+**Files Modified:**
+- `lib/models.dart` - Added Gemini AI models (GeminiChatHistory, requests, responses)
+- `lib/main.dart` - Added GeminiService provider
+- `lib/pages/restaurant_detail.dart` - Integrated AI chat button
+
+**Files Created:**
+- `lib/services/gemini_service.dart`
+- `lib/widgets/ai/gemini_chat_button.dart`
+- `lib/widgets/ai/suggestion_chips.dart`
+- `lib/pages/gemini_chat_page.dart`
+
+**Total Lines Added:** ~1,000 lines of production code
+
+---
+
 **Last Updated**: 2025-12-25
 **Maintained By**: Development Team & Claude AI Assistant
 **For**: AI Assistants (Claude, GPT, etc.)
