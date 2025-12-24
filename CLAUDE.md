@@ -1769,6 +1769,99 @@ This document provides comprehensive guidance for understanding and working with
 
 ---
 
-**Last Updated**: 2025-12-13
-**Maintained By**: Development Team
+## Implementation Progress (by Claude)
+
+### ✅ Completed Features (2025-12-24)
+
+#### Priority 1: Review System
+
+Complete implementation of restaurant review functionality with full CRUD operations.
+
+**Models Created:**
+- `Review` - Full review data model with rating (1-5 stars), comment, image, user info, timestamps
+- `ReviewStats` - Aggregate statistics (total reviews, average rating)
+- `CreateReviewRequest` - Request model for creating reviews
+- `UpdateReviewRequest` - Request model for updating reviews
+
+**Service Implemented:**
+- `lib/services/review_service.dart` (362 lines)
+  - `getReviews(restaurantId, userId)` - Fetch reviews with filtering
+  - `getReview(reviewId)` - Fetch single review
+  - `createReview(request)` - Create new review (auth required)
+  - `updateReview(reviewId, request)` - Update own review (auth required)
+  - `deleteReview(reviewId)` - Delete own review (auth required)
+  - `getReviewStats(restaurantId)` - Fetch aggregate statistics
+  - Full error handling and loading states
+  - Authentication integration with Firebase tokens
+
+**Widgets Created:**
+- `lib/widgets/reviews/star_rating.dart`
+  - `StarRating` - Display-only star rating widget (full/half/empty stars)
+  - `StarRatingSelector` - Interactive star rating selector with value display
+- `lib/widgets/reviews/review_card.dart`
+  - Displays user avatar, name, rating, comment, optional image
+  - Edit/delete menu for own reviews
+  - "Edited" indicator for modified reviews
+  - Time ago formatting (e.g., "2 hours ago")
+- `lib/widgets/reviews/review_form.dart`
+  - Create/edit review form in bottom sheet
+  - Star rating selector (1-5 stars)
+  - Optional comment field (max 500 chars)
+  - Form validation and loading states
+- `lib/widgets/reviews/review_stats.dart`
+  - `ReviewStatsWidget` - Full statistics display with average rating and count
+  - `ReviewStatsBadge` - Compact badge for restaurant cards
+- `lib/widgets/reviews/review_list.dart`
+  - Pull-to-refresh support
+  - Empty state with helpful message
+  - Edit/delete handlers for user's own reviews
+  - Loading and error states with retry
+
+**Integration:**
+- Updated `lib/pages/restaurant_detail.dart`:
+  - Added Reviews section with stats widget
+  - Created `_ReviewsPage` for full reviews view
+  - "Write Review" floating action button
+  - Login prompt for unauthenticated users
+  - Bilingual support (EN/TC) throughout
+- Registered `ReviewService` as provider in `lib/main.dart`
+- Added `timeago: ^3.7.0` dependency to `pubspec.yaml`
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app`
+- All endpoints require `x-api-passcode: PourRice` header
+- Auth endpoints require `Authorization: Bearer <token>` header
+- Follows API.md specification exactly
+
+**Features:**
+- Star rating system (1-5 stars, half stars for display)
+- Optional comment (up to 500 characters)
+- User can only edit/delete own reviews
+- Real-time updates after create/edit/delete
+- Automatic stats refresh
+- Time ago formatting for review dates
+- Bilingual UI (English/Traditional Chinese)
+- Material Design 3 components
+- Smooth animations and transitions
+
+**Files Modified:**
+- `lib/models.dart` - Updated Review models (replaced old simple model)
+- `lib/main.dart` - Added ReviewService provider
+- `lib/pages/restaurant_detail.dart` - Integrated reviews section
+- `pubspec.yaml` - Added timeago dependency
+
+**Files Created:**
+- `lib/services/review_service.dart`
+- `lib/widgets/reviews/star_rating.dart`
+- `lib/widgets/reviews/review_card.dart`
+- `lib/widgets/reviews/review_form.dart`
+- `lib/widgets/reviews/review_stats.dart`
+- `lib/widgets/reviews/review_list.dart`
+
+**Total Lines Added:** ~850 lines of production code
+
+---
+
+**Last Updated**: 2025-12-24
+**Maintained By**: Development Team & Claude AI Assistant
 **For**: AI Assistants (Claude, GPT, etc.)

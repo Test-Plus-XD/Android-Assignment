@@ -7,7 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/location_service.dart';
 import '../services/booking_service.dart';
 import '../services/notification_service.dart';
+import '../services/auth_service.dart';
+import '../services/review_service.dart';
 import '../models.dart';
+import '../widgets/reviews/review_stats.dart';
+import '../widgets/reviews/review_list.dart';
+import '../widgets/reviews/review_form.dart';
 
 /// Restaurant Detail Page - Native Android Integration
 /// 
@@ -839,6 +844,49 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       ),
                     ),
                   ],
+                  /// Reviews Section
+                  ///
+                  /// Displays review statistics and a list of user reviews.
+                  const SizedBox(height: 24),
+                  Consumer<ReviewService>(
+                    builder: (context, reviewService, child) {
+                      return FutureBuilder(
+                        future: reviewService.getReviewStats(widget.restaurant.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData && snapshot.data != null) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.isTraditionalChinese ? '評價' : 'Reviews',
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ReviewStatsWidget(
+                                  stats: snapshot.data!,
+                                  onTap: () {
+                                    // Navigate to full reviews page
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => _ReviewsPage(
+                                          restaurantId: widget.restaurant.id,
+                                          restaurantName: name,
+                                          isTraditionalChinese: widget.isTraditionalChinese,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -863,6 +911,123 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
             : const Icon(Icons.calendar_today),
         label: Text(
           widget.isTraditionalChinese ? '預訂' : 'Book',
+        ),
+      ),
+    );
+  }
+}
+
+/// Reviews Page
+///
+/// Full-screen page for viewing and managing reviews.
+class _ReviewsPage extends StatelessWidget {
+  final String restaurantId;
+  final String restaurantName;
+  final bool isTraditionalChinese;
+
+  const _ReviewsPage({
+    required this.restaurantId,
+    required this.restaurantName,
+    required this.isTraditionalChinese,
+  });
+
+  Future<void> _showAddReviewForm(BuildContext context) async {
+    final authService = context.read<AuthService>();
+    final reviewService = context.read<ReviewService>();
+
+    if (authService.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isTraditionalChinese ? '請先登入以撰寫評價' : 'Please sign in to write a review',
+          ),
+          action: SnackBarAction(
+            label: isTraditionalChinese ? '登入' : 'Sign In',
+            onPressed: () {
+              Navigator.of(context).pushReplacementNamed('/login');
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    await showReviewForm(
+      context: context,
+      restaurantId: restaurantId,
+      onSubmit: (rating, comment) async {
+        final request = CreateReviewRequest(
+          restaurantId: restaurantId,
+          rating: rating,
+          comment: comment,
+          dateTime: DateTime.now().toIso8601String(),
+        );
+
+        final reviewId = await reviewService.createReview(request);
+
+        if (context.mounted) {
+          if (reviewId != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  isTraditionalChinese ? '評價已提交' : 'Review submitted successfully',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+            // Refresh stats
+            await reviewService.getReviewStats(restaurantId);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  '${isTraditionalChinese ? '提交失敗' : 'Failed to submit review'}: ${reviewService.error}',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          isTraditionalChinese ? '評價' : 'Reviews',
+        ),
+      ),
+      body: Column(
+        children: [
+          // Review stats at the top
+          Consumer<ReviewService>(
+            builder: (context, reviewService, child) {
+              return FutureBuilder(
+                future: reviewService.getReviewStats(restaurantId),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    return ReviewStatsWidget(stats: snapshot.data!);
+                  }
+                  return const SizedBox.shrink();
+                },
+              );
+            },
+          ),
+          const Divider(),
+          // Reviews list
+          Expanded(
+            child: ReviewList(restaurantId: restaurantId),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddReviewForm(context),
+        icon: const Icon(Icons.rate_review),
+        label: Text(
+          isTraditionalChinese ? '撰寫評價' : 'Write Review',
         ),
       ),
     );

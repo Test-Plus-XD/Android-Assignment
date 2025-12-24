@@ -9,6 +9,7 @@ import 'services/location_service.dart';
 import 'services/notification_service.dart';
 import 'services/restaurant_service.dart';
 import 'services/user_service.dart';
+import 'services/review_service.dart';
 import 'pages/home.dart';
 import 'pages/search.dart';
 import 'pages/account.dart';
@@ -161,6 +162,15 @@ class PourRiceApp extends StatelessWidget {
           ),
           update: (context, authService, previous) =>
               previous ?? BookingService(authService),
+        ),
+
+        // ReviewService - needs AuthService for tokens
+        ChangeNotifierProxyProvider<AuthService, ReviewService>(
+          create: (context) => ReviewService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? ReviewService(authService),
         ),
       ],
       child: const AppRoot(),
