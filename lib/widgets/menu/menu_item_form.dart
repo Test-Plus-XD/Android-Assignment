@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models.dart';
 import '../../services/menu_service.dart';
+import '../../services/image_service.dart';
 import '../../main.dart';
+import '../images/image_picker_button.dart';
+import '../images/image_preview.dart';
+import '../images/upload_progress_indicator.dart';
 
 /// Bottom sheet form for creating or editing menu items
 ///
@@ -40,6 +45,8 @@ class _MenuItemFormState extends State<MenuItemForm> {
   late TextEditingController _priceController;
   late TextEditingController _categoryController;
   late bool _available;
+  File? _selectedImage;
+  String? _uploadedImageUrl;
 
   // Common categories
   final List<String> _commonCategories = [
@@ -67,6 +74,21 @@ class _MenuItemFormState extends State<MenuItemForm> {
     );
     _categoryController = TextEditingController(text: item?.category ?? '');
     _available = item?.available ?? true;
+    _uploadedImageUrl = item?.image;
+  }
+
+  void _onImageSelected(File image) {
+    setState(() {
+      _selectedImage = image;
+      _uploadedImageUrl = null; // Clear existing URL when new image selected
+    });
+  }
+
+  void _removeImage() {
+    setState(() {
+      _selectedImage = null;
+      _uploadedImageUrl = null;
+    });
   }
 
   @override
@@ -90,9 +112,24 @@ class _MenuItemFormState extends State<MenuItemForm> {
     final appState = context.read<AppState>();
     final isTC = appState.isTraditionalChinese;
     final menuService = context.read<MenuService>();
+    final imageService = context.read<ImageService>();
 
     try {
       final price = double.tryParse(_priceController.text);
+      String? imageUrl = _uploadedImageUrl;
+
+      // Upload image if one was selected
+      if (_selectedImage != null) {
+        imageUrl = await imageService.uploadImage(
+          imageFile: _selectedImage!,
+          folder: 'Menu/${widget.restaurantId}',
+          compress: true,
+        );
+
+        if (imageUrl == null) {
+          throw Exception(isTC ? '圖片上傳失敗' : 'Image upload failed');
+        }
+      }
 
       if (widget.menuItem == null) {
         // Create new menu item
@@ -103,6 +140,7 @@ class _MenuItemFormState extends State<MenuItemForm> {
           descriptionTc: _descriptionTcController.text.trim(),
           price: price,
           category: _categoryController.text.trim(),
+          image: imageUrl,
           available: _available,
         );
 
@@ -126,6 +164,7 @@ class _MenuItemFormState extends State<MenuItemForm> {
           descriptionTc: _descriptionTcController.text.trim(),
           price: price,
           category: _categoryController.text.trim(),
+          image: imageUrl,
           available: _available,
         );
 
@@ -341,6 +380,35 @@ class _MenuItemFormState extends State<MenuItemForm> {
                         },
                       ),
 
+                      const SizedBox(height: 16),
+
+                      // Image upload section
+                      Text(
+                        isTC ? '圖片（選填）' : 'Image (Optional)',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      if (_selectedImage != null || _uploadedImageUrl != null) ...[
+                        WideImagePreview(
+                          image: _selectedImage ?? _uploadedImageUrl!,
+                          aspectRatio: 16 / 9,
+                          showRemoveButton: true,
+                          onRemove: _removeImage,
+                        ),
+                        const SizedBox(height: 8),
+                      ] else ...[
+                        ImagePickerButton(
+                          onImageSelected: _onImageSelected,
+                          label: isTC ? '選擇圖片' : 'Select Image',
+                          icon: Icons.add_photo_alternate,
+                          showCropOption: true,
+                          isTraditionalChinese: isTC,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+
+                      // Upload progress indicator
+                      UploadProgressWithError(isTraditionalChinese: isTC),
                       const SizedBox(height: 16),
 
                       // Availability toggle

@@ -1012,11 +1012,13 @@ class _ReviewsPage extends StatelessWidget {
     await showReviewForm(
       context: context,
       restaurantId: restaurantId,
-      onSubmit: (rating, comment) async {
+      isTraditionalChinese: isTraditionalChinese,
+      onSubmit: (rating, comment, imageUrl) async {
         final request = CreateReviewRequest(
           restaurantId: restaurantId,
           rating: rating,
           comment: comment,
+          imageUrl: imageUrl,
           dateTime: DateTime.now().toIso8601String(),
         );
 

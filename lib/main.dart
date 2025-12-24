@@ -11,6 +11,7 @@ import 'services/restaurant_service.dart';
 import 'services/user_service.dart';
 import 'services/review_service.dart';
 import 'services/menu_service.dart';
+import 'services/image_service.dart';
 import 'pages/home.dart';
 import 'pages/search.dart';
 import 'pages/account.dart';
@@ -225,6 +226,15 @@ class PourRiceApp extends StatelessWidget {
           ),
           update: (context, authService, previous) =>
               previous ?? MenuService(authService),
+        ),
+
+        // ImageService - needs AuthService for tokens (image upload)
+        ChangeNotifierProxyProvider<AuthService, ImageService>(
+          create: (context) => ImageService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? ImageService(authService),
         ),
       ],
       child: const AppRoot(),

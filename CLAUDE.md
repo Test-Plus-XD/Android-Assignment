@@ -1948,6 +1948,138 @@ Complete implementation of restaurant menu management with full CRUD operations.
 
 ---
 
-**Last Updated**: 2025-12-24
+#### Priority 3: Image Upload System
+
+Complete implementation of image upload functionality with Android camera/gallery integration and Firebase Storage.
+
+**Models Created:**
+- `ImageMetadata` - Full image metadata model with size, content type, timestamps, download URL
+
+**Service Implemented:**
+- `lib/services/image_service.dart` (400+ lines)
+  - `pickImage(source)` - Pick image from camera or gallery with permission handling
+  - `cropImage(imageFile)` - Crop images with Android UI
+  - `compressImage(imageFile, quality)` - Compress images before upload
+  - `uploadImage(imageFile, folder)` - Upload to Firebase Storage via API
+  - `deleteImage(filePath)` - Delete images from Firebase Storage
+  - `getImageMetadata(filePath)` - Fetch image metadata
+  - `showImageSourceDialog(context)` - Bottom sheet for camera/gallery selection
+  - Full error handling and loading states
+  - Authentication integration with Firebase tokens
+  - Permission handling for camera and storage (Android 13+ support)
+
+**Widgets Created:**
+- `lib/widgets/images/image_picker_button.dart`
+  - `ImagePickerButton` - Full button with camera/gallery selection
+  - `ImagePickerIconButton` - Compact icon button version
+  - Bottom sheet UI for source selection
+  - Optional crop after selection
+  - Bilingual support (EN/TC)
+- `lib/widgets/images/image_preview.dart`
+  - `ImagePreview` - Generic image preview (File or URL)
+  - `SquareImagePreview` - Square preview for profiles/thumbnails
+  - `CircularImagePreview` - Circular preview for avatars
+  - `WideImagePreview` - Wide preview for banners (16:9 aspect ratio)
+  - `ImageGridPreview` - Grid layout for multiple images
+  - Remove button support
+  - Loading and error placeholders
+- `lib/widgets/images/upload_progress_indicator.dart`
+  - `UploadProgressIndicator` - Linear progress with percentage
+  - `CircularUploadProgress` - Circular progress indicator
+  - `InlineUploadProgress` - Compact inline progress
+  - `UploadOverlay` - Full-screen overlay during upload
+  - `UploadProgressWithError` - Progress with error display
+
+**Integration:**
+- Updated `lib/widgets/reviews/review_form.dart`:
+  - Added image upload capability to review form
+  - Image picker button with crop option
+  - Image preview with remove button
+  - Upload progress indicator
+  - Updated `CreateReviewRequest` to include `imageUrl`
+  - Bilingual support throughout
+- Updated `lib/widgets/menu/menu_item_form.dart`:
+  - Added image upload capability to menu item form
+  - Wide image preview for menu items (16:9 aspect ratio)
+  - Upload to `Menu/{restaurantId}` folder
+  - Updated `CreateMenuItemRequest` and `UpdateMenuItemRequest` to include `image`
+  - Bilingual support throughout
+- Updated `lib/pages/restaurant_detail.dart`:
+  - Modified review submission to handle image URL
+  - Pass language preference to review form
+- Updated `lib/widgets/reviews/review_list.dart`:
+  - Modified review edit to handle image URL
+  - Pass language preference to review form
+- Registered `ImageService` as provider in `lib/main.dart`
+- Updated `pubspec.yaml` with image upload dependencies
+- Updated `android/app/src/main/AndroidManifest.xml` with camera and storage permissions
+
+**Dependencies Added:**
+- `image_picker: ^1.0.7` - Camera/gallery access
+- `image_cropper: ^5.0.1` - Image cropping with Android UI
+- `flutter_image_compress: ^2.1.0` - Image compression
+- `path: ^1.9.0` - File path manipulation
+- `http_parser: ^4.0.2` - Multipart response parsing
+- `mime: ^1.0.5` - MIME type detection
+
+**Android Permissions Added:**
+- `CAMERA` - Camera access for taking photos
+- `READ_EXTERNAL_STORAGE` - Read images from storage (Android 12 and below)
+- `WRITE_EXTERNAL_STORAGE` - Write images to storage (Android 12 and below)
+- `READ_MEDIA_IMAGES` - Read images on Android 13+
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app`
+- Endpoints:
+  - `POST /API/Images/upload?folder=X` - Upload image (multipart/form-data)
+  - `DELETE /API/Images/delete` - Delete image by filePath
+  - `GET /API/Images/metadata?filePath=X` - Get image metadata
+- All endpoints require `x-api-passcode: PourRice` header
+- Auth endpoints require `Authorization: Bearer <token>` header
+- Follows API.md specification exactly
+
+**Folder Organization:**
+- `Menu/{restaurantId}` - Menu item images
+- `Restaurants/{restaurantId}` - Restaurant images
+- `Profiles` - User profile pictures
+- `Reviews` - Review images
+- `Chat` - Chat attachments
+- `Banners` - Promotional content
+- `General` - Default folder
+
+**Features:**
+- Camera and gallery access with runtime permission requests
+- Image cropping with Android native UI
+- Automatic image compression before upload
+- Upload progress tracking with percentage
+- Multiple image preview styles (square, circular, wide, grid)
+- Remove image functionality
+- Error handling with user-friendly messages
+- Loading states for all async operations
+- Bilingual support (EN/TC) throughout
+- Material Design 3 components
+- Android 13+ permission support
+
+**Files Modified:**
+- `pubspec.yaml` - Added image upload dependencies
+- `lib/models.dart` - Added ImageMetadata model
+- `lib/main.dart` - Added ImageService provider
+- `lib/widgets/reviews/review_form.dart` - Integrated image upload
+- `lib/widgets/menu/menu_item_form.dart` - Integrated image upload
+- `lib/pages/restaurant_detail.dart` - Updated review submission
+- `lib/widgets/reviews/review_list.dart` - Updated review edit
+- `android/app/src/main/AndroidManifest.xml` - Added permissions
+
+**Files Created:**
+- `lib/services/image_service.dart`
+- `lib/widgets/images/image_picker_button.dart`
+- `lib/widgets/images/image_preview.dart`
+- `lib/widgets/images/upload_progress_indicator.dart`
+
+**Total Lines Added:** ~1,200 lines of production code
+
+---
+
+**Last Updated**: 2025-12-25
 **Maintained By**: Development Team & Claude AI Assistant
 **For**: AI Assistants (Claude, GPT, etc.)

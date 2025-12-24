@@ -58,6 +58,14 @@ dependencies:
   url_launcher: ^6.3.1                  # Open URLs, phone numbers, maps
   cached_network_image: ^3.4.1          # Image caching for better performance
 
+  # Image Upload
+  image_picker: ^1.0.7                  # Android camera/gallery access
+  image_cropper: ^5.0.1                 # Image cropping
+  flutter_image_compress: ^2.1.0        # Compress before upload
+  path: ^1.9.0                          # File path manipulation
+  http_parser: ^4.0.2                   # Parse multipart responses
+  mime: ^1.0.5                          # MIME type detection
+
   # Tier 2: Polish and user experience enhancements
   # shimmer: ^3.0.0                     # Loading skeleton animations
   # connectivity_plus: ^6.1.1           # Network status detection
