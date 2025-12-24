@@ -1862,6 +1862,92 @@ Complete implementation of restaurant review functionality with full CRUD operat
 
 ---
 
+#### Priority 2: Menu System
+
+Complete implementation of restaurant menu management with full CRUD operations.
+
+**Models Created:**
+- `MenuItem` - Full menu item data model with bilingual names, descriptions, price, category, availability, image, timestamps
+- `Booking` - Booking model for table reservations (supporting future booking system)
+- `CreateMenuItemRequest` - Request model for creating menu items
+- `UpdateMenuItemRequest` - Request model for updating menu items
+
+**Service Implemented:**
+- `lib/services/menu_service.dart` (320 lines)
+  - `getMenuItems(restaurantId)` - Fetch all menu items for a restaurant
+  - `getMenuItem(restaurantId, menuItemId)` - Fetch single menu item
+  - `createMenuItem(restaurantId, request)` - Create new menu item (auth required)
+  - `updateMenuItem(restaurantId, menuItemId, request)` - Update menu item (auth required)
+  - `deleteMenuItem(restaurantId, menuItemId)` - Delete menu item (auth required)
+  - `getMenuItemsByCategory()` - Group menu items by category
+  - Full error handling and loading states
+  - Authentication integration with Firebase tokens
+
+**Widgets Created:**
+- `lib/widgets/menu/menu_item_card.dart`
+  - Displays menu item image, name, description, price, availability
+  - Shows "Sold Out" badge for unavailable items
+  - Edit/delete buttons for restaurant owners
+  - Responsive card layout with image thumbnail
+- `lib/widgets/menu/menu_list.dart`
+  - Groups menu items by category with headers
+  - Pull-to-refresh support
+  - Empty state with helpful message
+  - Loading and error states with retry
+  - Optional edit/delete actions for owners
+- `lib/widgets/menu/menu_item_form.dart`
+  - Create/edit menu item form in bottom sheet
+  - Bilingual input fields (English/Traditional Chinese)
+  - Price input with validation
+  - Category autocomplete with common categories
+  - Availability toggle
+  - Form validation and loading states
+
+**Integration:**
+- Updated `lib/pages/restaurant_detail.dart`:
+  - Added Menu section with preview (first 3 items)
+  - Created `_MenuPage` for full menu view
+  - "View All" button to navigate to full menu
+  - Owner-only "Add Item" floating action button
+  - Edit/delete confirmation dialogs
+  - Bilingual support (EN/TC) throughout
+- Registered `MenuService` as provider in `lib/main.dart`
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app`
+- Endpoints: `/API/Restaurants/:restaurantId/menu`
+- All endpoints require `x-api-passcode: PourRice` header
+- Auth endpoints require `Authorization: Bearer <token>` header
+- Menu items stored as sub-collections in Firestore
+- Follows API.md specification exactly
+
+**Features:**
+- Bilingual menu item names and descriptions (EN/TC)
+- Price display with HK$ currency format
+- Category organization with autocomplete
+- Availability toggle (available/sold out)
+- Menu items grouped by category
+- Real-time updates after create/edit/delete
+- Owner-only edit/delete permissions (TODO: implement user type check)
+- Responsive card layout with images
+- Material Design 3 components
+- Smooth animations and transitions
+
+**Files Modified:**
+- `lib/models.dart` - Added MenuItem, Booking, CreateMenuItemRequest, UpdateMenuItemRequest models
+- `lib/main.dart` - Added MenuService provider
+- `lib/pages/restaurant_detail.dart` - Integrated menu section and _MenuPage
+
+**Files Created:**
+- `lib/services/menu_service.dart`
+- `lib/widgets/menu/menu_item_card.dart`
+- `lib/widgets/menu/menu_list.dart`
+- `lib/widgets/menu/menu_item_form.dart`
+
+**Total Lines Added:** ~900 lines of production code
+
+---
+
 **Last Updated**: 2025-12-24
 **Maintained By**: Development Team & Claude AI Assistant
 **For**: AI Assistants (Claude, GPT, etc.)

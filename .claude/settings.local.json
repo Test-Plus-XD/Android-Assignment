@@ -5,7 +5,8 @@
       "Bash(Get-ChildItem -Path . -Filter \"*.meta\" -Recurse -File)",
       "Bash(Remove-Item -Force)",
       "Bash(find:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(flutter analyze:*)"
     ]
   }
 }

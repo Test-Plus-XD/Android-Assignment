@@ -11,7 +11,6 @@ import 'auth_service.dart';
 /// All endpoints require x-api-passcode header.
 /// Create/Update/Delete operations require Firebase authentication token.
 class ReviewService extends ChangeNotifier {
-  final String _apiUrl = AppConfig.getEndpoint('API/Reviews');
   final AuthService _authService;
 
   // State management
@@ -44,7 +43,7 @@ class ReviewService extends ChangeNotifier {
   Map<String, String> _getHeaders() {
     return {
       'Content-Type': 'application/json',
-      'X-API-Passcode': AppConfig.apiPasscode,
+      'x-api-passcode': AppConfig.apiPasscode,
     };
   }
 
@@ -67,10 +66,13 @@ class ReviewService extends ChangeNotifier {
     _setError(null);
 
     try {
-      final uri = Uri.parse(_apiUrl).replace(queryParameters: {
-        if (restaurantId != null) 'restaurantId': restaurantId,
-        if (userId != null) 'userId': userId,
-      });
+      final queryParams = <String, String>{};
+      if (restaurantId != null) queryParams['restaurantId'] = restaurantId;
+      if (userId != null) queryParams['userId'] = userId;
+
+      final uri = Uri.parse(AppConfig.getEndpoint('Reviews')).replace(
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
 
       final response = await http.get(
         uri,
@@ -106,7 +108,7 @@ class ReviewService extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('$_apiUrl/${Uri.encodeComponent(reviewId)}'),
+        Uri.parse(AppConfig.getEndpoint('Reviews/$reviewId')),
         headers: _getHeaders(),
       );
 
@@ -140,7 +142,7 @@ class ReviewService extends ChangeNotifier {
       }
 
       final response = await http.post(
-        Uri.parse(_apiUrl),
+        Uri.parse(AppConfig.getEndpoint('Reviews')),
         headers: await _getAuthHeaders(),
         body: json.encode(request.toJson()),
       );
@@ -179,7 +181,7 @@ class ReviewService extends ChangeNotifier {
       }
 
       final response = await http.put(
-        Uri.parse('$_apiUrl/${Uri.encodeComponent(reviewId)}'),
+        Uri.parse(AppConfig.getEndpoint('Reviews/$reviewId')),
         headers: await _getAuthHeaders(),
         body: json.encode(request.toJson()),
       );
@@ -223,7 +225,7 @@ class ReviewService extends ChangeNotifier {
       }
 
       final response = await http.delete(
-        Uri.parse('$_apiUrl/${Uri.encodeComponent(reviewId)}'),
+        Uri.parse(AppConfig.getEndpoint('Reviews/$reviewId')),
         headers: await _getAuthHeaders(),
       );
 
@@ -253,7 +255,7 @@ class ReviewService extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('$_apiUrl/Restaurant/${Uri.encodeComponent(restaurantId)}/stats'),
+        Uri.parse(AppConfig.getEndpoint('Reviews/Restaurant/$restaurantId/stats')),
         headers: _getHeaders(),
       );
 

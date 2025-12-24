@@ -46,10 +46,15 @@ class AuthService with ChangeNotifier {
   String? get uid => _currentUser?.uid;
 
   // Get ID token for API authentication
-  Future<String?> get idToken async {
+  Future<String?> get idToken => getIdToken();
+
+  /// Get ID token for API authentication
+  /// 
+  /// [forceRefresh] - If true, forces a token refresh from Firebase
+  Future<String?> getIdToken({bool forceRefresh = false}) async {
     if (_currentUser == null) return null;
     try {
-      return await _currentUser!.getIdToken();
+      return await _currentUser!.getIdToken(forceRefresh);
     } catch (error) {
       if (kDebugMode) print('AuthService: Error getting ID token - $error');
       return null;

@@ -10,6 +10,7 @@ import 'services/notification_service.dart';
 import 'services/restaurant_service.dart';
 import 'services/user_service.dart';
 import 'services/review_service.dart';
+import 'services/menu_service.dart';
 import 'pages/home.dart';
 import 'pages/search.dart';
 import 'pages/account.dart';
@@ -46,6 +47,45 @@ import 'config.dart';
 // Keys for persisted preferences
 const String prefKeyIsDark = 'pourrice_is_dark';
 const String prefKeyIsTc = 'pourrice_is_tc';
+
+/// Application State
+/// 
+/// Manages global UI preferences like theme and language.
+class AppState with ChangeNotifier {
+  bool _isDarkMode = false;
+  bool _isTraditionalChinese = false;
+  bool _isLoaded = false;
+
+  bool get isDarkMode => _isDarkMode;
+  bool get isTraditionalChinese => _isTraditionalChinese;
+  bool get isLoaded => _isLoaded;
+
+  AppState() {
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDarkMode = prefs.getBool(prefKeyIsDark) ?? false;
+    _isTraditionalChinese = prefs.getBool(prefKeyIsTc) ?? false;
+    _isLoaded = true;
+    notifyListeners();
+  }
+
+  Future<void> toggleTheme(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(prefKeyIsDark, value);
+    _isDarkMode = value;
+    notifyListeners();
+  }
+
+  Future<void> toggleLanguage(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(prefKeyIsTc, value);
+    _isTraditionalChinese = value;
+    notifyListeners();
+  }
+}
 
 /// Main Entry Point
 /// Initialisation order matters:
@@ -126,6 +166,11 @@ class PourRiceApp extends StatelessWidget {
     /// This is the same pattern as your Angular services with inject()
     return MultiProvider(
       providers: [
+        // AppState - handles global UI preferences
+        ChangeNotifierProvider(
+          create: (_) => AppState(),
+        ),
+
         // NotificationService - already initialised in main()
         ChangeNotifierProvider.value(
           value: notificationService,
@@ -172,6 +217,15 @@ class PourRiceApp extends StatelessWidget {
           update: (context, authService, previous) =>
               previous ?? ReviewService(authService),
         ),
+
+        // MenuService - needs AuthService for tokens
+        ChangeNotifierProxyProvider<AuthService, MenuService>(
+          create: (context) => MenuService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? MenuService(authService),
+        ),
       ],
       child: const AppRoot(),
     );
@@ -190,49 +244,8 @@ class AppRoot extends StatefulWidget {
 }
 
 class _AppRootState extends State<AppRoot> {
-  // Theme and language state (same as before)
-  bool isDarkMode = false;
-  bool isTraditionalChinese = false;
-  bool prefsLoaded = false;
   bool _isSkipped = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadPreferences();
-  }
-
-  /// Load User Preferences
-  /// 
-  /// Loads theme and language preferences from SharedPreferences.
-  /// This is like localStorage in your Angular app.
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isDarkMode = prefs.getBool(prefKeyIsDark) ?? false;
-      isTraditionalChinese = prefs.getBool(prefKeyIsTc) ?? false;
-      prefsLoaded = true;
-    });
-  }
-
-  /// Toggle Theme
-  /// 
-  /// Persists theme preference and updates UI
-  Future<void> _toggleTheme(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(prefKeyIsDark, value);
-    setState(() => isDarkMode = value);
-  }
-
-  /// Toggle Language
-  /// 
-  /// Persists language preference and updates UI
-  Future<void> _toggleLanguage(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(prefKeyIsTc, value);
-    setState(() => isTraditionalChinese = value);
-  }
-  
   void _skipLogin() {
     setState(() {
       _isSkipped = true;
@@ -241,8 +254,10 @@ class _AppRootState extends State<AppRoot> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+
     // Wait for preferences to load
-    if (!prefsLoaded) {
+    if (!appState.isLoaded) {
       return const MaterialApp(
         home: Scaffold(
           body: Center(child: CircularProgressIndicator()),
@@ -373,7 +388,7 @@ class _AppRootState extends State<AppRoot> {
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,
-      themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: appState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       
       // Consumer listens to AuthService and rebuilds on changes
       home: Consumer<AuthService>(
@@ -388,19 +403,19 @@ class _AppRootState extends State<AppRoot> {
           // User is logged in -> show main app
           if (authService.isLoggedIn || _isSkipped) {
             return MainShell(
-              isDarkMode: isDarkMode,
-              isTraditionalChinese: isTraditionalChinese,
-              onThemeChanged: _toggleTheme,
-              onLanguageChanged: _toggleLanguage,
+              isDarkMode: appState.isDarkMode,
+              isTraditionalChinese: appState.isTraditionalChinese,
+              onThemeChanged: appState.toggleTheme,
+              onLanguageChanged: appState.toggleLanguage,
             );
           }
           
           // User not logged in -> show login page
           return LoginPage(
-            isTraditionalChinese: isTraditionalChinese,
-            isDarkMode: isDarkMode,
-            onThemeChanged: () => _toggleTheme(!isDarkMode),
-            onLanguageChanged: () => _toggleLanguage(!isTraditionalChinese),
+            isTraditionalChinese: appState.isTraditionalChinese,
+            isDarkMode: appState.isDarkMode,
+            onThemeChanged: () => appState.toggleTheme(!appState.isDarkMode),
+            onLanguageChanged: () => appState.toggleLanguage(!appState.isTraditionalChinese),
             onSkip: _skipLogin,
           );
         },

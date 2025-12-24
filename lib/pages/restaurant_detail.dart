@@ -9,10 +9,14 @@ import '../services/booking_service.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
 import '../services/review_service.dart';
+import '../services/menu_service.dart';
 import '../models.dart';
 import '../widgets/reviews/review_stats.dart';
 import '../widgets/reviews/review_list.dart';
 import '../widgets/reviews/review_form.dart';
+import '../widgets/menu/menu_item_card.dart';
+import '../widgets/menu/menu_list.dart';
+import '../widgets/menu/menu_item_form.dart';
 
 /// Restaurant Detail Page - Native Android Integration
 /// 
@@ -844,6 +848,59 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       ),
                     ),
                   ],
+                  /// Menu Section
+                  ///
+                  /// Displays restaurant menu items grouped by category.
+                  const SizedBox(height: 24),
+                  Consumer<MenuService>(
+                    builder: (context, menuService, child) {
+                      return FutureBuilder<List<MenuItem>>(
+                        future: menuService.getMenuItems(widget.restaurant.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      widget.isTraditionalChinese ? '菜單' : 'Menu',
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        // Navigate to full menu page
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (context) => _MenuPage(
+                                              restaurantId: widget.restaurant.id,
+                                              restaurantName: name,
+                                              isTraditionalChinese: widget.isTraditionalChinese,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Text(widget.isTraditionalChinese ? '查看全部' : 'View All'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                // Show first 3 menu items as preview
+                                ...snapshot.data!.take(3).map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: MenuItemCard(item: item),
+                                )),
+                              ],
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      );
+                    },
+                  ),
                   /// Reviews Section
                   ///
                   /// Displays review statistics and a list of user reviews.
@@ -1030,6 +1087,126 @@ class _ReviewsPage extends StatelessWidget {
           isTraditionalChinese ? '撰寫評價' : 'Write Review',
         ),
       ),
+    );
+  }
+}
+
+/// Menu Page
+///
+/// Full-screen page for viewing restaurant menu.
+class _MenuPage extends StatelessWidget {
+  final String restaurantId;
+  final String restaurantName;
+  final bool isTraditionalChinese;
+
+  const _MenuPage({
+    required this.restaurantId,
+    required this.restaurantName,
+    required this.isTraditionalChinese,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final authService = context.watch<AuthService>();
+    final isOwner = false; // TODO: Implement owner check based on user type
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          isTraditionalChinese ? '菜單' : 'Menu',
+        ),
+      ),
+      body: MenuList(
+        restaurantId: restaurantId,
+        showActions: isOwner,
+        onEdit: isOwner
+            ? (item) {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => MenuItemForm(
+                    restaurantId: restaurantId,
+                    menuItem: item,
+                  ),
+                );
+              }
+            : null,
+        onDelete: isOwner
+            ? (item) async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text(
+                      isTraditionalChinese ? '確認刪除' : 'Confirm Delete',
+                    ),
+                    content: Text(
+                      isTraditionalChinese
+                          ? '確定要刪除 "${item.getDisplayName(isTraditionalChinese)}" 嗎？'
+                          : 'Are you sure you want to delete "${item.getDisplayName(isTraditionalChinese)}"?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(isTraditionalChinese ? '取消' : 'Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(isTraditionalChinese ? '刪除' : 'Delete'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed == true && context.mounted) {
+                  try {
+                    final menuService = context.read<MenuService>();
+                    await menuService.deleteMenuItem(restaurantId, item.id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isTraditionalChinese ? '已刪除菜單項目' : 'Menu item deleted',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(e.toString()),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                }
+              }
+            : null,
+      ),
+      floatingActionButton: isOwner
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => MenuItemForm(
+                    restaurantId: restaurantId,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: Text(
+                isTraditionalChinese ? '新增項目' : 'Add Item',
+              ),
+            )
+          : null,
     );
   }
 }
