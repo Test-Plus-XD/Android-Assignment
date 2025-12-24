@@ -53,6 +53,10 @@ class AppConfig {
   // Placeholder URL
   static const String placeholderUrl = 'https://firebasestorage.googleapis.com/v0/b/cross-platform-assignmen-b97cc.firebasestorage.app/o/Placeholder.png?alt=media&token=2ceff686-bda6-43c8-ab7d-5551117569f1';
 
+  /// Socket.IO Server URL (Railway)
+  /// Used for real-time chat functionality
+  static const String socketIOUrl = 'https://railway-socket-production.up.railway.app';
+
   /// Algolia Configuration
   /// 
   /// These settings come from your Algolia dashboard.

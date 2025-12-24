@@ -2080,6 +2080,179 @@ Complete implementation of image upload functionality with Android camera/galler
 
 ---
 
+#### Priority 4: Real-time Chat System
+
+Complete implementation of real-time chat functionality with Socket.IO integration and REST API message persistence.
+
+**Models Created:**
+- `ChatRoom` - Full chat room model with participants, room name, type (direct/group), last message, timestamps
+- `ChatMessage` - Message model with sender info, content, timestamp, edited/deleted flags, optional image
+- `TypingIndicator` - Typing indicator model for real-time typing status
+
+**Service Implemented:**
+- `lib/services/chat_service.dart` (~600 lines)
+  - **Socket.IO Integration**:
+    - `connect(userId)` - Connect to Socket.IO server on Railway
+    - `disconnect()` - Disconnect from server
+    - Real-time event listeners (message_received, typing, user_online/offline)
+  - **Room Operations**:
+    - `getChatRooms()` - Fetch all chat rooms for current user
+    - `getChatRoom(roomId)` - Fetch single room details
+    - `createChatRoom(participants, roomName, type)` - Create new room
+    - `joinRoom(roomId)` - Join room via Socket.IO
+    - `leaveRoom(roomId)` - Leave room via Socket.IO
+  - **Message Operations**:
+    - `getMessages(roomId, limit)` - Fetch message history
+    - `sendMessage(roomId, message, imageUrl)` - Send via Socket.IO + save to API
+    - `editMessage(roomId, messageId, newMessage)` - Edit own messages
+    - `deleteMessage(roomId, messageId)` - Delete own messages
+    - `sendTypingIndicator(roomId, isTyping)` - Real-time typing status
+  - **Real-time Streams**:
+    - `messageStream` - Stream for incoming messages
+    - `typingStream` - Stream for typing indicators
+    - `connectionStatusStream` - Stream for connection status
+  - Full error handling and loading states
+  - Message caching for performance
+  - Authentication integration with Firebase tokens
+
+**Widgets Created:**
+- `lib/widgets/chat/chat_bubble.dart`
+  - Displays single message with user avatar, content, timestamp
+  - Shows image attachments with cached loading
+  - Edit/delete menu for own messages (long press)
+  - Edited indicator for modified messages
+  - Deleted message placeholder
+  - Time ago formatting with timeago package
+  - Bilingual support (EN/TC)
+
+- `lib/widgets/chat/chat_input.dart`
+  - Message text input with multi-line support
+  - Send button with loading state
+  - Optional image attachment picker
+  - Typing indicator emission
+  - Image preview with remove button
+  - Image upload before send
+  - Character limit support (optional)
+
+- `lib/widgets/chat/typing_indicator.dart`
+  - Animated typing dots
+  - User avatar and name
+  - Smooth fade animation
+  - Bilingual "typing..." text
+
+- `lib/widgets/chat/chat_room_list.dart`
+  - List of chat rooms with pull-to-refresh
+  - Room avatar (user initial or group icon)
+  - Room name and participant count
+  - Last message preview
+  - Time ago formatting
+  - Empty state with helpful message
+  - Loading and error states
+
+**Pages Created:**
+- `lib/pages/chat_page.dart`
+  - Full chat interface with message list
+  - Real-time message updates via Socket.IO
+  - Auto-scroll to bottom on new messages
+  - Typing indicators from other users
+  - Edit/delete message dialogs
+  - Join/leave room on mount/unmount
+  - Image attachment support
+  - Connection status in app bar
+  - Empty state for no messages
+
+- `lib/pages/chat_rooms_page.dart`
+  - List of all chat rooms for current user
+  - Connection status indicator
+  - Auto-connect to Socket.IO on mount
+  - Navigation to individual chats
+  - Login prompt for unauthenticated users
+  - Pull-to-refresh support
+
+**Integration:**
+- Updated `lib/pages/restaurant_detail.dart`:
+  - Added chat button in AppBar
+  - Implemented `_startChatWithRestaurant()` method
+  - Creates/opens direct chat with restaurant
+  - Checks authentication before opening chat
+  - Auto-connects to Socket.IO if needed
+  - Navigates to ChatPage on success
+  - Bilingual support throughout
+
+- Updated `lib/config.dart`:
+  - Added `socketIOUrl` constant for Railway server
+  - Value: `https://railway-socket-production.up.railway.app`
+
+- Registered `ChatService` as provider in `lib/main.dart`:
+  - Added as `ChangeNotifierProxyProvider<AuthService, ChatService>`
+  - Depends on AuthService for authentication
+
+- Added `socket_io_client: ^3.1.3` dependency to `pubspec.yaml`
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app`
+- Socket.IO URL: `https://railway-socket-production.up.railway.app`
+- **REST Endpoints**:
+  - `GET /API/Chat/Rooms` - List chat rooms (requires auth)
+  - `GET /API/Chat/Rooms/:roomId` - Get room details (requires auth)
+  - `POST /API/Chat/Rooms` - Create chat room (requires auth)
+  - `GET /API/Chat/Rooms/:roomId/Messages?limit=50` - Get messages (requires auth)
+  - `POST /API/Chat/Rooms/:roomId/Messages` - Save message (requires auth)
+  - `PUT /API/Chat/Rooms/:roomId/Messages/:messageId` - Edit message (requires auth)
+  - `DELETE /API/Chat/Rooms/:roomId/Messages/:messageId` - Delete message (requires auth)
+- **Socket.IO Events**:
+  - `connection` - Connect to server
+  - `join_room` - Join a chat room
+  - `send_message` - Send message in real-time
+  - `message_received` - Receive message in real-time
+  - `typing` - Typing indicator
+  - `user_online` / `user_offline` - Online status
+- All endpoints require `x-api-passcode: PourRice` header
+- Auth endpoints require `Authorization: Bearer <token>` header
+- Follows API.md specification exactly
+
+**Features:**
+- Real-time messaging with Socket.IO WebSocket connection
+- Message persistence via REST API
+- Direct and group chat support
+- Typing indicators with auto-timeout
+- Online/offline status tracking
+- Message editing with edited indicator
+- Message deletion with confirmation
+- Image attachments in messages
+- Message caching for performance
+- Auto-scroll to bottom on new messages
+- Time ago formatting for messages and rooms
+- Connection status indicator
+- Pull-to-refresh for room list
+- Login/authentication integration
+- Error handling with user-friendly messages
+- Loading states for all async operations
+- Empty states with helpful messages
+- Bilingual support (EN/TC) throughout
+- Material Design 3 components
+- Smooth animations and transitions
+
+**Files Modified:**
+- `pubspec.yaml` - Added socket_io_client dependency
+- `lib/models.dart` - Added ChatRoom, ChatMessage, TypingIndicator models
+- `lib/config.dart` - Added socketIOUrl constant
+- `lib/main.dart` - Added ChatService provider
+- `lib/pages/restaurant_detail.dart` - Integrated chat button and functionality
+
+**Files Created:**
+- `lib/services/chat_service.dart`
+- `lib/widgets/chat/chat_bubble.dart`
+- `lib/widgets/chat/chat_input.dart`
+- `lib/widgets/chat/typing_indicator.dart`
+- `lib/widgets/chat/chat_room_list.dart`
+- `lib/pages/chat_page.dart`
+- `lib/pages/chat_rooms_page.dart`
+
+**Total Lines Added:** ~1,500 lines of production code
+
+---
+
 **Last Updated**: 2025-12-25
 **Maintained By**: Development Team & Claude AI Assistant
 **For**: AI Assistants (Claude, GPT, etc.)

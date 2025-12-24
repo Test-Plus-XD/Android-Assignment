@@ -10,7 +10,9 @@ import '../services/notification_service.dart';
 import '../services/auth_service.dart';
 import '../services/review_service.dart';
 import '../services/menu_service.dart';
+import '../services/chat_service.dart';
 import '../models.dart';
+import 'chat_page.dart';
 import '../widgets/reviews/review_stats.dart';
 import '../widgets/reviews/review_list.dart';
 import '../widgets/reviews/review_form.dart';
@@ -191,6 +193,69 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開地圖' : 'Could not open maps')),
+      );
+    }
+  }
+
+  /// Start a chat with the restaurant
+  ///
+  /// Creates or opens a direct chat room with the restaurant
+  Future<void> _startChatWithRestaurant() async {
+    final authService = context.read<AuthService>();
+    final chatService = context.read<ChatService>();
+
+    // Check if user is logged in
+    if (!authService.isLoggedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese ? '請先登入以使用聊天功能' : 'Please log in to use chat',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Connect to socket if not connected
+    if (!chatService.isConnected && authService.currentUser != null) {
+      await chatService.connect(authService.currentUser!.uid);
+    }
+
+    // For now, create a chat room with restaurant ID as participant
+    // In a real app, you would have a restaurant owner user ID
+    final restaurantUserId = 'restaurant_${widget.restaurant.id}';
+    final currentUserId = authService.currentUser!.uid;
+
+    // Try to find existing room or create new one
+    String? roomId;
+    final existingRooms = chatService.rooms.where((room) =>
+        room.type == 'direct' &&
+        room.participants.contains(restaurantUserId) &&
+        room.participants.contains(currentUserId)).toList();
+
+    if (existingRooms.isNotEmpty) {
+      roomId = existingRooms.first.roomId;
+    } else {
+      // Create new room
+      roomId = await chatService.createChatRoom(
+        [currentUserId, restaurantUserId],
+        roomName: widget.isTraditionalChinese
+            ? widget.restaurant.nameTc ?? widget.restaurant.nameEn
+            : widget.restaurant.nameEn ?? widget.restaurant.nameTc,
+      );
+    }
+
+    if (roomId != null && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatPage(
+            roomId: roomId!,
+            isTraditionalChinese: widget.isTraditionalChinese,
+          ),
+        ),
       );
     }
   }
@@ -565,10 +630,16 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     }
 
     return Scaffold(
-      // Custom app bar with share button
+      // Custom app bar with share and chat buttons
       appBar: AppBar(
         title: Text(name),
         actions: [
+          // Chat button
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: widget.isTraditionalChinese ? '聊天' : 'Chat',
+            onPressed: _startChatWithRestaurant,
+          ),
           // Share button in app bar for easy access
           IconButton(
             icon: const Icon(Icons.share),

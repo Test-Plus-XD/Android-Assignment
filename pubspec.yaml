@@ -66,6 +66,9 @@ dependencies:
   http_parser: ^4.0.2                   # Parse multipart responses
   mime: ^1.0.5                          # MIME type detection
 
+  # Real-time Chat
+  socket_io_client: ^3.1.3              # Socket.IO client for real-time messaging
+
   # Tier 2: Polish and user experience enhancements
   # shimmer: ^3.0.0                     # Loading skeleton animations
   # connectivity_plus: ^6.1.1           # Network status detection

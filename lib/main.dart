@@ -12,6 +12,7 @@ import 'services/user_service.dart';
 import 'services/review_service.dart';
 import 'services/menu_service.dart';
 import 'services/image_service.dart';
+import 'services/chat_service.dart';
 import 'pages/home.dart';
 import 'pages/search.dart';
 import 'pages/account.dart';
@@ -235,6 +236,15 @@ class PourRiceApp extends StatelessWidget {
           ),
           update: (context, authService, previous) =>
               previous ?? ImageService(authService),
+        ),
+
+        // ChatService - needs AuthService for tokens (real-time chat)
+        ChangeNotifierProxyProvider<AuthService, ChatService>(
+          create: (context) => ChatService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? ChatService(authService),
         ),
       ],
       child: const AppRoot(),
