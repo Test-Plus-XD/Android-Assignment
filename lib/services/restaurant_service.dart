@@ -68,9 +68,20 @@ class RestaurantService with ChangeNotifier {
     int hitsPerPage = 12,
     bool isInitialSearch = true,
   }) async {
-    _isLoading = true;
+    // Only set loading and notify if not already loading
+    if (!_isLoading) {
+      _isLoading = true;
+    }
+
     // On a new initial search, clear previous results first
-    if (isInitialSearch) clearResults();
+    if (isInitialSearch) {
+      _searchResults = [];
+      _totalHits = 0;
+      _currentPage = 0;
+      _totalPages = 0;
+      _errorMessage = null;
+    }
+    
     notifyListeners();
 
     try {
@@ -79,10 +90,10 @@ class RestaurantService with ChangeNotifier {
         if (query.isNotEmpty) 'query': query,
         if (districtsEn != null && districtsEn.isNotEmpty) 'districts': districtsEn.join(','),
         if (keywordsEn != null && keywordsEn.isNotEmpty) 'keywords': keywordsEn.join(','),
-        //'language': isTraditionalChinese ? 'TC' : 'EN',
         'page': pageToFetch.toString(),
         'hitsPerPage': hitsPerPage.toString(),
       });
+      
       if (kDebugMode) print('RestaurantService: Searching → $uri');
       final response = await http.get(uri, headers: _getHeaders());
 
@@ -91,7 +102,8 @@ class RestaurantService with ChangeNotifier {
         final hits = (data['hits'] as List)
             .map((hit) => Restaurant.fromJson(hit))
             .toList();
-        _searchResults = isInitialSearch ? List<Restaurant>.from(hits) : [..._searchResults, ...hits]; // Create a fresh list instance
+            
+        _searchResults = isInitialSearch ? List<Restaurant>.from(hits) : [..._searchResults, ...hits];
         _totalHits = data['nbHits'] as int;
         _currentPage = data['page'] as int;
         _totalPages = data['nbPages'] as int;
@@ -99,12 +111,9 @@ class RestaurantService with ChangeNotifier {
         final isLastPage = _currentPage >= _totalPages - 1;
         final nextPageKey = isLastPage ? null : _currentPage + 1;
         final hitsPage = HitsPage(hits, _currentPage, nextPageKey);
-        //final hitsPage = HitsPage(_searchResults, _currentPage, nextPageKey);
 
-        //_searchResultsController.add(_searchResults);
-        _searchResultsController.add(List<Restaurant>.from(_searchResults)); // Emit new instance
+        _searchResultsController.add(List<Restaurant>.from(_searchResults));
         _metadataController.add(SearchMetadata(_totalHits));
-        //_pagesController.add(hitsPage);
         _pagesController.add(HitsPage(List<Restaurant>.from(_searchResults), _currentPage, nextPageKey));
 
         _errorMessage = null;
@@ -197,9 +206,7 @@ class RestaurantService with ChangeNotifier {
 
       if (response.statusCode == 201) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final id = json['id'] as String;
-        if (kDebugMode) print('Restaurant created with ID: $id');
-        return id;
+        return json['id'] as String;
       } else {
         throw Exception('Failed to create restaurant: ${response.statusCode}');
       }
@@ -219,11 +226,7 @@ class RestaurantService with ChangeNotifier {
         body: jsonEncode(restaurant.toJson()),
       );
 
-      if (response.statusCode == 204) {
-        if (kDebugMode) print('Restaurant updated: $id');
-      } else if (response.statusCode == 404) {
-        throw Exception('Restaurant not found: $id');
-      } else {
+      if (response.statusCode != 204) {
         throw Exception('Failed to update restaurant: ${response.statusCode}');
       }
     } catch (error) {
@@ -238,11 +241,7 @@ class RestaurantService with ChangeNotifier {
       final url = Uri.parse('$_apiEndpoint/${Uri.encodeComponent(id)}');
       final response = await http.delete(url, headers: _getHeaders(authToken: authToken));
 
-      if (response.statusCode == 204) {
-        if (kDebugMode) print('Restaurant deleted: $id');
-      } else if (response.statusCode == 404) {
-        throw Exception('Restaurant not found: $id');
-      } else {
+      if (response.statusCode != 204) {
         throw Exception('Failed to delete restaurant: ${response.statusCode}');
       }
     } catch (error) {
@@ -251,14 +250,12 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  // ============================================================================
-  // Advanced Search Features
-  // ============================================================================
-
   /// Advanced search with full SearchResponse metadata
   Future<SearchResponse> advancedSearch(AdvancedSearchRequest request) async {
     _isLoading = true;
-    if (request.page == 0) clearResults();
+    if (request.page == 0) {
+      _searchResults = [];
+    }
     notifyListeners();
 
     try {
@@ -288,16 +285,6 @@ class RestaurantService with ChangeNotifier {
         _isLoading = false;
         notifyListeners();
 
-        if (kDebugMode) {
-          print('RestaurantService: Advanced search completed');
-          print('  Results: ${searchResponse.hits.length} hits');
-          print('  Page: ${searchResponse.page}/${searchResponse.nbPages - 1}');
-          print('  Total: ${searchResponse.nbHits} hits');
-          if (searchResponse.processingTimeMS != null) {
-            print('  Processing time: ${searchResponse.processingTimeMS}ms');
-          }
-        }
-
         return searchResponse;
       } else {
         throw Exception('Search failed with status: ${response.statusCode}');
@@ -307,45 +294,6 @@ class RestaurantService with ChangeNotifier {
       _isLoading = false;
       _searchResults = [];
       notifyListeners();
-      if (kDebugMode) print('RestaurantService Error: $e');
-      rethrow;
-    }
-  }
-
-  /// Get facet values for a specific facet (e.g., districts, keywords)
-  /// Facet names: District_EN, District_TC, Keyword_EN, Keyword_TC
-  Future<List<FacetValue>> getFacetValues(
-    String facetName, {
-    String? query,
-  }) async {
-    try {
-      final endpoint = AppConfig.getEndpoint('API/Algolia/Restaurants/facets/$facetName');
-      final uri = Uri.parse(endpoint).replace(
-        queryParameters: {
-          if (query != null && query.isNotEmpty) 'query': query,
-        },
-      );
-
-      if (kDebugMode) print('RestaurantService: Getting facets → $uri');
-      final response = await http.get(uri, headers: _getHeaders());
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final facets = (data['facetHits'] as List?)
-                ?.map((f) => FacetValue.fromJson(f as Map<String, dynamic>))
-                .toList() ??
-            [];
-
-        if (kDebugMode) {
-          print('RestaurantService: Got ${facets.length} facet values for $facetName');
-        }
-
-        return facets;
-      } else {
-        throw Exception('Failed to get facets: ${response.statusCode}');
-      }
-    } catch (error) {
-      if (kDebugMode) print('Error getting facet values: $error');
       rethrow;
     }
   }

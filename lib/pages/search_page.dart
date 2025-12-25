@@ -6,7 +6,7 @@ import '../services/restaurant_service.dart';
 import '../models.dart';
 import '../constants/districts.dart';
 import '../constants/keywords.dart';
-import 'restaurant_detail.dart';
+import 'restaurant_detail_page.dart';
 
 /// Search Page with Infinite Scroll Pagination (Version 5)
 //

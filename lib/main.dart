@@ -15,10 +15,10 @@ import 'services/image_service.dart';
 import 'services/chat_service.dart';
 import 'services/gemini_service.dart';
 import 'services/store_service.dart';
-import 'pages/home.dart';
-import 'pages/search.dart';
-import 'pages/account.dart';
-import 'pages/login.dart';
+import 'pages/home_page.dart';
+import 'pages/search_page.dart';
+import 'pages/account_page.dart';
+import 'pages/login_page.dart';
 import 'widgets/drawer.dart';
 import 'firebase_options.dart';
 import 'config.dart';
@@ -231,14 +231,8 @@ class PourRiceApp extends StatelessWidget {
               previous ?? MenuService(authService),
         ),
 
-        // ImageService - needs AuthService for tokens (image upload)
-        ChangeNotifierProxyProvider<AuthService, ImageService>(
-          create: (context) => ImageService(
-            context.read<AuthService>(),
-          ),
-          update: (context, authService, previous) =>
-              previous ?? ImageService(authService),
-        ),
+        // ImageService - No longer requires AuthService
+        ChangeNotifierProvider(create: (_) => ImageService()),
 
         // ChatService - needs AuthService for tokens (real-time chat)
         ChangeNotifierProxyProvider<AuthService, ChatService>(

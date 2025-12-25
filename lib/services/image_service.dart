@@ -7,52 +7,82 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as path;
-import 'package:mime/mime.dart';
 import 'dart:convert';
 import '../config.dart';
 import '../models.dart';
-import 'auth_service.dart';
 
-/// Service for handling image upload, deletion, and selection
-/// Integrates with Firebase Storage via Vercel Express API
+/// [ImageService] is a [ChangeNotifier] that manages image-related operations.
+/// 
+/// It provides functionality for:
+/// * Requesting necessary permissions (camera, gallery).
+/// * Picking images from different sources using [ImagePicker].
+/// * Cropping images with a customizable UI via [ImageCropper].
+/// * Compressing images to save bandwidth and storage using [FlutterImageCompress].
+/// * Uploading, deleting, and retrieving metadata for images via a remote API.
+/// 
+/// It maintains state for upload progress and error messages to be consumed by the UI.
 class ImageService extends ChangeNotifier {
-  final AuthService _authService;
   final ImagePicker _picker = ImagePicker();
 
+  // Internal state for managing upload status and errors
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   String? _error;
 
+  /// Returns true if an image upload is currently in progress.
   bool get isUploading => _isUploading;
+
+  /// Returns the current upload progress as a value between 0.0 and 1.0.
   double get uploadProgress => _uploadProgress;
+
+  /// Returns the last error message encountered, if any.
   String? get error => _error;
 
-  ImageService(this._authService);
+  ImageService();
 
-  /// Request camera permission
+  /// Clears the current error state and notifies listeners.
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  /// Requests permission to access the device camera.
+  /// 
+  /// Returns [true] if permission is granted, [false] otherwise.
   Future<bool> requestCameraPermission() async {
     final status = await Permission.camera.request();
     return status.isGranted;
   }
 
-  /// Request photos permission
+  /// Requests permission to access the device's photo gallery or storage.
+  /// 
+  /// On Android, it checks for both 'photos' and 'storage' permissions to ensure compatibility
+  /// across different OS versions.
+  /// Returns [true] if permission is granted, [false] otherwise.
   Future<bool> requestPhotosPermission() async {
     if (Platform.isAndroid) {
-      // Android 13+ uses different permissions
+      // Check if already granted
       if (await Permission.photos.isGranted) return true;
       if (await Permission.storage.isGranted) return true;
-
+      
+      // Request photos permission (Android 13+)
       final photosStatus = await Permission.photos.request();
       if (photosStatus.isGranted) return true;
-
+      
+      // Fallback to storage permission (Android 12 and below)
       final storageStatus = await Permission.storage.request();
       return storageStatus.isGranted;
     }
-    return true; // iOS/Web handle permissions differently
+    // iOS handles permissions via Info.plist and system dialogs triggered by ImagePicker
+    return true;
   }
 
-  /// Pick an image from gallery or camera
-  /// Returns the picked image file or null if cancelled/failed
+  /// Picks an image from the specified [source] (camera or gallery).
+  /// 
+  /// [imageQuality] (0-100) controls the initial compression applied by the picker.
+  /// [maxWidth] and [maxHeight] can be used to resize the image during picking.
+  /// 
+  /// Returns a [File] object if successful, or [null] if the user cancelled or an error occurred.
   Future<File?> pickImage({
     required ImageSource source,
     int imageQuality = 85,
@@ -63,24 +93,21 @@ class ImageService extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      // Request appropriate permission
+      // Ensure permissions are granted before opening the picker
       if (source == ImageSource.camera) {
-        final hasPermission = await requestCameraPermission();
-        if (!hasPermission) {
+        if (!await requestCameraPermission()) {
           _error = 'Camera permission denied';
           notifyListeners();
           return null;
         }
       } else {
-        final hasPermission = await requestPhotosPermission();
-        if (!hasPermission) {
+        if (!await requestPhotosPermission()) {
           _error = 'Photos permission denied';
           notifyListeners();
           return null;
         }
       }
 
-      // Pick image
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
         imageQuality: imageQuality,
@@ -89,18 +116,20 @@ class ImageService extends ChangeNotifier {
       );
 
       if (pickedFile == null) return null;
-
       return File(pickedFile.path);
     } catch (e) {
       _error = 'Failed to pick image: $e';
       notifyListeners();
-      if (kDebugMode) print('Error picking image: $e');
       return null;
     }
   }
 
-  /// Crop an image
-  /// Returns the cropped image file or null if cancelled/failed
+  /// Opens the image cropper UI for the provided [imageFile].
+  /// 
+  /// [aspectRatio] defines the target ratio (e.g., square).
+  /// [aspectRatioPresets] lists the available ratios for the user to choose from.
+  /// 
+  /// Returns a cropped [File] or [null] if the user cancelled.
   Future<File?> cropImage({
     required File imageFile,
     CropAspectRatio? aspectRatio,
@@ -114,7 +143,6 @@ class ImageService extends ChangeNotifier {
       final croppedFile = await ImageCropper().cropImage(
         sourcePath: imageFile.path,
         aspectRatio: aspectRatio,
-        aspectRatioPresets: aspectRatioPresets,
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop Image',
@@ -122,35 +150,39 @@ class ImageService extends ChangeNotifier {
             toolbarWidgetColor: Colors.white,
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: false,
+            aspectRatioPresets: aspectRatioPresets,
+          ),
+          IOSUiSettings(
+            title: 'Crop Image',
+            aspectRatioPresets: aspectRatioPresets,
           ),
         ],
       );
 
       if (croppedFile == null) return null;
-
       return File(croppedFile.path);
     } catch (e) {
       _error = 'Failed to crop image: $e';
       notifyListeners();
-      if (kDebugMode) print('Error cropping image: $e');
       return null;
     }
   }
 
-  /// Compress an image to reduce file size
-  /// Returns the compressed image file or null if failed
+  /// Compresses the [imageFile] if it exceeds [maxSizeKB].
+  /// 
+  /// [quality] (1-100) determines the compression level.
+  /// Creates a new temporary file with a '_compressed' suffix.
+  /// 
+  /// Returns the compressed [File], or the original file if compression failed or wasn't needed.
   Future<File?> compressImage({
     required File imageFile,
     int quality = 85,
-    int maxSizeKB = 1024, // 1MB default
+    int maxSizeKB = 1024,
   }) async {
     try {
       final fileSize = await imageFile.length();
-
-      // Skip compression if already small enough
-      if (fileSize <= maxSizeKB * 1024) {
-        return imageFile;
-      }
+      // Skip compression if file is already small enough
+      if (fileSize <= maxSizeKB * 1024) return imageFile;
 
       final dir = path.dirname(imageFile.path);
       final fileName = path.basenameWithoutExtension(imageFile.path);
@@ -163,27 +195,21 @@ class ImageService extends ChangeNotifier {
         quality: quality,
       );
 
-      if (compressedFile == null) return imageFile;
-
-      return File(compressedFile.path);
+      return compressedFile != null ? File(compressedFile.path) : imageFile;
     } catch (e) {
       _error = 'Failed to compress image: $e';
       notifyListeners();
-      if (kDebugMode) print('Error compressing image: $e');
-      return imageFile; // Return original if compression fails
+      return imageFile;
     }
   }
 
-  /// Upload an image to Firebase Storage via API
-  /// Returns the download URL of the uploaded image
-  ///
-  /// Folders:
-  /// - Menu/{restaurantId} - Menu item images
-  /// - Restaurants/{restaurantId} - Restaurant images
-  /// - Profiles - User profile pictures
-  /// - Chat - Chat attachments
-  /// - Banners - Promotional content
-  /// - General - Default folder
+  /// Uploads the [imageFile] to the remote API.
+  /// 
+  /// [folder] specifies the destination directory on the server.
+  /// [compress] if true, will run [compressImage] before uploading.
+  /// 
+  /// This method updates [_uploadProgress] and [_isUploading] throughout the process.
+  /// Returns the download URL string on success, or [null] on failure.
   Future<String?> uploadImage({
     required File imageFile,
     required String folder,
@@ -196,163 +222,115 @@ class ImageService extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      // Get auth token
-      final token = await _authService.getIdToken(forceRefresh: false);
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
-      // Compress image if requested
       File fileToUpload = imageFile;
       if (compress) {
         _uploadProgress = 0.1;
         notifyListeners();
-
-        final compressed = await compressImage(
-          imageFile: imageFile,
-          quality: compressQuality,
-        );
-        if (compressed != null) {
-          fileToUpload = compressed;
-        }
+        final compressed = await compressImage(imageFile: imageFile, quality: compressQuality);
+        if (compressed != null) fileToUpload = compressed;
       }
 
       _uploadProgress = 0.2;
       notifyListeners();
 
-      // Detect MIME type
-      final mimeType = lookupMimeType(fileToUpload.path) ?? 'image/jpeg';
-      final fileName = path.basename(fileToUpload.path);
-
-      // Create multipart request
+      // Construct the upload URI with the target folder as a query parameter
       final uri = Uri.parse('${AppConfig.apiBaseUrl}/API/Images/upload?folder=$folder');
+      
+      // Use MultipartRequest for file uploads
       final request = http.MultipartRequest('POST', uri);
-
-      // Add headers
-      request.headers['Authorization'] = 'Bearer $token';
       request.headers['x-api-passcode'] = AppConfig.apiPasscode;
 
-      // Add file
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'image',
-          fileToUpload.path,
-          filename: fileName,
-        ),
-      );
+      request.files.add(await http.MultipartFile.fromPath(
+        'image',
+        fileToUpload.path,
+        filename: path.basename(fileToUpload.path),
+      ));
 
       _uploadProgress = 0.3;
       notifyListeners();
 
-      // Send request
+      // Send the request and wait for the streamed response
       final streamedResponse = await request.send();
       _uploadProgress = 0.8;
       notifyListeners();
 
-      // Get response
+      // Convert streamed response to a standard response to access body
       final response = await http.Response.fromStream(streamedResponse);
       _uploadProgress = 1.0;
       notifyListeners();
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
-        final downloadURL = data['downloadURL'] as String?;
-
-        if (downloadURL == null) {
-          throw Exception('No download URL in response');
-        }
-
-        if (kDebugMode) print('Image uploaded successfully: $downloadURL');
-
         _isUploading = false;
         notifyListeners();
-        return downloadURL;
+        // Expecting a JSON object with a 'downloadURL' key
+        return data['downloadURL'] as String?;
       } else {
-        throw Exception('Upload failed: ${response.statusCode} - ${response.body}');
+        throw Exception('Upload failed: ${response.statusCode}');
       }
     } catch (e) {
       _error = 'Failed to upload image: $e';
       _isUploading = false;
       notifyListeners();
-      if (kDebugMode) print('Error uploading image: $e');
       return null;
     }
   }
 
-  /// Delete an image from Firebase Storage via API
+  /// Deletes a remote image file identified by [filePath].
+  /// 
+  /// Returns [true] if the deletion was successful (HTTP 200).
   Future<bool> deleteImage(String filePath) async {
     try {
       _error = null;
       notifyListeners();
-
-      // Get auth token
-      final token = await _authService.getIdToken(forceRefresh: false);
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
 
       final uri = Uri.parse('${AppConfig.apiBaseUrl}/API/Images/delete');
       final response = await http.delete(
         uri,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
           'x-api-passcode': AppConfig.apiPasscode,
         },
         body: json.encode({'filePath': filePath}),
       );
 
-      if (response.statusCode == 200) {
-        if (kDebugMode) print('Image deleted successfully');
-        return true;
-      } else {
-        throw Exception('Delete failed: ${response.statusCode} - ${response.body}');
-      }
+      return response.statusCode == 200;
     } catch (e) {
       _error = 'Failed to delete image: $e';
       notifyListeners();
-      if (kDebugMode) print('Error deleting image: $e');
       return false;
     }
   }
 
-  /// Get metadata for an uploaded image
+  /// Retrieves metadata for a remote image file.
+  /// 
+  /// Returns an [ImageMetadata] object if successful, or [null] otherwise.
   Future<ImageMetadata?> getImageMetadata(String filePath) async {
     try {
       _error = null;
       notifyListeners();
 
-      // Get auth token
-      final token = await _authService.getIdToken(forceRefresh: false);
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
       final uri = Uri.parse('${AppConfig.apiBaseUrl}/API/Images/metadata?filePath=$filePath');
       final response = await http.get(
         uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'x-api-passcode': AppConfig.apiPasscode,
-        },
+        headers: {'x-api-passcode': AppConfig.apiPasscode},
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return ImageMetadata.fromJson(data);
-      } else {
-        throw Exception('Get metadata failed: ${response.statusCode} - ${response.body}');
+        return ImageMetadata.fromJson(json.decode(response.body));
       }
+      return null;
     } catch (e) {
       _error = 'Failed to get image metadata: $e';
       notifyListeners();
-      if (kDebugMode) print('Error getting image metadata: $e');
       return null;
     }
   }
 
-  /// Show image source selection dialog (Camera or Gallery)
-  /// Returns the selected image file or null if cancelled
+  /// Displays an [AlertDialog] allowing the user to choose between Camera and Gallery.
+  /// 
+  /// Automatically calls [pickImage] based on the user's selection.
+  /// Returns the picked [File] or [null] if the dialog was dismissed.
   Future<File?> showImageSourceDialog(BuildContext context) async {
     return showDialog<File?>(
       context: context,
@@ -366,40 +344,22 @@ class ImageService extends ChangeNotifier {
                 leading: const Icon(Icons.camera_alt),
                 title: const Text('Camera'),
                 onTap: () async {
-                  Navigator.pop(context);
                   final file = await pickImage(source: ImageSource.camera);
-                  if (context.mounted && file != null) {
-                    Navigator.pop(context, file);
-                  }
+                  if (context.mounted) Navigator.pop(context, file);
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library),
                 title: const Text('Gallery'),
                 onTap: () async {
-                  Navigator.pop(context);
                   final file = await pickImage(source: ImageSource.gallery);
-                  if (context.mounted && file != null) {
-                    Navigator.pop(context, file);
-                  }
+                  if (context.mounted) Navigator.pop(context, file);
                 },
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel'),
-            ),
-          ],
         );
       },
     );
-  }
-
-  /// Clear error message
-  void clearError() {
-    _error = null;
-    notifyListeners();
   }
 }

@@ -12,7 +12,7 @@
 /// - models/chat.dart - Chat models (ChatRoom, ChatMessage, TypingIndicator)
 /// - models/gemini.dart - AI/Gemini models for Google Gemini integration
 /// - models/docupipe.dart - DocuPipe models for document processing
-/// - models/search.dart - Search models (SearchResponse, FacetValue, AdvancedSearchRequest)
+/// - models/search_page.dart - Search models (SearchResponse, FacetValue, AdvancedSearchRequest)
 /// - models/image.dart - Image models (ImageMetadata)
 library;
 

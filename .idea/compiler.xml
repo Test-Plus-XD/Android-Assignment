@@ -2,6 +2,10 @@
 <project version="4">
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel>
+      <module name="android.geolocator_android" target="21" />
+      <module name="android.image_cropper" target="21" />
+      <module name="android.permission_handler_android" target="21" />
+      <module name="android.share_plus" target="21" />
       <module name="android.shared_preferences_android" target="21" />
       <module name="io.flutter.plugins.urllauncher.android.url_launcher_android" target="21" />
     </bytecodeTargetLevel>

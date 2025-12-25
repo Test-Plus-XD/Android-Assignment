@@ -5,7 +5,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../services/restaurant_service.dart';
 import '../services/location_service.dart';
 import '../models.dart';
-import 'restaurant_detail.dart';
+import 'restaurant_detail_page.dart';
 
 /// Home Page with Direct Vercel API Integration
 ///

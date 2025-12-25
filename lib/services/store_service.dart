@@ -6,18 +6,12 @@ import '../models.dart';
 import 'auth_service.dart';
 
 /// Store Service - Restaurant Owner Management
-///
-/// Handles restaurant ownership claims, updates, and management.
-/// This service is for restaurant owners to manage their businesses.
 class StoreService extends ChangeNotifier {
-  final AuthService _authService;
-
-  // State
+  AuthService _authService;
   Restaurant? _ownedRestaurant;
   bool _isLoading = false;
   String? _error;
 
-  // Getters
   Restaurant? get ownedRestaurant => _ownedRestaurant;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -25,21 +19,24 @@ class StoreService extends ChangeNotifier {
 
   StoreService(this._authService);
 
-  /// Claim restaurant ownership
-  ///
-  /// POST /API/Restaurants/:id/claim
-  /// Requires authentication
+  /// Update the AuthService dependency without recreating the service instance
+  void updateAuth(AuthService authService) {
+    if (_authService != authService) {
+      _authService = authService;
+      // If logged out, clear the owned restaurant cache
+      if (!_authService.isLoggedIn) {
+        clearOwnedRestaurant();
+      }
+    }
+  }
+
   Future<bool> claimRestaurant(String restaurantId) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final token = await _authService.getIdToken(forceRefresh: true);
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
+      if (token == null) throw Exception('Not authenticated');
       final response = await http.post(
         Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/claim'),
         headers: {
@@ -48,22 +45,17 @@ class StoreService extends ChangeNotifier {
           'x-api-passcode': AppConfig.apiPasscode,
         },
       );
-
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = json.decode(response.body);
-        _ownedRestaurant = Restaurant.fromJson(data);
+        _ownedRestaurant = Restaurant.fromJson(json.decode(response.body));
         _isLoading = false;
         notifyListeners();
         return true;
-      } else {
-        final errorData = json.decode(response.body);
-        _error = errorData['message'] ?? 'Failed to claim restaurant';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
+      _error = json.decode(response.body)['message'] ?? 'Failed to claim restaurant';
+      _isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
-      if (kDebugMode) print('Error claiming restaurant: $e');
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
@@ -71,63 +63,39 @@ class StoreService extends ChangeNotifier {
     }
   }
 
-  /// Get owned restaurant
-  ///
-  /// Fetches the restaurant owned by the current user
-  /// Note: This requires the user to have 'restaurantId' field in their profile
   Future<Restaurant?> getOwnedRestaurant() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final token = await _authService.getIdToken(forceRefresh: true);
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
-      final user = _authService.currentUser;
-      if (user == null) {
-        throw Exception('No user logged in');
-      }
-
-      // Get user profile to find owned restaurant ID
+      if (token == null) throw Exception('Not authenticated');
       final userResponse = await http.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/API/Users/${user.uid}'),
+        Uri.parse('${AppConfig.apiBaseUrl}/API/Users/${_authService.uid}'),
         headers: {
           'Authorization': 'Bearer $token',
           'x-api-passcode': AppConfig.apiPasscode,
         },
       );
-
       if (userResponse.statusCode == 200) {
-        final userData = json.decode(userResponse.body);
-        final restaurantId = userData['restaurantId'];
-
+        final restaurantId = json.decode(userResponse.body)['restaurantId'];
         if (restaurantId != null) {
-          // Fetch restaurant details
-          final restaurantResponse = await http.get(
+          final res = await http.get(
             Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId'),
-            headers: {
-              'x-api-passcode': AppConfig.apiPasscode,
-            },
+            headers: {'x-api-passcode': AppConfig.apiPasscode},
           );
-
-          if (restaurantResponse.statusCode == 200) {
-            final restaurantData = json.decode(restaurantResponse.body);
-            _ownedRestaurant = Restaurant.fromJson(restaurantData);
+          if (res.statusCode == 200) {
+            _ownedRestaurant = Restaurant.fromJson(json.decode(res.body));
             _isLoading = false;
             notifyListeners();
             return _ownedRestaurant;
           }
         }
       }
-
       _isLoading = false;
       notifyListeners();
       return null;
     } catch (e) {
-      if (kDebugMode) print('Error getting owned restaurant: $e');
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
@@ -135,24 +103,13 @@ class StoreService extends ChangeNotifier {
     }
   }
 
-  /// Update restaurant details
-  ///
-  /// PUT /API/Restaurants/:id
-  /// Requires authentication and ownership
-  Future<bool> updateRestaurant(
-    String restaurantId,
-    Map<String, dynamic> updates,
-  ) async {
+  Future<bool> updateRestaurant(String restaurantId, Map<String, dynamic> updates) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final token = await _authService.getIdToken(forceRefresh: true);
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
+      if (token == null) throw Exception('Not authenticated');
       final response = await http.put(
         Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId'),
         headers: {
@@ -162,22 +119,17 @@ class StoreService extends ChangeNotifier {
         },
         body: json.encode(updates),
       );
-
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        _ownedRestaurant = Restaurant.fromJson(data);
+        _ownedRestaurant = Restaurant.fromJson(json.decode(response.body));
         _isLoading = false;
         notifyListeners();
         return true;
-      } else {
-        final errorData = json.decode(response.body);
-        _error = errorData['message'] ?? 'Failed to update restaurant';
-        _isLoading = false;
-        notifyListeners();
-        return false;
       }
+      _error = json.decode(response.body)['message'] ?? 'Failed to update';
+      _isLoading = false;
+      notifyListeners();
+      return false;
     } catch (e) {
-      if (kDebugMode) print('Error updating restaurant: $e');
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
@@ -185,44 +137,23 @@ class StoreService extends ChangeNotifier {
     }
   }
 
-  /// Upload restaurant image
-  ///
-  /// POST /API/Restaurants/:id/image
-  /// Requires authentication and ownership
-  Future<String?> uploadRestaurantImage(
-    String restaurantId,
-    String imagePath,
-  ) async {
+  Future<String?> uploadRestaurantImage(String restaurantId, String imagePath) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final token = await _authService.getIdToken(forceRefresh: true);
-      if (token == null) {
-        throw Exception('Not authenticated');
-      }
-
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/image'),
-      );
-
+      if (token == null) throw Exception('Not authenticated');
+      final request = http.MultipartRequest('POST', Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/image'));
       request.headers.addAll({
         'Authorization': 'Bearer $token',
         'x-api-passcode': AppConfig.apiPasscode,
       });
-
       request.files.add(await http.MultipartFile.fromPath('image', imagePath));
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
+      final response = await http.Response.fromStream(await request.send());
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
         final imageUrl = data['imageUrl'] ?? data['downloadURL'];
-
-        // Update owned restaurant image URL
         if (_ownedRestaurant != null) {
           _ownedRestaurant = Restaurant(
             id: _ownedRestaurant!.id,
@@ -243,19 +174,15 @@ class StoreService extends ChangeNotifier {
             contacts: _ownedRestaurant!.contacts,
           );
         }
-
         _isLoading = false;
         notifyListeners();
         return imageUrl;
-      } else {
-        final errorData = json.decode(response.body);
-        _error = errorData['message'] ?? 'Failed to upload image';
-        _isLoading = false;
-        notifyListeners();
-        return null;
       }
+      _error = json.decode(response.body)['message'] ?? 'Upload failed';
+      _isLoading = false;
+      notifyListeners();
+      return null;
     } catch (e) {
-      if (kDebugMode) print('Error uploading restaurant image: $e');
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
@@ -263,7 +190,6 @@ class StoreService extends ChangeNotifier {
     }
   }
 
-  /// Clear owned restaurant data
   void clearOwnedRestaurant() {
     _ownedRestaurant = null;
     _error = null;

@@ -5,54 +5,39 @@ import 'auth_service.dart';
 import '../config.dart';
 import '../models.dart';
 
-/// User Service - Flutter Implementation
-/// 
-/// This service communicates with Vercel (Node.js) API to manage user profiles.
-/// It mirrors your Angular UserService but uses Flutter's HTTP package.
-/// 
-/// Architecture:
-/// - AuthService handles authentication (login/logout)
-/// - UserService handles user profile data (CRUD operations)
-/// - They work together: AuthService provides the ID token, UserService uses it for API calls
+/// User Service
 class UserService with ChangeNotifier {
-  // Your Node.js API endpoint from AppConfig
   final String _apiUrl = AppConfig.getEndpoint('API/Users');
-  // Reference to AuthService to get authentication tokens
-  final AuthService _authService;
-  // Cached user profile - reduces API calls
+  AuthService _authService;
   User? _currentProfile;
-  // Loading state for profile operations
   bool _isLoading = false;
-  // Error message for UI display
   String? _errorMessage;
-  // Constructor requires AuthService dependency
+
   UserService(this._authService) {
-    // Listen to auth state changes
-    // When user logs in/out, we need to update profile state
     _authService.addListener(_onAuthChanged);
   }
 
-  // GETTERS
   User? get currentProfile => _currentProfile;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  /// Handle Authentication State Changes
-  ///
-  /// When auth state changes, we need to:
-  /// - Load profile if user logged in
-  /// - Create profile if it doesn't exist
-  /// - Clear profile if user logged out
+  /// Update the AuthService dependency without recreating the service instance
+  void updateAuth(AuthService authService) {
+    if (_authService != authService) {
+      _authService.removeListener(_onAuthChanged);
+      _authService = authService;
+      _authService.addListener(_onAuthChanged);
+      // Trigger a check in case auth state changed during the transition
+      _onAuthChanged();
+    }
+  }
+
   void _onAuthChanged() {
     if (_authService.isLoggedIn && _authService.uid != null) {
-      // User just logged in, load their profile
-      // We use a Future.microtask to schedule this work for after the current build cycle,
-      // preventing a "setState() or markNeedsBuild() called during build" error
+      // Use microtask to ensure this doesn't block the UI/Build cycle
       Future.microtask(() async {
         final profile = await getUserProfile(_authService.uid!);
-        // If profile doesn't exist, create one automatically
         if (profile == null && _authService.currentUser != null) {
-          if (kDebugMode) print('UserService: Profile not found, creating new profile...');
           final newProfile = User(
             uid: _authService.uid!,
             email: _authService.currentUser!.email,
@@ -66,16 +51,11 @@ class UserService with ChangeNotifier {
         }
       });
     } else {
-      // User logged out, clear profile
       _currentProfile = null;
       notifyListeners();
     }
   }
 
-  /// Get HTTP Headers with Authentication
-  /// 
-  /// Your Vercel index.ts (API.js) expects an Authorization header with Bearer token.
-  /// This is the same pattern your Angular service uses.
   Future<Map<String, String>> _getHeaders() async {
     final token = await _authService.idToken;
     return {
@@ -85,135 +65,65 @@ class UserService with ChangeNotifier {
     };
   }
 
-  /// Create User Profile
-  /// 
-  /// Calls POST /API/Users endpoint to create a new user profile in Firestore.
-  /// Your API.js authenticate middleware verifies the token and checks ownership.
-  /// 
-  /// This matches your Angular service's createUserProfile() method.
   Future<bool> createUserProfile(User profile) async {
     try {
       _setLoading(true);
-      
       final headers = await _getHeaders();
-      final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: headers,
-        body: jsonEncode(profile.toJson()),
-      );
+      final response = await http.post(Uri.parse(_apiUrl), headers: headers, body: jsonEncode(profile.toJson()));
       if (response.statusCode == 201) {
-        // Profile created successfully
-        final data = jsonDecode(response.body);
-        // 1. Update the current profile with the newly created one.
         _currentProfile = profile;
         _errorMessage = null;
-        // 2. Print the log you were expecting.
-        if (kDebugMode) print('UserService: Profile created with ID: ${data['id']}');
-        // 3. Set loading to false and notify listeners.
-        _setLoading(false);
-        notifyListeners(); // Manually notify listeners of the new profile.
-        return true;
-      } else if (response.statusCode == 409) {
-        // Profile already exists - just load it
-        if (kDebugMode) print('UserService: Profile already exists, loading...');
-        await getUserProfile(profile.uid);
-        _setLoading(false);
-        return true;
-      } else {
-        // Error creating profile
-        final error = jsonDecode(response.body);
-        _errorMessage = error['error'] ?? 'Failed to create profile';
         _setLoading(false);
         notifyListeners();
-        return false;
+        return true;
       }
-    } catch (e) {
-      _errorMessage = 'Failed to create profile: $e';
       _setLoading(false);
-      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = '$e';
+      _setLoading(false);
       return false;
     }
   }
 
-  /// Get User Profile
-  /// 
-  /// Calls GET /API/Users/:uid to fetch a user profile from Firestore.
-  /// Caches the result to reduce API calls.
   Future<User?> getUserProfile(String uid) async {
     try {
       _setLoading(true);
-
       final headers = await _getHeaders();
       final response = await http.get(Uri.parse('$_apiUrl/$uid'), headers: headers);
-      
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _currentProfile = User.fromJson(data);
+        _currentProfile = User.fromJson(jsonDecode(response.body));
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
         return _currentProfile;
-      } else if (response.statusCode == 404) {
-        // Profile doesn't exist - this is normal for new users
-        if (kDebugMode) print('UserService: Profile not found for uid: $uid');
-        _currentProfile = null;
-        _setLoading(false);
-        notifyListeners();
-        return null;
-      } else {
-        final error = jsonDecode(response.body);
-        _errorMessage = error['error'] ?? 'Failed to load profile';
-        _setLoading(false);
-        notifyListeners();
-        return null;
       }
-    } catch (e) {
-      _errorMessage = 'Failed to load profile: $e';
       _setLoading(false);
-      notifyListeners();
+      return null;
+    } catch (e) {
+      _setLoading(false);
       return null;
     }
   }
 
-  /// Update User Profile
-  /// 
-  /// Calls PUT /API/Users/:uid to update profile fields.
-  /// Your API.js verifies ownership before allowing updates.
   Future<bool> updateUserProfile(String uid, Map<String, dynamic> updates) async {
     try {
       _setLoading(true);
-      
       final headers = await _getHeaders();
-      final response = await http.put(
-        Uri.parse('$_apiUrl/$uid'),
-        headers: headers,
-        body: jsonEncode(updates),
-      );
-      
+      final response = await http.put(Uri.parse('$_apiUrl/$uid'), headers: headers, body: jsonEncode(updates));
       if (response.statusCode == 204) {
-        // Update successful, refresh cached profile
         await getUserProfile(uid);
         _setLoading(false);
         return true;
-      } else {
-        final error = jsonDecode(response.body);
-        _errorMessage = error['error'] ?? 'Failed to update profile';
-        _setLoading(false);
-        notifyListeners();
-        return false;
       }
-    } catch (e) {
-      _errorMessage = 'Failed to update profile: $e';
       _setLoading(false);
-      notifyListeners();
+      return false;
+    } catch (e) {
+      _setLoading(false);
       return false;
     }
   }
 
-  /// Update Login Metadata
-  /// 
-  /// Called after successful login to track last login time and count.
-  /// This helps you understand user engagement.
   Future<bool> updateLoginMetadata(String uid) async {
     final currentCount = _currentProfile?.loginCount ?? 0;
     return await updateUserProfile(uid, {
@@ -222,72 +132,43 @@ class UserService with ChangeNotifier {
     });
   }
 
-  /// Update User Preferences
-  /// 
-  /// Updates just the preferences object (language, theme, notifications).
-  /// This is a convenience method for a common operation.
   Future<bool> updatePreferences(String uid, Map<String, dynamic> preferences) async {
     final currentPrefs = _currentProfile?.preferences ?? {};
     final mergedPrefs = {...currentPrefs, ...preferences};
     return await updateUserProfile(uid, {'preferences': mergedPrefs});
   }
 
-  /// Delete User Profile
-  /// 
-  /// Calls DELETE /API/Users/:uid to remove the profile from Firestore.
-  /// Note: This doesn't delete the Firebase Auth account, only the Firestore document.
   Future<bool> deleteUserProfile(String uid) async {
     try {
       _setLoading(true);
-
       final headers = await _getHeaders();
       final response = await http.delete(Uri.parse('$_apiUrl/$uid'), headers: headers);
-      
       if (response.statusCode == 204) {
         _currentProfile = null;
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
         return true;
-      } else {
-        final error = jsonDecode(response.body);
-        _errorMessage = error['error'] ?? 'Failed to delete profile';
-        _setLoading(false);
-        notifyListeners();
-        return false;
       }
-    } catch (e) {
-      _errorMessage = 'Failed to delete profile: $e';
       _setLoading(false);
-      notifyListeners();
+      return false;
+    } catch (e) {
+      _setLoading(false);
       return false;
     }
   }
 
-  /// Check if Profile Exists
-  /// 
-  /// Useful for determining if a new user needs a profile created.
   Future<bool> profileExists(String uid) async {
     final profile = await getUserProfile(uid);
     return profile != null;
   }
 
-  /// Clear Cache
-  /// 
-  /// Clears the cached profile, forcing a fresh load on next access.
   void clearCache() {
     _currentProfile = null;
     _errorMessage = null;
     notifyListeners();
   }
 
-  /// Clear Error Message
-  void clearError() {
-    _errorMessage = null;
-    notifyListeners();
-  }
-
-  /// Set Loading State
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();

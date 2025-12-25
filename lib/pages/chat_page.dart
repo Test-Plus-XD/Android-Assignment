@@ -73,8 +73,12 @@ class _ChatPageContentState extends State<_ChatPageContent> {
     _scrollController.dispose();
 
     // Leave room on dispose
-    final chatService = context.read<ChatService>();
-    chatService.leaveRoom(widget.roomId);
+    try {
+      final chatService = context.read<ChatService>();
+      chatService.leaveRoom(widget.roomId);
+    } catch (e) {
+      // Context might not be available
+    }
 
     super.dispose();
   }
@@ -89,21 +93,23 @@ class _ChatPageContentState extends State<_ChatPageContent> {
 
     // Load room details
     final room = await chatService.getChatRoom(widget.roomId);
-    if (room != null) {
+    if (mounted && room != null) {
       setState(() => _room = room);
     }
 
     // Load messages
     final messages = await chatService.getMessages(widget.roomId);
-    setState(() {
-      _messages = messages;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _messages = messages;
+        _isLoading = false;
+      });
 
-    // Scroll to bottom
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
+      // Scroll to bottom
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
+    }
   }
 
   void _setupListeners() {
@@ -114,16 +120,18 @@ class _ChatPageContentState extends State<_ChatPageContent> {
     // Listen for new messages
     _messageSubscription = chatService.messageStream.listen((message) {
       if (message.roomId == widget.roomId) {
-        setState(() {
-          // Avoid duplicates
-          if (!_messages.any((m) => m.messageId == message.messageId)) {
-            _messages.add(message);
-          }
-        });
+        if (mounted) {
+          setState(() {
+            // Avoid duplicates
+            if (!_messages.any((m) => m.messageId == message.messageId)) {
+              _messages.add(message);
+            }
+          });
 
-        // Scroll to bottom if message is from current user
-        if (message.userId == currentUserId) {
-          _scrollToBottom();
+          // Scroll to bottom if message is from current user
+          if (message.userId == currentUserId) {
+            _scrollToBottom();
+          }
         }
       }
     });
@@ -131,9 +139,11 @@ class _ChatPageContentState extends State<_ChatPageContent> {
     // Listen for typing indicators
     _typingSubscription = chatService.typingStream.listen((indicator) {
       if (indicator.roomId == widget.roomId && indicator.userId != currentUserId) {
-        setState(() {
-          _typingUsers[indicator.userId] = indicator.isTyping;
-        });
+        if (mounted) {
+          setState(() {
+            _typingUsers[indicator.userId] = indicator.isTyping;
+          });
+        }
 
         // Remove typing indicator after 3 seconds
         if (indicator.isTyping) {
@@ -162,7 +172,9 @@ class _ChatPageContentState extends State<_ChatPageContent> {
   Future<void> _handleSendMessage(String message, {String? imageUrl}) async {
     final chatService = context.read<ChatService>();
     await chatService.sendMessage(widget.roomId, message, imageUrl: imageUrl);
-    _scrollToBottom();
+    if (mounted) {
+      _scrollToBottom();
+    }
   }
 
   void _handleTypingChanged(bool isTyping) {
@@ -171,7 +183,9 @@ class _ChatPageContentState extends State<_ChatPageContent> {
   }
 
   Future<void> _handleEditMessage(ChatMessage message) async {
+    final chatService = context.read<ChatService>();
     final controller = TextEditingController(text: message.message);
+    
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -198,23 +212,26 @@ class _ChatPageContentState extends State<_ChatPageContent> {
     );
 
     if (result != null && result.trim().isNotEmpty && result != message.message) {
-      final chatService = context.read<ChatService>();
       await chatService.editMessage(widget.roomId, message.messageId, result);
 
-      // Update local message
-      setState(() {
-        final index = _messages.indexWhere((m) => m.messageId == message.messageId);
-        if (index != -1) {
-          _messages[index] = _messages[index].copyWith(
-            message: result,
-            edited: true,
-          );
-        }
-      });
+      if (mounted) {
+        // Update local message
+        setState(() {
+          final index = _messages.indexWhere((m) => m.messageId == message.messageId);
+          if (index != -1) {
+            _messages[index] = _messages[index].copyWith(
+              message: result,
+              edited: true,
+            );
+          }
+        });
+      }
     }
   }
 
   Future<void> _handleDeleteMessage(ChatMessage message) async {
+    final chatService = context.read<ChatService>();
+    
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -241,13 +258,14 @@ class _ChatPageContentState extends State<_ChatPageContent> {
     );
 
     if (confirm == true) {
-      final chatService = context.read<ChatService>();
       await chatService.deleteMessage(widget.roomId, message.messageId);
 
-      // Remove from local list
-      setState(() {
-        _messages.removeWhere((m) => m.messageId == message.messageId);
-      });
+      if (mounted) {
+        // Remove from local list
+        setState(() {
+          _messages.removeWhere((m) => m.messageId == message.messageId);
+        });
+      }
     }
   }
 
@@ -314,7 +332,7 @@ class _ChatPageContentState extends State<_ChatPageContent> {
                             Icon(
                               Icons.chat_bubble_outline,
                               size: 64,
-                              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -329,7 +347,7 @@ class _ChatPageContentState extends State<_ChatPageContent> {
                                   ? '開始對話吧！'
                                   : 'Start the conversation!',
                               style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                               ),
                             ),
                           ],

@@ -11,16 +11,8 @@ import 'auth_service.dart';
 ///
 /// Manages real-time chat functionality using Socket.IO for real-time events
 /// and REST API for message persistence.
-///
-/// Features:
-/// - Real-time messaging with Socket.IO
-/// - Message persistence via REST API
-/// - Typing indicators
-/// - Online/offline status
-/// - Chat room management
-/// - Message editing and deletion
 class ChatService extends ChangeNotifier {
-  final AuthService _authService;
+  AuthService _authService;
   IO.Socket? _socket;
 
   // State
@@ -45,6 +37,28 @@ class ChatService extends ChangeNotifier {
   Stream<ChatMessage> get messageStream => _messageController.stream;
   Stream<TypingIndicator> get typingStream => _typingController.stream;
   Stream<bool> get connectionStatusStream => _connectionController.stream;
+
+  /// Update the AuthService dependency without recreating the service instance
+  void updateAuth(AuthService authService) {
+    if (_authService != authService) {
+      final wasLoggedIn = _authService.isLoggedIn;
+      _authService = authService;
+      
+      if (_authService.isLoggedIn && !wasLoggedIn) {
+        // Just logged in, connect to socket
+        if (_authService.uid != null) {
+          connect(_authService.uid!);
+          getChatRooms();
+        }
+      } else if (!_authService.isLoggedIn && wasLoggedIn) {
+        // Logged out, disconnect and clear
+        disconnect();
+        _rooms.clear();
+        _messagesCache.clear();
+        notifyListeners();
+      }
+    }
+  }
 
   /// Get cached messages for a room
   List<ChatMessage> getCachedMessages(String roomId) {
@@ -179,19 +193,6 @@ class ChatService extends ChangeNotifier {
         if (kDebugMode) print('ChatService: Error parsing typing indicator: $e');
       }
     });
-
-    // Online/offline events
-    _socket!.on('user_online', (data) {
-      if (kDebugMode) print('ChatService: User online: $data');
-      // Could update user status here
-      notifyListeners();
-    });
-
-    _socket!.on('user_offline', (data) {
-      if (kDebugMode) print('ChatService: User offline: $data');
-      // Could update user status here
-      notifyListeners();
-    });
   }
 
   // ============================================================================
@@ -212,7 +213,7 @@ class ChatService extends ChangeNotifier {
 
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('/API/Chat/Rooms');
+      final url = AppConfig.getEndpoint('Chat/Rooms');
 
       if (kDebugMode) print('ChatService: Fetching rooms from $url');
 
@@ -229,7 +230,6 @@ class ChatService extends ChangeNotifier {
         final List<dynamic> data = json.decode(response.body);
         _rooms = data.map((json) => ChatRoom.fromJson(json)).toList();
 
-        // Sort by last message time
         _rooms.sort((a, b) {
           if (a.lastMessageAt == null) return 1;
           if (b.lastMessageAt == null) return -1;
@@ -238,12 +238,10 @@ class ChatService extends ChangeNotifier {
 
         if (kDebugMode) print('ChatService: Loaded ${_rooms.length} rooms');
       } else {
-        _error = 'Failed to load chat rooms: ${response.statusCode}';
-        if (kDebugMode) print('ChatService: $_error - ${response.body}');
+        _error = 'Failed to load chat rooms';
       }
     } catch (e) {
       _error = 'Error loading chat rooms: $e';
-      if (kDebugMode) print('ChatService: $_error');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -252,15 +250,9 @@ class ChatService extends ChangeNotifier {
 
   /// Get single chat room details
   Future<ChatRoom?> getChatRoom(String roomId) async {
-    if (!_authService.isLoggedIn) {
-      _error = 'Not authenticated';
-      notifyListeners();
-      return null;
-    }
-
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('/API/Chat/Rooms/$roomId');
+      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId');
 
       final response = await http.get(
         Uri.parse(url),
@@ -273,13 +265,9 @@ class ChatService extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         return ChatRoom.fromJson(json.decode(response.body));
-      } else {
-        _error = 'Failed to load room: ${response.statusCode}';
-        if (kDebugMode) print('ChatService: $_error - ${response.body}');
       }
     } catch (e) {
-      _error = 'Error loading room: $e';
-      if (kDebugMode) print('ChatService: $_error');
+      if (kDebugMode) print('ChatService: Error loading room: $e');
     }
     return null;
   }
@@ -290,15 +278,9 @@ class ChatService extends ChangeNotifier {
     String? roomName,
     String type = 'direct',
   }) async {
-    if (!_authService.isLoggedIn) {
-      _error = 'Not authenticated';
-      notifyListeners();
-      return null;
-    }
-
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('/API/Chat/Rooms');
+      final url = AppConfig.getEndpoint('Chat/Rooms');
 
       final response = await http.post(
         Uri.parse(url),
@@ -317,43 +299,24 @@ class ChatService extends ChangeNotifier {
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = json.decode(response.body);
         final roomId = data['roomId'] as String;
-
-        if (kDebugMode) print('ChatService: Room created: $roomId');
-
-        // Refresh rooms list
         await getChatRooms();
-
         return roomId;
-      } else {
-        _error = 'Failed to create room: ${response.statusCode}';
-        if (kDebugMode) print('ChatService: $_error - ${response.body}');
       }
     } catch (e) {
-      _error = 'Error creating room: $e';
-      if (kDebugMode) print('ChatService: $_error');
+      if (kDebugMode) print('ChatService: Error creating room: $e');
     }
     return null;
   }
 
   /// Join a chat room (Socket.IO)
   Future<void> joinRoom(String roomId) async {
-    if (!_isConnected || _socket == null) {
-      if (kDebugMode) print('ChatService: Not connected, cannot join room');
-      return;
-    }
-
-    if (kDebugMode) print('ChatService: Joining room $roomId');
+    if (!_isConnected || _socket == null) return;
     _socket!.emit('join_room', {'roomId': roomId});
   }
 
   /// Leave a chat room (Socket.IO)
   Future<void> leaveRoom(String roomId) async {
-    if (!_isConnected || _socket == null) {
-      if (kDebugMode) print('ChatService: Not connected, cannot leave room');
-      return;
-    }
-
-    if (kDebugMode) print('ChatService: Leaving room $roomId');
+    if (!_isConnected || _socket == null) return;
     _socket!.emit('leave_room', {'roomId': roomId});
   }
 
@@ -363,17 +326,9 @@ class ChatService extends ChangeNotifier {
 
   /// Get messages for a room
   Future<List<ChatMessage>> getMessages(String roomId, {int limit = 50}) async {
-    if (!_authService.isLoggedIn) {
-      _error = 'Not authenticated';
-      notifyListeners();
-      return [];
-    }
-
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('/API/Chat/Rooms/$roomId/Messages?limit=$limit');
-
-      if (kDebugMode) print('ChatService: Fetching messages from $url');
+      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages?limit=$limit');
 
       final response = await http.get(
         Uri.parse(url),
@@ -387,54 +342,27 @@ class ChatService extends ChangeNotifier {
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         final messages = data.map((json) => ChatMessage.fromJson(json)).toList();
-
-        // Cache messages
         _messagesCache[roomId] = messages;
         notifyListeners();
-
-        if (kDebugMode) print('ChatService: Loaded ${messages.length} messages');
         return messages;
-      } else {
-        _error = 'Failed to load messages: ${response.statusCode}';
-        if (kDebugMode) print('ChatService: $_error - ${response.body}');
       }
     } catch (e) {
-      _error = 'Error loading messages: $e';
-      if (kDebugMode) print('ChatService: $_error');
+      if (kDebugMode) print('ChatService: Error loading messages: $e');
     }
     return [];
   }
 
-  /// Send a message (real-time via Socket.IO + save via API)
-  Future<void> sendMessage(String roomId, String message, {String? imageUrl}) async {
-    if (!_authService.isLoggedIn) {
-      _error = 'Not authenticated';
-      notifyListeners();
-      return;
-    }
-
+  /// Send a message
+  Future<bool> sendMessage(String roomId, String text, {String type = 'text', String? imageUrl}) async {
     try {
-      final user = _authService.currentUser;
-      if (user == null) return;
+      final token = await _authService.getIdToken();
+      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages');
 
       final messageData = {
-        'roomId': roomId,
-        'userId': user.uid,
-        'displayName': user.displayName ?? user.email ?? 'Anonymous',
-        'message': message,
-        'timestamp': DateTime.now().toIso8601String(),
+        'message': text,
+        'type': type,
         if (imageUrl != null) 'imageUrl': imageUrl,
       };
-
-      // Send via Socket.IO for real-time delivery
-      if (_isConnected && _socket != null) {
-        if (kDebugMode) print('ChatService: Sending message via Socket.IO');
-        _socket!.emit('send_message', messageData);
-      }
-
-      // Also save to database via API
-      final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('/API/Chat/Rooms/$roomId/Messages');
 
       final response = await http.post(
         Uri.parse(url),
@@ -443,33 +371,35 @@ class ChatService extends ChangeNotifier {
           'x-api-passcode': AppConfig.apiPasscode,
           'Content-Type': 'application/json',
         },
-        body: json.encode({
-          'message': message,
-          if (imageUrl != null) 'imageUrl': imageUrl,
-        }),
+        body: json.encode(messageData),
       );
 
-      if (response.statusCode != 201 && response.statusCode != 200) {
-        if (kDebugMode) print('ChatService: Failed to save message: ${response.statusCode}');
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final message = ChatMessage.fromJson(data);
+        
+        if (_socket != null && _isConnected) {
+          _socket!.emit('send_message', data);
+        }
+
+        if (!_messagesCache.containsKey(roomId)) {
+          _messagesCache[roomId] = [];
+        }
+        _messagesCache[roomId]!.add(message);
+        notifyListeners();
+        return true;
       }
     } catch (e) {
-      _error = 'Error sending message: $e';
-      if (kDebugMode) print('ChatService: $_error');
-      notifyListeners();
+      if (kDebugMode) print('ChatService: Error sending message: $e');
     }
+    return false;
   }
 
   /// Edit a message
-  Future<void> editMessage(String roomId, String messageId, String newMessage) async {
-    if (!_authService.isLoggedIn) {
-      _error = 'Not authenticated';
-      notifyListeners();
-      return;
-    }
-
+  Future<bool> editMessage(String roomId, String messageId, String newText) async {
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('/API/Chat/Rooms/$roomId/Messages/$messageId');
+      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages/$messageId');
 
       final response = await http.put(
         Uri.parse(url),
@@ -478,88 +408,69 @@ class ChatService extends ChangeNotifier {
           'x-api-passcode': AppConfig.apiPasscode,
           'Content-Type': 'application/json',
         },
-        body: json.encode({'message': newMessage}),
+        body: json.encode({'message': newText}),
       );
 
       if (response.statusCode == 200) {
-        // Update cached message
+        // Update local cache
         if (_messagesCache.containsKey(roomId)) {
           final index = _messagesCache[roomId]!.indexWhere((m) => m.messageId == messageId);
           if (index != -1) {
             _messagesCache[roomId]![index] = _messagesCache[roomId]![index].copyWith(
-              message: newMessage,
+              message: newText,
               edited: true,
             );
             notifyListeners();
           }
         }
-
-        if (kDebugMode) print('ChatService: Message edited successfully');
-      } else {
-        _error = 'Failed to edit message: ${response.statusCode}';
-        if (kDebugMode) print('ChatService: $_error - ${response.body}');
-        notifyListeners();
+        return true;
       }
     } catch (e) {
-      _error = 'Error editing message: $e';
-      if (kDebugMode) print('ChatService: $_error');
-      notifyListeners();
+      if (kDebugMode) print('ChatService: Error editing message: $e');
     }
+    return false;
   }
 
   /// Delete a message
-  Future<void> deleteMessage(String roomId, String messageId) async {
-    if (!_authService.isLoggedIn) {
-      _error = 'Not authenticated';
-      notifyListeners();
-      return;
-    }
-
+  Future<bool> deleteMessage(String roomId, String messageId) async {
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('/API/Chat/Rooms/$roomId/Messages/$messageId');
+      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages/$messageId');
 
       final response = await http.delete(
         Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $token',
           'x-api-passcode': AppConfig.apiPasscode,
-          'Content-Type': 'application/json',
         },
       );
 
       if (response.statusCode == 200) {
-        // Remove from cache or mark as deleted
+        // Update local cache
         if (_messagesCache.containsKey(roomId)) {
           _messagesCache[roomId]!.removeWhere((m) => m.messageId == messageId);
           notifyListeners();
         }
-
-        if (kDebugMode) print('ChatService: Message deleted successfully');
-      } else {
-        _error = 'Failed to delete message: ${response.statusCode}';
-        if (kDebugMode) print('ChatService: $_error - ${response.body}');
-        notifyListeners();
+        return true;
       }
     } catch (e) {
-      _error = 'Error deleting message: $e';
-      if (kDebugMode) print('ChatService: $_error');
-      notifyListeners();
+      if (kDebugMode) print('ChatService: Error deleting message: $e');
     }
+    return false;
   }
 
-  /// Send typing indicator
+  /// Emit typing indicator
   void sendTypingIndicator(String roomId, bool isTyping) {
     if (!_isConnected || _socket == null) return;
-
-    final user = _authService.currentUser;
-    if (user == null) return;
-
     _socket!.emit('typing', {
       'roomId': roomId,
-      'userId': user.uid,
-      'displayName': user.displayName ?? user.email ?? 'Anonymous',
       'isTyping': isTyping,
+      'userId': _authService.uid,
     });
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
   }
 }

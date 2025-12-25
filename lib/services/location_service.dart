@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 /// Location Service - GPS Functionality
 /// 
@@ -71,7 +71,7 @@ class LocationService with ChangeNotifier {
       }
 
       // Check current permission status
-      PermissionStatus status = await Permission.location.status;
+      ph.PermissionStatus status = await ph.Permission.location.status;
       
       if (status.isGranted) {
         // We already have permission, proceed
@@ -84,7 +84,7 @@ class LocationService with ChangeNotifier {
       if (status.isDenied) {
         // Permission denied but we can ask again
         // Request permission from user
-        status = await Permission.location.request();
+        status = await ph.Permission.location.request();
         
         if (status.isGranted) {
           _hasPermission = true;
@@ -168,13 +168,12 @@ class LocationService with ChangeNotifier {
       _currentPosition = position;
       _errorMessage = null;
       _setLoading(false);
-      notifyListeners();
+      // notifyListeners is called in _setLoading
       if (kDebugMode)     print('LocationService: Position acquired - Lat: ${position.latitude}, Lng: ${position.longitude}');
       return position;
     } catch (e) {
       _errorMessage = 'Failed to get current location: $e';
       _setLoading(false);
-      notifyListeners();
       if (kDebugMode) print('LocationService: Error getting position - $e');
       return null;
     }
@@ -242,7 +241,7 @@ class LocationService with ChangeNotifier {
   /// When permission is permanently denied, we need to direct users
   /// to their device's app settings where they can manually enable it.
   Future<void> openAppSettings() async {
-    await openAppSettings();
+    await ph.openAppSettings();
   }
 
   /// Clear cached position
@@ -263,6 +262,7 @@ class LocationService with ChangeNotifier {
 
   /// Set loading state
   void _setLoading(bool loading) {
+    if (_isLoading == loading) return;
     _isLoading = loading;
     notifyListeners();
   }

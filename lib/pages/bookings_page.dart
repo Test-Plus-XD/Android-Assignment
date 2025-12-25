@@ -4,8 +4,8 @@ import '../services/booking_service.dart';
 import '../services/auth_service.dart';
 import '../models.dart';
 import '../widgets/booking/booking_list.dart';
-import 'restaurant_detail.dart';
-import 'login.dart';
+import 'restaurant_detail_page.dart';
+import 'login_page.dart';
 
 /// Bookings Page
 ///

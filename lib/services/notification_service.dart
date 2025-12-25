@@ -261,7 +261,7 @@ class NotificationService with ChangeNotifier {
       // Format booking time for display
       // Example: "7:00 PM" or "下午7:00"
       final timeString = _formatTime(bookingDateTime, isTraditionalChinese);
-      final dateString = _formatDate(bookingDateTime, isTraditionalChinese);
+      _formatDate(bookingDateTime, isTraditionalChinese);
 
       // Build notification title and body based on language
       final title = isTraditionalChinese
@@ -300,8 +300,6 @@ class NotificationService with ChangeNotifier {
         scheduledDate,              // When to show it
         notificationDetails,        // How to show it
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: 
-            UILocalNotificationDateInterpretation.absoluteTime,
       );
 
       if (kDebugMode) {

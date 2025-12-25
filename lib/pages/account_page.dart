@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../models.dart';
-import 'login.dart';
+import 'login_page.dart';
 
 /// Account Page with Edit Functionality
 //
