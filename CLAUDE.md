@@ -49,7 +49,7 @@ This application provides users with a comprehensive platform to:
 - **Google OAuth**: One-tap sign-in using Android's native Google Sign-In
 - **Guest Mode**: "Skip for now" option to browse without authentication
 
-**User Profile Management** (`pages/account.dart`):
+**User Profile Management** (`pages/account_page.dart`):
 - **Inline Editing Mode**: Click edit button to modify profile fields
 - **Editable Fields**:
   - Display Name
@@ -69,7 +69,7 @@ This application provides users with a comprehensive platform to:
 
 #### 2. Restaurant Discovery
 
-**Home Page** (`pages/home.dart`):
+**Home Page** (`pages/home_page.dart`):
 - **Featured Restaurants Carousel**:
   - Auto-playing carousel with 10 randomly selected restaurants
   - Smooth transitions between slides
@@ -89,7 +89,7 @@ This application provides users with a comprehensive platform to:
 
 - **Pull-to-Refresh**: Swipe down to reload all data from API
 
-**Search Page** (`pages/search.dart`):
+**Search Page** (`pages/search_page.dart`):
 - **Full-Text Search**:
   - Powered by Algolia search engine
   - Real-time search as you type
@@ -121,7 +121,7 @@ This application provides users with a comprehensive platform to:
 
 #### 3. Restaurant Details
 
-**Restaurant Detail Page** (`pages/restaurant_detail.dart`):
+**Restaurant Detail Page** (`pages/restaurant_detail_page.dart`):
 
 - **Information Panels** (Responsive Grid Layout):
   - **Basic Info**: Name, address, district, keywords
@@ -363,15 +363,34 @@ Primarily Android (with web and iOS configurations present but not fully impleme
 ├── lib/                              # Main Dart source code
 │   ├── main.dart                     # Application entry point & Provider setup
 │   ├── config.dart                   # Environment configuration
-│   ├── models.dart                   # Data models (Restaurant, User, Booking, etc.)
+│   ├── models.dart                   # Re-exports all models from models/ directory
 │   ├── firebase_options.dart         # Firebase multi-platform configuration
 │   │
+│   ├── models/                       # Data Models (organized by domain)
+│   │   ├── restaurant.dart           # Restaurant model
+│   │   ├── user.dart                 # User and UserPreferences models
+│   │   ├── review.dart               # Review models
+│   │   ├── menu.dart                 # MenuItem models
+│   │   ├── booking.dart              # Booking model
+│   │   ├── chat.dart                 # Chat models (ChatRoom, ChatMessage)
+│   │   ├── gemini.dart               # AI/Gemini models
+│   │   ├── docupipe.dart             # DocuPipe models (document processing)
+│   │   ├── search.dart               # Search models (SearchResponse, Facet Value)
+│   │   └── image.dart                # Image metadata model
+│   │
 │   ├── pages/                        # UI Pages (Stateful/Stateless Widgets)
-│   │   ├── login.dart                # Authentication page (login/register/Google OAuth)
-│   │   ├── home.dart                 # Home page (featured + nearby restaurants)
-│   │   ├── search.dart               # Search page (Algolia search + filters)
-│   │   ├── account.dart              # User account management page
-│   │   └── restaurant_detail.dart    # Restaurant detail page (maps, booking, share)
+│   │   ├── login_page.dart           # Authentication page (login/register/Google OAuth)
+│   │   ├── home_page.dart            # Home page (featured + nearby restaurants)
+│   │   ├── search_page.dart          # Search page (Algolia search + filters)
+│   │   ├── account_page.dart         # User account management page
+│   │   ├── restaurant_detail_page.dart    # Restaurant detail page (maps, booking, share)
+│   │   ├── restaurant_menu_page.dart      # Full menu view page
+│   │   ├── restaurant_reviews_page.dart   # Full reviews view page
+│   │   ├── bookings_page.dart        # User's booking history
+│   │   ├── chat_page.dart            # Chat conversation page
+│   │   ├── chat_rooms_page.dart      # Chat rooms list
+│   │   ├── gemini_chat_page.dart     # AI assistant chat page
+│   │   └── store_dashboard_page.dart # Restaurant owner dashboard
 │   │
 │   ├── services/                     # Business Logic Layer (ChangeNotifier services)
 │   │   ├── auth_service.dart         # Firebase Authentication
@@ -379,11 +398,60 @@ Primarily Android (with web and iOS configurations present but not fully impleme
 │   │   ├── restaurant_service.dart   # Restaurant data (Algolia + REST API)
 │   │   ├── restaurant_service_native.dart  # Direct Algolia SDK implementation
 │   │   ├── booking_service.dart      # Booking CRUD (REST API)
+│   │   ├── review_service.dart       # Review CRUD (REST API)
+│   │   ├── menu_service.dart         # Menu item CRUD (REST API)
+│   │   ├── image_service.dart        # Image upload (Firebase Storage via API)
+│   │   ├── chat_service.dart         # Real-time chat (Socket.IO + REST API)
+│   │   ├── gemini_service.dart       # AI assistant (Google Gemini)
+│   │   ├── store_service.dart        # Restaurant ownership & management
+│   │   ├── docupipe_service.dart     # Document processing & menu extraction
 │   │   ├── notification_service.dart # Local notifications scheduling
 │   │   └── location_service.dart     # GPS location & distance calculations
 │   │
-│   └── widgets/                      # Reusable UI Components
-│       └── drawer.dart               # Navigation drawer with theme/language toggles
+│   ├── widgets/                      # Reusable UI Components
+│   │   ├── drawer.dart               # Navigation drawer with theme/language toggles
+│   │   ├── reviews/                  # Review widgets
+│   │   │   ├── star_rating.dart      # Star rating display and selector
+│   │   │   ├── review_card.dart      # Review card widget
+│   │   │   ├── review_form.dart      # Review create/edit form
+│   │   │   ├── review_stats.dart     # Review statistics widget
+│   │   │   └── review_list.dart      # Review list widget
+│   │   ├── menu/                     # Menu widgets
+│   │   │   ├── menu_item_card.dart   # Menu item card widget
+│   │   │   ├── menu_list.dart        # Menu list widget
+│   │   │   └── menu_item_form.dart   # Menu item create/edit form
+│   │   ├── booking/                  # Booking widgets
+│   │   │   ├── booking_form.dart     # Booking create/edit form
+│   │   │   ├── booking_card.dart     # Booking card widget
+│   │   │   └── booking_list.dart     # Booking list widget
+│   │   ├── images/                   # Image widgets
+│   │   │   ├── image_picker_button.dart       # Camera/gallery picker
+│   │   │   ├── image_preview.dart             # Image preview widgets
+│   │   │   └── upload_progress_indicator.dart # Upload progress
+│   │   ├── chat/                     # Chat widgets
+│   │   │   ├── chat_bubble.dart      # Message bubble widget
+│   │   │   ├── chat_input.dart       # Message input widget
+│   │   │   ├── chat_room_list.dart   # Chat rooms list
+│   │   │   └── typing_indicator.dart # Typing indicator
+│   │   ├── ai/                       # AI widgets
+│   │   │   ├── gemini_chat_button.dart # AI chat button
+│   │   │   └── suggestion_chips.dart   # Suggested questions
+│   │   ├── restaurant_detail/        # Restaurant detail widgets
+│   │   │   ├── hero_image_section.dart     # Hero image with overlay
+│   │   │   ├── restaurant_info_card.dart   # Restaurant info card
+│   │   │   ├── contact_actions.dart        # Contact action buttons
+│   │   │   └── opening_hours_card.dart     # Opening hours display
+│   │   └── carousel/                 # Carousel widgets
+│   │       ├── hero_carousel.dart        # Hero banner carousel
+│   │       ├── restaurant_carousel.dart  # Restaurant cards carousel
+│   │       ├── offer_carousel.dart       # Offers/promotions carousel
+│   │       └── menu_carousel.dart        # Menu items carousel
+│   │
+│   └── constants/                    # Constants and enums
+│       ├── districts.dart            # Hong Kong districts
+│       ├── keywords.dart             # Restaurant keywords/tags
+│       ├── payments.dart             # Payment methods
+│       └── weekdays.dart             # Weekday utilities
 │
 ├── assets/                           # Static Resources
 │   ├── images/                       # Application icons & images
@@ -2766,6 +2834,290 @@ Complete implementation of carousel system with Android-optimized touch gestures
 - `lib/widgets/carousel/menu_carousel.dart`
 
 **Total Lines Added:** ~850 lines of production code
+
+---
+
+#### Priority 12: Booking System
+
+Complete implementation of table booking functionality with CRUD operations and booking history.
+
+**Service:** Booking service already existed with full CRUD operations
+
+**Widgets Created:**
+- `lib/widgets/booking/booking_form.dart` (~350 lines)
+  - Bottom sheet form for creating/editing bookings
+  - Date and time pickers
+  - Guest count selector (1-20 guests)
+  - Special requests text field
+  - Form validation and loading states
+
+- `lib/widgets/booking/booking_card.dart` (~280 lines)
+  - Booking display card with status badges
+  - Colored status indicators (Pending/Confirmed/Completed/Cancelled)
+  - Payment status display
+  - Date, time, and guest count display
+  - Cancel booking functionality
+  - View restaurant action
+
+- `lib/widgets/booking/booking_list.dart` (~100 lines)
+  - List widget with filtering (All, Upcoming, Past)
+  - Pull-to-refresh support
+  - Empty states for each filter type
+  - Delegates to BookingCard for rendering
+
+**Page Created:**
+- `lib/pages/bookings_page.dart` (~242 lines)
+  - Tabbed interface (All / Upcoming / Past)
+  - Login prompt for unauthenticated users
+  - Cancel booking with confirmation dialog
+  - View restaurant from booking
+  - Integration with BookingService
+  - Bilingual support (EN/TC)
+
+**Features:**
+- Complete booking CRUD operations (Create, Read, Update, Delete)
+- Status tracking (Pending, Confirmed, Completed, Cancelled)
+- Payment status tracking (Unpaid, Paid, Refunded)
+- Date/time selection with Material Design pickers
+- Guest count selector with increment/decrement buttons
+- Special requests field for dietary requirements, occasions, etc.
+- Booking history filtering (All, Upcoming, Past bookings)
+- Cancel booking with confirmation dialog
+- Real-time booking list updates
+- Empty states with helpful messages
+- Pull-to-refresh functionality
+- Bilingual support (EN/TC) throughout
+- Material Design 3 components
+
+**Files Created:**
+- `lib/widgets/booking/booking_form.dart`
+- `lib/widgets/booking/booking_card.dart`
+- `lib/widgets/booking/booking_list.dart`
+- `lib/pages/bookings_page.dart`
+
+**Total Lines Added:** ~970 lines of production code
+
+---
+
+#### Priority 13: DocuPipe Integration (Admin Feature)
+
+Complete implementation of document processing and AI-powered menu extraction using DocuPipe API.
+
+**Models Created (in lib/models/docupipe.dart):**
+- `JobStatus` - Processing job status tracking
+- `DocumentResult` - Processed document with extracted text
+- `StandardizationResult` - AI-normalized/standardized data
+
+**Service Implemented:**
+- `lib/services/docupipe_service.dart` (~258 lines)
+  - **Upload Document**:
+    - `uploadDocument(file, dataset)` - Upload PDF/image for OCR processing
+    - Multipart file upload with progress tracking
+    - MIME type detection
+    - Returns document ID for tracking
+  - **Menu Extraction**:
+    - `extractMenu(menuFile)` - AI-powered menu extraction from PDF/image
+    - Returns structured MenuItem objects ready for database
+    - Automatic parsing of names, prices, descriptions, categories
+  - **Job Management**:
+    - `checkJobStatus(jobId)` - Poll processing status
+    - `getDocument(documentId)` - Retrieve processed document
+    - `getStandardization(standardizationId)` - Get AI-normalized results
+  - **State Management**:
+    - `isProcessing` - Processing status
+    - `uploadProgress` - Upload progress (0.0 to 1.0)
+    - `error` - Error messages
+  - Full error handling and loading states
+  - Authentication integration with Firebase tokens
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app/API/DocuPipe`
+- **Endpoints**:
+  - `POST /upload?dataset=X` - Upload document for processing
+  - `GET /job/:jobId` - Check processing status
+  - `GET /document/:documentId` - Get processed document
+  - `POST /extract-menu` - Extract menu items from PDF/image
+  - `GET /standardization/:standardizationId` - Get standardized results
+- All endpoints require `x-api-passcode: PourRice` header
+- Auth endpoints require `Authorization: Bearer <token>` header
+- Multipart/form-data support for file uploads
+
+**Features:**
+- Document upload with progress tracking
+- OCR processing for PDF and image files (PNG, JPG)
+- AI-powered menu extraction
+- Structured menu item parsing (name, price, description, category)
+- Job status polling for async processing
+- Document metadata retrieval
+- Standardization/normalization of extracted data
+- MIME type detection
+- Error handling with user-friendly messages
+- Loading states for all async operations
+- Upload progress percentage tracking
+- Admin-only feature for restaurant owners
+
+**Use Cases:**
+1. **Menu Digitization**: Upload physical menu PDF/photo → Get structured menu items
+2. **Bulk Menu Import**: Process existing menu documents for quick restaurant setup
+3. **Menu Updates**: Extract new menu items from updated menus
+4. **Data Standardization**: Normalize menu item names, prices, categories
+
+**Files Modified:**
+- `lib/models.dart` - Re-exports docupipe models
+
+**Files Created:**
+- `lib/services/docupipe_service.dart`
+- `lib/models/docupipe.dart`
+
+**Total Lines Added:** ~410 lines of production code (service + models)
+
+---
+
+### ✅ Code Refactoring (2025-12-25)
+
+#### Models Refactoring
+
+Complete refactoring of models.dart (originally 1408 lines) into separate domain-specific model files.
+
+**Files Created:**
+1. `lib/models/restaurant.dart` (149 lines) - Restaurant model with bilingual support
+2. `lib/models/user.dart` (135 lines) - User and UserPreferences models
+3. `lib/models/review.dart` (140 lines) - Review models and request classes
+4. `lib/models/menu.dart` (167 lines) - MenuItem models and request classes
+5. `lib/models/booking.dart` (72 lines) - Booking model
+6. `lib/models/chat.dart` (204 lines) - Chat models (ChatRoom, ChatMessage, TypingIndicator)
+7. `lib/models/gemini.dart` (200 lines) - AI/Gemini models for Google Gemini integration
+8. `lib/models/docupipe.dart` (152 lines) - DocuPipe models for document processing
+9. `lib/models/search.dart` (170 lines) - Search models (SearchResponse, FacetValue, AdvancedSearchRequest)
+10. `lib/models/image.dart` (49 lines) - ImageMetadata model
+
+**Files Updated:**
+- `lib/models.dart` (29 lines) - Now serves as a re-export hub
+- All files renamed from `*.dart` to `*_page.dart` for pages
+
+**Benefits:**
+- ✅ Better organization by domain
+- ✅ Easier to navigate and maintain
+- ✅ No circular dependencies
+- ✅ Backward compatible with existing code
+- ✅ Zero errors introduced
+
+**Total Lines:** 1467 lines across 11 files (originally 1408 in 1 file)
+
+---
+
+#### Dynamic Navigation System Refactoring
+
+Complete refactoring of the application's navigation system with role-based dynamic bottom navigation.
+
+**Architecture Changes:**
+
+1. **Extracted Theme Configuration** (`lib/config/theme.dart` - 150 lines):
+   - `LightThemeColors` - Light theme color palette
+   - `DarkThemeColors` - Dark theme color palette
+   - `AppTheme.buildLightTheme()` - Light theme builder
+   - `AppTheme.buildDarkTheme()` - Dark theme builder
+   - Centralized theme management for consistency
+
+2. **Extracted App State** (`lib/config/app_state.dart` - 72 lines):
+   - `AppState` class with ChangeNotifier pattern
+   - Theme preference management (dark/light mode)
+   - Language preference management (English/Traditional Chinese)
+   - Persistent storage with SharedPreferences
+   - Automatic UI rebuild on preference changes
+
+3. **Refactored App Root** (`lib/widgets/navigation/app_root.dart` - 92 lines):
+   - Authentication flow management
+   - Guest mode support ("Skip for now")
+   - Theme application (light/dark)
+   - Loading states during preference/auth checks
+   - Routing between LoginPage and MainShell
+
+4. **Dynamic Navigation Shell** (`lib/widgets/navigation/main_shell.dart` - 298 lines):
+   - **Role-Based Navigation**: Different navigation items based on user type
+   - **Guest (Not Logged In)**:
+     - Home (left)
+     - Search/Restaurants (middle)
+     - Account (right)
+   - **Diner Users** (type: 'Diner'):
+     - Home (left)
+     - Search/Restaurants (middle-left)
+     - Chat (middle-right)
+     - Bookings (right) - Calendar icon for reservations
+   - **Restaurant Users** (type: 'Restaurant'):
+     - Home (left)
+     - Search/Restaurants (middle-left)
+     - Chat (middle-right)
+     - Store Dashboard (right) - Storefront icon for management
+   - **Stylish Bottom Bar**: Uses `stylish_bottom_bar: ^1.1.1` package
+   - **PageView Navigation**: Smooth swipe between pages
+   - **Consumer2 Pattern**: Listens to AuthService and UserService
+   - **Auto-Reset**: Returns to home when logging out
+
+**UI Components Created:**
+
+5. **Search Widgets** (`lib/widgets/search/`):
+   - **FilterButton** (142 lines) - Reusable filter button with count badge
+   - **RestaurantSearchCard** (271 lines) - Beautiful search result card with hero image
+   - **FilterDialog** (162 lines) - Generic multi-select filter dialog
+   - All widgets support bilingual display (EN/TC)
+
+**Key Features:**
+
+- **Dependency Injection**: Services properly injected via ChangeNotifierProvider
+- **Reactive UI**: Consumer widgets automatically rebuild on state changes
+- **Type Safety**: Strong typing for user types and navigation states
+- **Smooth Animations**: PageView for swipe navigation, BarAnimation.fade for bottom bar
+- **Theme Awareness**: All components respond to theme changes
+- **Bilingual Support**: Dynamic UI text based on language preference
+- **Error Handling**: Graceful handling of null user profiles
+- **State Persistence**: Theme and language preferences saved across sessions
+
+**Files Modified:**
+- `pubspec.yaml` - Added `stylish_bottom_bar: ^1.1.1`
+- `lib/main.dart` - Refactored to use extracted components (555 → 239 lines)
+- `lib/widgets/menu/menu_item_card.dart` - Fixed import path
+- `lib/widgets/menu/menu_item_form.dart` - Fixed import path
+- `lib/widgets/menu/menu_list.dart` - Fixed import path
+- `lib/widgets/reviews/review_list.dart` - Fixed import path
+
+**Files Created:**
+- `lib/config/theme.dart`
+- `lib/config/app_state.dart`
+- `lib/widgets/navigation/app_root.dart`
+- `lib/widgets/navigation/main_shell.dart`
+- `lib/widgets/search/filter_button.dart`
+- `lib/widgets/search/restaurant_search_card.dart`
+- `lib/widgets/search/filter_dialog.dart`
+
+**Total Lines Added/Refactored:** ~1,200 lines (navigation system + search widgets)
+
+**Benefits:**
+- ✅ Modular architecture with clear separation of concerns
+- ✅ Reusable navigation and search components
+- ✅ Role-based UI that adapts to user type
+- ✅ Better code organization (main.dart reduced by 57%)
+- ✅ Improved maintainability with extracted widgets
+- ✅ Enhanced user experience with stylish bottom bar
+- ✅ Scalable navigation system for future user roles
+- ✅ Zero compilation errors after refactoring
+
+**Navigation Flow:**
+```
+App Start
+  └─> AppRoot (loads preferences)
+      ├─> Not Logged In → LoginPage
+      │   ├─> Login Success → MainShell (dynamic nav)
+      │   └─> Skip → MainShell (guest mode, limited nav)
+      └─> Logged In → MainShell
+          ├─> Diner → Home, Search, Chat, Bookings
+          └─> Restaurant → Home, Search, Chat, Store Dashboard
+```
+
+**User Type Detection:**
+- Determined by `UserService.currentProfile.type` field
+- Automatically updates navigation when user profile loads
+- Supports dynamic role changes without app restart
 
 ---
 

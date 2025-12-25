@@ -9,7 +9,9 @@
       "Bash(flutter analyze:*)",
       "Bash(cat:*)",
       "Bash(dart format:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(flutter pub:*)",
+      "Bash(grep:*)"
     ]
   }
 }

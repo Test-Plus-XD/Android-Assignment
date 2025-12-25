@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models.dart';
 import '../../services/menu_service.dart';
-import '../../main.dart';
+import '../../config/app_state.dart';
 import 'menu_item_card.dart';
 
 /// Widget displaying a list of menu items grouped by category

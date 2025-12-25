@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models.dart';
 import '../../services/menu_service.dart';
 import '../../services/image_service.dart';
-import '../../main.dart';
+import '../../config/app_state.dart';
 import '../images/image_picker_button.dart';
 import '../images/image_preview.dart';
 import '../images/upload_progress_indicator.dart';

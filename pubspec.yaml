@@ -87,6 +87,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   intl: ^0.20.2
   timeago: ^3.7.0                       # Time ago formatting for reviews
+  stylish_bottom_bar: ^1.1.1            # Stylish bottom navigation bar
 
 dev_dependencies:
   flutter_test:

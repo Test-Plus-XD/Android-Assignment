@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../../models.dart';
-import '../../main.dart';
+import '../../config/app_state.dart';
 
 /// Card widget displaying a single menu item
 ///

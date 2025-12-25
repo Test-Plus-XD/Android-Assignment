@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models.dart';
 import '../../services/auth_service.dart';
 import '../../services/review_service.dart';
-import '../../main.dart';
+import '../../config/app_state.dart';
 import 'review_card.dart';
 import 'review_form.dart';
 
