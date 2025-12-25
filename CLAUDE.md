@@ -2378,6 +2378,397 @@ Complete implementation of AI-powered assistant using Google Gemini 2.5 for rest
 
 ---
 
+#### Priority 7: Enhanced Restaurant Detail Page
+
+Complete enhancement of the restaurant detail page with improved visual hierarchy, modular widget structure, and better user experience.
+
+**New Widgets Created:**
+- `lib/widgets/restaurant_detail/hero_image_section.dart`
+  - Large hero image (300px height) with gradient overlay
+  - Distance badge overlay with white background and shadow
+  - Smooth loading with placeholder
+  - Error handling with fallback icon
+  - Gradient overlay for better text contrast
+
+- `lib/widgets/restaurant_detail/restaurant_info_card.dart`
+  - Elegant card layout with restaurant name and rating
+  - Tap-to-navigate address with underline decoration
+  - District and seating capacity display
+  - Keyword chips with themed colors
+  - Integration with review stats badge
+  - 16px border radius for modern look
+
+- `lib/widgets/restaurant_detail/contact_actions.dart`
+  - Icon-based action buttons (Phone, Email, Website)
+  - Color-coded buttons (Green for phone, Blue for email, Orange for website)
+  - Responsive row layout with equal width buttons
+  - Only shows available contact methods
+  - Bilingual labels
+
+- `lib/widgets/restaurant_detail/opening_hours_card.dart`
+  - Weekly schedule display with current day highlighting
+  - "Open Now" / "Closed" status indicator with color coding
+  - Time parsing for various formats (12h/24h, AM/PM)
+  - Current day highlighted with primary container color
+  - Day-by-day hours with proper formatting
+  - Bilingual day names and labels
+
+**Page Refactoring:**
+- Updated `lib/pages/restaurant_detail.dart`:
+  - Reduced file complexity by extracting widgets to separate files
+  - Improved visual hierarchy with proper spacing
+  - Hero image section at top (300px height with overlay)
+  - Restaurant info card with rating integration
+  - Contact action buttons in horizontal row
+  - Opening hours card with current status
+  - Google Maps section with improved padding
+  - Menu section with preview (first 3 items)
+  - Reviews section with stats and "View All" button
+  - Removed unused imports and cleaned up code
+  - Fixed bracket indentation issues
+  - All sections properly padded (16px horizontal)
+
+**Features:**
+- Enhanced visual design with card-based layout
+- Better information hierarchy
+- Improved spacing and padding consistency
+- Real-time "Open Now" status calculation
+- Distance badge on hero image
+- Review stats integrated into info card
+- Modular widget architecture for easier maintenance
+- Responsive design with max-width constraints
+- Smooth loading states and error handling
+- Bilingual support throughout (EN/TC)
+- Material Design 3 components
+- Proper theme awareness (light/dark modes)
+
+**Files Modified:**
+- `lib/pages/restaurant_detail.dart` - Refactored with new widgets
+
+**Files Created:**
+- `lib/widgets/restaurant_detail/hero_image_section.dart`
+- `lib/widgets/restaurant_detail/restaurant_info_card.dart`
+- `lib/widgets/restaurant_detail/contact_actions.dart`
+- `lib/widgets/restaurant_detail/opening_hours_card.dart`
+
+**Total Lines Added:** ~600 lines of production code
+
+---
+
+#### Priority 8: Restaurant Owner Dashboard
+
+Complete implementation of restaurant owner management system with claim functionality and store dashboard.
+
+**Models:** (No new models - uses existing Restaurant, MenuItem, Booking)
+
+**Service Implemented:**
+- `lib/services/store_service.dart` (~280 lines)
+  - **Restaurant Ownership**:
+    - `claimRestaurant(restaurantId)` - Claim ownership of a restaurant
+    - `getOwnedRestaurant()` - Fetch restaurant owned by current user
+    - `clearOwnedRestaurant()` - Clear cached data
+  - **Restaurant Management**:
+    - `updateRestaurant(restaurantId, updates)` - Update restaurant details
+    - `uploadRestaurantImage(restaurantId, imagePath)` - Upload restaurant image
+  - **State Properties**:
+    - `ownedRestaurant` - Currently owned restaurant
+    - `isLoading` - Loading state
+    - `error` - Error messages
+    - `hasOwnedRestaurant` - Convenience getter
+  - Full error handling and loading states
+  - Authentication integration with Firebase tokens
+  - Multipart image upload support
+
+**Page Created:**
+- `lib/pages/store_dashboard_page.dart` (~400 lines)
+  - **Dashboard Overview**:
+    - Restaurant header card with name, address, and seating
+    - Quick actions grid (2x2 layout)
+    - Statistics cards showing menu item count and bookings
+    - Pull-to-refresh functionality
+  - **Quick Actions**:
+    - Manage Menu - Navigate to menu management (placeholder)
+    - Bookings - View and manage reservations (placeholder)
+    - Reviews - View customer reviews (placeholder)
+    - Settings - Update restaurant info (placeholder)
+  - **Statistics Section**:
+    - Menu items count (live data from MenuService)
+    - Today's bookings count (placeholder for future implementation)
+    - Color-coded stat cards (Orange for menu, Blue for bookings)
+  - **Auth States**:
+    - Not logged in - Shows login prompt
+    - No owned restaurant - Shows claim prompt
+    - Loading - Shows circular progress indicator
+    - Has restaurant - Shows full dashboard
+  - Bilingual support (EN/TC) throughout
+
+**Integration:**
+- Registered `StoreService` as provider in `lib/main.dart`:
+  - Added as `ChangeNotifierProxyProvider<AuthService, StoreService>`
+  - Depends on AuthService for authentication
+  - Available to all widgets in the app
+- Added import for `store_service.dart` in main.dart
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app`
+- **Endpoints**:
+  - `POST /API/Restaurants/:id/claim` - Claim restaurant ownership (requires auth)
+  - `GET /API/Users/:uid` - Get user profile with restaurantId field
+  - `GET /API/Restaurants/:id` - Get restaurant details
+  - `PUT /API/Restaurants/:id` - Update restaurant (requires auth + ownership)
+  - `POST /API/Restaurants/:id/image` - Upload restaurant image (multipart, requires auth)
+- All endpoints require `x-api-passcode: PourRice` header
+- Auth endpoints require `Authorization: Bearer <token>` header
+- Follows API.md specification exactly
+
+**Features:**
+- Restaurant ownership claim system
+- Store dashboard with overview and stats
+- Quick action grid for common tasks
+- Real-time statistics from MenuService
+- Pull-to-refresh support
+- Auth state handling (not logged in, no restaurant, has restaurant)
+- Image upload for restaurant photos
+- Restaurant information updates
+- Error handling with user-friendly messages
+- Loading states for all async operations
+- Bilingual support (EN/TC) throughout
+- Material Design 3 components
+- Responsive card-based layout
+- Smooth animations and transitions
+
+**Future Enhancements:**
+- Full menu management page
+- Bookings management page with status updates
+- Reviews management with owner responses
+- Restaurant settings page with all editable fields
+- Analytics and insights dashboard
+- Multi-restaurant support for chains
+- Staff management for larger establishments
+
+**Files Modified:**
+- `lib/main.dart` - Added StoreService provider
+
+**Files Created:**
+- `lib/services/store_service.dart`
+- `lib/pages/store_dashboard_page.dart`
+
+**Total Lines Added:** ~680 lines of production code
+
+---
+
+### ✅ Completed Features (2025-12-25)
+
+#### Priority 9: Advanced Search Features
+
+Complete implementation of enhanced search functionality with advanced filtering, faceted search, and geo-location search.
+
+**Models Created:**
+- `SearchResponse` - Enhanced search response with pagination metadata (hits, nbHits, page, nbPages, hitsPerPage, processingTimeMS)
+- `FacetValue` - Facet value with count for filtering (value, count)
+- `AdvancedSearchRequest` - Advanced search request with all filter options (query, districts, keywords, page, hitsPerPage, aroundLatLng, aroundRadius, custom filters)
+
+**Service Enhanced:**
+- Updated `lib/services/restaurant_service.dart` (~400 lines total, +140 lines added)
+  - `advancedSearch(request)` - Advanced search with full SearchResponse metadata
+  - `getFacetValues(facetName, query)` - Get facet values for filtering (District_EN, District_TC, Keyword_EN, Keyword_TC)
+  - `searchNearby(latitude, longitude, radiusMeters, ...)` - Geo-location search with radius
+  - `getNearbyRestaurants(latitude, longitude, radiusMeters, limit)` - Quick nearby search
+  - Full support for combining query, district, keyword, and geo filters
+  - Processing time tracking for performance monitoring
+
+**API Integration:**
+- Base URL: `https://vercel-express-api-alpha.vercel.app`
+- **Endpoints**:
+  - `GET /API/Algolia/Restaurants` - Basic search with query parameters
+  - `GET /API/Algolia/Restaurants/facets/:facetName` - Get facet values
+  - `POST /API/Algolia/Restaurants/advanced` - Advanced search with custom filters (future)
+- **Query Parameters**:
+  - `query` - Full-text search (searches both EN and TC)
+  - `districts` - Comma-separated districts
+  - `keywords` - Comma-separated keywords
+  - `page` - Page number (default: 0)
+  - `hitsPerPage` - Results per page (default: 20, max: 100)
+  - `aroundLatLng` - Geo coordinates in "lat,lng" format
+  - `aroundRadius` - Radius in meters
+- All endpoints require `x-api-passcode: PourRice` header
+- Follows API.md specification exactly
+
+**Features:**
+- Advanced search with multiple filter combinations
+- Faceted search for discovering filter options
+- Geo-location search within radius
+- Pagination with metadata (hasNextPage, hasPreviousPage, isEmpty)
+- Processing time tracking
+- Combined text + filter + geo search
+- Real-time state updates with ChangeNotifier
+- Error handling with user-friendly messages
+- Loading states for all async operations
+- Bilingual support (EN/TC) throughout
+
+**Files Modified:**
+- `lib/models.dart` - Added SearchResponse, FacetValue, AdvancedSearchRequest models
+- `lib/services/restaurant_service.dart` - Added advanced search methods
+
+**Total Lines Added:** ~350 lines of production code
+
+---
+
+#### Priority 10: Constants System
+
+Complete implementation of constants system for standardized data across the application.
+
+**Constants Created:**
+- `lib/constants/districts.dart` (~95 lines)
+  - `DistrictOption` - Bilingual district data model
+  - `HKDistricts` - All 18 Hong Kong districts with EN/TC names
+  - `findByEn(name)` - Find district by English name (case-insensitive)
+  - `findByTc(name)` - Find district by Traditional Chinese name
+  - `getAllEnglish()` - Get all district names in English
+  - `getAllChinese()` - Get all district names in Traditional Chinese
+  - `getAllNames(isTC)` - Get district names based on language preference
+
+- `lib/constants/keywords.dart` (~185 lines)
+  - `KeywordOption` - Bilingual keyword data model with category
+  - `KeywordCategory` - Enum for dietary, cuisine, feature categories
+  - `RestaurantKeywords` - 50+ keywords organized by category
+    - Dietary: Vegan, Vegetarian, Plant-Based, Gluten-Free, Halal, Kosher, etc.
+    - Cuisine: Chinese, Japanese, Korean, Thai, Italian, Mexican, etc.
+    - Feature: Organic, Sustainable, Farm-to-Table, Pet-Friendly, etc.
+  - `findByEn(name)` - Find keyword by English name (case-insensitive)
+  - `findByTc(name)` - Find keyword by Traditional Chinese name
+  - `getByCategory(category)` - Get keywords filtered by category
+  - `getAllEnglish()`, `getAllChinese()`, `getAllNames(isTC)` - Get all keyword names
+  - `getDietaryNames(isTC)`, `getCuisineNames(isTC)`, `getFeatureNames(isTC)` - Get category-specific names
+
+- `lib/constants/payments.dart` (~105 lines)
+  - `PaymentOption` - Bilingual payment method data model with icon
+  - `PaymentMethods` - 10 payment methods (Cash, Credit Card, Octopus, AlipayHK, WeChat Pay, PayMe, FPS, Apple Pay, Google Pay)
+  - `findByEn(name)` - Find payment method by English name
+  - `findByTc(name)` - Find payment method by Traditional Chinese name
+  - `getAllEnglish()`, `getAllChinese()`, `getAllNames(isTC)` - Get all payment method names
+
+- `lib/constants/weekdays.dart` (~140 lines)
+  - `Weekdays` - Weekday names in multiple formats
+    - `enShort` - Short English names (Mon, Tue, Wed, ...)
+    - `enFull` - Full English names (Monday, Tuesday, ...)
+    - `tc` - Traditional Chinese names (星期一, 星期二, ...)
+    - `tcShort` - Short Traditional Chinese names (週一, 週二, ...)
+  - `getName(index, isTC, useShortForm)` - Get weekday name by index (0 = Monday, 6 = Sunday)
+  - `getAll(isTC, useShortForm)` - Get all weekday names
+  - `dateTimeToIndex(dateTimeWeekday)` - Convert DateTime.weekday to index
+  - `indexToDateTime(index)` - Convert index to DateTime.weekday
+  - `today(isTC, useShortForm)` - Get current weekday name
+  - `isWeekend(index)` - Check if index is weekend
+  - `indexFromEnglish(name)`, `indexFromChinese(name)` - Get index from name
+
+**Features:**
+- Centralized constants for consistent data
+- Bilingual support (EN/TC) for all constants
+- Helper methods for finding, filtering, and converting
+- Category-based organization for keywords
+- Icon support for payment methods
+- Weekday utilities for calendar operations
+- Case-insensitive search for English names
+- Null-safe operations with proper error handling
+
+**Files Created:**
+- `lib/constants/districts.dart`
+- `lib/constants/keywords.dart`
+- `lib/constants/payments.dart`
+- `lib/constants/weekdays.dart`
+
+**Total Lines Added:** ~525 lines of production code
+
+---
+
+#### Priority 11: Swiper/Carousel System
+
+Complete implementation of carousel system with Android-optimized touch gestures and Material Design components.
+
+**Dependency Added:**
+- `smooth_page_indicator: ^1.1.0` - Material Design page indicators
+
+**Widgets Created:**
+- `lib/widgets/carousel/hero_carousel.dart` (~210 lines)
+  - `HeroCarouselItem` - Data model for hero carousel items (imageUrl, title, subtitle, onTap)
+  - `HeroCarousel` - Full-width hero image carousel
+    - Auto-play with configurable interval
+    - Smooth page indicators with worm effect
+    - Gradient overlay for better text readability
+    - Customizable height and padding
+    - Touch gesture support with carousel_slider
+    - Loading and error placeholders
+    - Title and subtitle with shadow for visibility
+
+- `lib/widgets/carousel/restaurant_carousel.dart` (~190 lines)
+  - `RestaurantCarousel` - Horizontal scrolling restaurant cards
+    - Enlarge center page effect
+    - Section title header
+    - Restaurant name, district, keywords display
+    - Gradient overlay on images
+    - Tap to view restaurant details
+    - Bilingual support (EN/TC)
+    - Cached network images
+    - Responsive card sizing (85% viewport)
+
+- `lib/widgets/carousel/offer_carousel.dart` (~250 lines)
+  - `OfferItem` - Data model for promotional offers (imageUrl, title, subtitle, description, backgroundColor, onTap)
+  - `OfferCarousel` - Promotional offers carousel
+    - Auto-play with smooth transitions
+    - Page indicators with worm effect
+    - Gradient overlay for text readability
+    - "View" badge for tappable items
+    - Custom background colors
+    - Card elevation and rounded corners
+    - Title, subtitle, and description support
+
+- `lib/widgets/carousel/menu_carousel.dart` (~200 lines)
+  - `MenuCarousel` - Menu item images carousel
+    - Enlarge center page effect (20% enlargement)
+    - Price display with HK$ format
+    - Availability badges (Sold Out)
+    - Category tags
+    - Bilingual support (EN/TC)
+    - Swipe navigation with page indicators
+    - Gradient overlay on images
+    - Tap to view menu item details
+
+**Features:**
+- Android-optimized touch gestures (swipe, tap, drag)
+- Material Design 3 components and theming
+- Smooth animations with carousel_slider
+- Auto-play support with configurable intervals
+- Page indicators with worm effect animation
+- Gradient overlays for better text contrast
+- Cached network images for performance
+- Loading and error states
+- Bilingual support (EN/TC) throughout
+- Customizable heights, padding, and margins
+- Enlarge center page effect for focus
+- Responsive viewport sizing
+- Card-based design with elevation and shadows
+- Theme-aware colors and typography
+
+**Use Cases:**
+1. **HeroCarousel**: Featured content, banners, promotional images
+2. **RestaurantCarousel**: Restaurant discovery, featured restaurants, nearby restaurants
+3. **OfferCarousel**: Special offers, deals, announcements
+4. **MenuCarousel**: Menu item showcase, dish galleries, food photography
+
+**Files Modified:**
+- `pubspec.yaml` - Added smooth_page_indicator dependency
+
+**Files Created:**
+- `lib/widgets/carousel/hero_carousel.dart`
+- `lib/widgets/carousel/restaurant_carousel.dart`
+- `lib/widgets/carousel/offer_carousel.dart`
+- `lib/widgets/carousel/menu_carousel.dart`
+
+**Total Lines Added:** ~850 lines of production code
+
+---
+
 **Last Updated**: 2025-12-25
 **Maintained By**: Development Team & Claude AI Assistant
 **For**: AI Assistants (Claude, GPT, etc.)

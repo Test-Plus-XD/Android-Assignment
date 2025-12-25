@@ -147,106 +147,11 @@ class Restaurant {
         : (keywordEn ?? keywordTc ?? []);
   }
 }
-
-// District filter option model
-class DistrictOption {
-  final String en;
-  final String tc;
-
-  const DistrictOption({required this.en, required this.tc});
-
-  // Returns display label based on language preference
-  String getLabel(bool isTraditionalChinese) {
-    return isTraditionalChinese ? tc : en;
-  }
-}
-
-// Hardcoded Hong Kong districts list
-class HongKongDistricts {
-  // All available districts with bilingual labels
-  static const List<DistrictOption> all = [
-    DistrictOption(en: 'Islands', tc: '離島'),
-    DistrictOption(en: 'Kwai Tsing', tc: '葵青'),
-    DistrictOption(en: 'North', tc: '北區'),
-    DistrictOption(en: 'Sai Kung', tc: '西貢'),
-    DistrictOption(en: 'Sha Tin', tc: '沙田'),
-    DistrictOption(en: 'Tai Po', tc: '大埔'),
-    DistrictOption(en: 'Tsuen Wan', tc: '荃灣'),
-    DistrictOption(en: 'Tuen Mun', tc: '屯門'),
-    DistrictOption(en: 'Yuen Long', tc: '元朗'),
-    DistrictOption(en: 'Kowloon City', tc: '九龍城'),
-    DistrictOption(en: 'Kwun Tong', tc: '觀塘'),
-    DistrictOption(en: 'Sham Shui Po', tc: '深水埗'),
-    DistrictOption(en: 'Wong Tai Sin', tc: '黃大仙'),
-    DistrictOption(en: 'Yau Tsim Mong', tc: '油尖旺'),
-    DistrictOption(en: 'Central and Western', tc: '中西區'),
-    DistrictOption(en: 'Eastern', tc: '東區'),
-    DistrictOption(en: 'Southern', tc: '南區'),
-    DistrictOption(en: 'Wan Chai', tc: '灣仔'),
-  ];
-
-  // "All Districts" option for UI
-  static const DistrictOption allDistricts =
-  DistrictOption(en: 'All Districts', tc: '所有地區');
-
-  // Returns full list including "All Districts" option
-  static List<DistrictOption> get withAllOption => [allDistricts, ...all];
-
-  // Finds district by English name
-  static DistrictOption? findByEn(String en) {
-    try {
-      return all.firstWhere((d) => d.en == en);
-    } catch (_) {
-      return null;
-    }
-  }
-}
-
-// Keyword filter option model
-class KeywordOption {
-  final String en;
-  final String tc;
-
-  const KeywordOption({required this.en, required this.tc});
-
-  // Returns display label based on language preference
-  String getLabel(bool isTraditionalChinese) {
-    return isTraditionalChinese ? tc : en;
-  }
-}
-
-// Hardcoded keywords list (vegetarian/vegan restaurant types)
-class RestaurantKeywords {
-  // Common keywords for vegetarian restaurants
-  static const List<KeywordOption> all = [
-    KeywordOption(en: 'Vegan', tc: '全素'),
-    KeywordOption(en: 'Vegetarian', tc: '素食'),
-    KeywordOption(en: 'Plant-Based', tc: '植物性'),
-    KeywordOption(en: 'Organic', tc: '有機'),
-    KeywordOption(en: 'Buffet', tc: '自助餐'),
-    KeywordOption(en: 'Chinese', tc: '中式'),
-    KeywordOption(en: 'Western', tc: '西式'),
-    KeywordOption(en: 'Japanese', tc: '日式'),
-    KeywordOption(en: 'Thai', tc: '泰式'),
-    KeywordOption(en: 'Indian', tc: '印度'),
-  ];
-
-  // "All Categories" option for UI
-  static const KeywordOption allCategories =
-  KeywordOption(en: 'All Categories', tc: '所有分類');
-
-  // Returns full list including "All Categories" option
-  static List<KeywordOption> get withAllOption => [allCategories, ...all];
-
-  // Finds keyword by English name
-  static KeywordOption? findByEn(String en) {
-    try {
-      return all.firstWhere((k) => k.en == en);
-    } catch (_) {
-      return null;
-    }
-  }
-}
+// NOTE: DistrictOption, KeywordOption, and PaymentOption models have been moved to:
+// - lib/constants/districts.dart
+// - lib/constants/keywords.dart
+// - lib/constants/payments.dart
+// Import those files to use the constants.
 
 /// User preferences model
 ///
@@ -1175,5 +1080,172 @@ class GeminiRestaurantDescriptionResponse {
       description: json['description'] ?? '',
       restaurant: json['restaurant'],
     );
+  }
+}
+
+// ============================================================================
+// Advanced Search Models
+// ============================================================================
+
+/// Enhanced search response with pagination metadata
+class SearchResponse {
+  final List<Restaurant> hits;
+  final int nbHits;
+  final int page;
+  final int nbPages;
+  final int hitsPerPage;
+  final String? processingTimeMS;
+
+  SearchResponse({
+    required this.hits,
+    required this.nbHits,
+    required this.page,
+    required this.nbPages,
+    required this.hitsPerPage,
+    this.processingTimeMS,
+  });
+
+  factory SearchResponse.fromJson(Map<String, dynamic> json) {
+    return SearchResponse(
+      hits: (json['hits'] as List?)
+              ?.map((hit) => Restaurant.fromJson(hit as Map<String, dynamic>))
+              .toList() ??
+          [],
+      nbHits: json['nbHits'] ?? 0,
+      page: json['page'] ?? 0,
+      nbPages: json['nbPages'] ?? 0,
+      hitsPerPage: json['hitsPerPage'] ?? 20,
+      processingTimeMS: json['processingTimeMS']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'hits': hits.map((h) => h.toJson()).toList(),
+      'nbHits': nbHits,
+      'page': page,
+      'nbPages': nbPages,
+      'hitsPerPage': hitsPerPage,
+      if (processingTimeMS != null) 'processingTimeMS': processingTimeMS,
+    };
+  }
+
+  bool get hasNextPage => page < nbPages - 1;
+  bool get hasPreviousPage => page > 0;
+  bool get isEmpty => hits.isEmpty;
+  bool get isNotEmpty => hits.isNotEmpty;
+}
+
+/// Facet value with count for filtering
+class FacetValue {
+  final String value;
+  final int count;
+
+  FacetValue({
+    required this.value,
+    required this.count,
+  });
+
+  factory FacetValue.fromJson(Map<String, dynamic> json) {
+    return FacetValue(
+      value: json['value'] ?? '',
+      count: json['count'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'value': value,
+      'count': count,
+    };
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FacetValue &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => '$value ($count)';
+}
+
+/// Advanced search request with all filter options
+class AdvancedSearchRequest {
+  final String? query;
+  final List<String>? districts;
+  final List<String>? keywords;
+  final int page;
+  final int hitsPerPage;
+  final String? aroundLatLng; // "lat,lng" format
+  final int? aroundRadius; // in meters
+  final Map<String, dynamic>? filters; // Custom filters
+
+  AdvancedSearchRequest({
+    this.query,
+    this.districts,
+    this.keywords,
+    this.page = 0,
+    this.hitsPerPage = 20,
+    this.aroundLatLng,
+    this.aroundRadius,
+    this.filters,
+  });
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = {
+      'page': page,
+      'hitsPerPage': hitsPerPage,
+    };
+
+    if (query != null && query!.isNotEmpty) {
+      json['query'] = query;
+    }
+    if (districts != null && districts!.isNotEmpty) {
+      json['districts'] = districts;
+    }
+    if (keywords != null && keywords!.isNotEmpty) {
+      json['keywords'] = keywords;
+    }
+    if (aroundLatLng != null) {
+      json['aroundLatLng'] = aroundLatLng;
+    }
+    if (aroundRadius != null) {
+      json['aroundRadius'] = aroundRadius;
+    }
+    if (filters != null && filters!.isNotEmpty) {
+      json['filters'] = filters;
+    }
+
+    return json;
+  }
+
+  Map<String, String> toQueryParameters() {
+    final Map<String, String> params = {
+      'page': page.toString(),
+      'hitsPerPage': hitsPerPage.toString(),
+    };
+
+    if (query != null && query!.isNotEmpty) {
+      params['query'] = query!;
+    }
+    if (districts != null && districts!.isNotEmpty) {
+      params['districts'] = districts!.join(',');
+    }
+    if (keywords != null && keywords!.isNotEmpty) {
+      params['keywords'] = keywords!.join(',');
+    }
+    if (aroundLatLng != null) {
+      params['aroundLatLng'] = aroundLatLng!;
+    }
+    if (aroundRadius != null) {
+      params['aroundRadius'] = aroundRadius.toString();
+    }
+
+    return params;
   }
 }

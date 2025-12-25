@@ -7,7 +7,8 @@
       "Bash(find:*)",
       "Bash(test:*)",
       "Bash(flutter analyze:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(dart format:*)"
     ]
   }
 }

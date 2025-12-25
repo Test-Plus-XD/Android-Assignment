@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,6 +19,10 @@ import '../widgets/menu/menu_item_card.dart';
 import '../widgets/menu/menu_list.dart';
 import '../widgets/menu/menu_item_form.dart';
 import '../widgets/ai/gemini_chat_button.dart';
+import '../widgets/restaurant_detail/hero_image_section.dart';
+import '../widgets/restaurant_detail/restaurant_info_card.dart';
+import '../widgets/restaurant_detail/contact_actions.dart';
+import '../widgets/restaurant_detail/opening_hours_card.dart';
 
 /// Restaurant Detail Page - Native Android Integration
 /// 
@@ -660,168 +663,71 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// Restaurant Image
-            ///
-            /// Using CachedNetworkImage for better performance.
-            /// Images are cached on device, so subsequent views are instant.
-            CachedNetworkImage(
-              imageUrl: widget.restaurant.imageUrl ?? '',
-              height: 250,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                height: 250,
-                color: Colors.grey.shade300,
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (context, url, error) => Container(
-                height: 250,
-                color: Colors.grey.shade300,
-                child: const Icon(Icons.restaurant, size: 64),
+            /// Hero Image Section with overlay
+            HeroImageSection(
+              imageUrl: widget.restaurant.imageUrl,
+              distanceText: distanceText,
+              isTraditionalChinese: widget.isTraditionalChinese,
+            ),
+
+            const SizedBox(height: 16),
+
+            /// Restaurant Info Card
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Consumer<ReviewService>(
+                builder: (context, reviewService, child) {
+                  return FutureBuilder<ReviewStats?>(
+                    future: reviewService.getReviewStats(widget.restaurant.id),
+                    builder: (context, snapshot) {
+                      return RestaurantInfoCard(
+                        restaurant: widget.restaurant,
+                        name: name,
+                        address: address,
+                        district: district,
+                        keywords: keywords,
+                        isTraditionalChinese: widget.isTraditionalChinese,
+                        onAddressTap: _openInMaps,
+                        reviewStats: snapshot.data,
+                      );
+                    },
+                  );
+                },
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            /// Contact Actions
+            ContactActions(
+              contacts: widget.restaurant.contacts,
+              isTraditionalChinese: widget.isTraditionalChinese,
+              onPhonePressed: _makePhoneCall,
+              onEmailPressed: _sendEmail,
+              onWebsitePressed: _openWebsite,
+            ),
+
+            const SizedBox(height: 16),
+
+            /// Opening Hours Card
             Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  /// Restaurant Name and Distance Badge
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (distanceText != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.location_on,
-                                size: 16,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                distanceText,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  /// Basic Information - "田"-shaped Grid (2x2)
-                  ///
-                  /// Displays restaurant name, address, district, and seats
-                  /// in a clean grid layout for easy scanning.
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.2,
-                    children: [
-                      _buildGridTile(
-                        icon: Icons.restaurant_menu,
-                        label: widget.isTraditionalChinese ? '餐廳名稱' : 'Name',
-                        value: name,
-                      ),
-                      _buildGridTile(
-                        icon: Icons.location_on,
-                        label: widget.isTraditionalChinese ? '地址' : 'Address',
-                        value: address,
-                        onTap: _openInMaps,
-                      ),
-                      _buildGridTile(
-                        icon: Icons.map,
-                        label: widget.isTraditionalChinese ? '地區' : 'District',
-                        value: district,
-                      ),
-                      _buildGridTile(
-                        icon: Icons.event_seat,
-                        label: widget.isTraditionalChinese ? '座位數量' : 'Seats',
-                        value: widget.restaurant.seats?.toString() ??
-                            (widget.isTraditionalChinese ? '未提供' : 'Not provided'),
-                      ),
-                    ],
-                  ),
-                  /// Contact Information - "田"-shaped Grid
-                  ///
-                  /// Displays available contact methods in a grid.
-                  /// Only shows non-empty contact information.
-                  /// Uses 2 columns if 2 or 4 items, 3 columns if 3 items.
-                  if (contactMethods.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      widget.isTraditionalChinese ? '聯絡方式' : 'Contact Information',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    GridView.count(
-                      crossAxisCount: contactMethods.length == 3 ? 3 : 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: contactMethods.length == 3 ? 0.9 : 1.1,
-                      children: contactMethods,
-                    ),
-                  ],
-                  /// Keywords Section
-                  ///
-                  /// Displays restaurant features as chips between
-                  /// contacts and map for better visual flow.
-                  if (keywords.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      widget.isTraditionalChinese ? '特色' : 'Features',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: keywords
-                          .map((keyword) => Chip(
-                        label: Text(keyword),
-                        backgroundColor:
-                        Theme.of(context).colorScheme.secondaryContainer,
-                        labelStyle: TextStyle(
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
-                        ),
-                      ))
-                          .toList(),
-                    ),
-                  ],
-                  /// Map Section
-                  ///
-                  /// Interactive map with controls for viewing restaurant location.
-                  if (widget.restaurant.latitude != null &&
-                      widget.restaurant.longitude != null) ...[
-                    const SizedBox(height: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: OpeningHoursCard(
+                openingHours: widget.restaurant.openingHours,
+                isTraditionalChinese: widget.isTraditionalChinese,
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            /// Map Section - Google Maps integration
+            if (widget.restaurant.latitude != null &&
+                widget.restaurant.longitude != null) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -850,7 +756,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: SizedBox(
                       height: 300,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -926,12 +837,15 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                         ),
                       ),
                     ),
-                  ],
-                  /// Menu Section
-                  ///
-                  /// Displays restaurant menu items grouped by category.
-                  const SizedBox(height: 24),
-                  Consumer<MenuService>(
+                ),
+            ],
+
+            const SizedBox(height: 16),
+
+            /// Menu Section - Restaurant menu items
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Consumer<MenuService>(
                     builder: (context, menuService, child) {
                       return FutureBuilder<List<MenuItem>>(
                         future: menuService.getMenuItems(widget.restaurant.id),
@@ -980,18 +894,24 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       );
                     },
                   ),
-                  /// Reviews Section
-                  ///
-                  /// Displays review statistics and a list of user reviews.
-                  const SizedBox(height: 24),
-                  Consumer<ReviewService>(
-                    builder: (context, reviewService, child) {
-                      return FutureBuilder(
-                        future: reviewService.getReviewStats(widget.restaurant.id),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData && snapshot.data != null) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+
+            const SizedBox(height: 16),
+
+            /// Reviews Section - Restaurant reviews and ratings
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Consumer<ReviewService>(
+                builder: (context, reviewService, child) {
+                  return FutureBuilder<ReviewStats?>(
+                    future: reviewService.getReviewStats(widget.restaurant.id),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data != null) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
                                   widget.isTraditionalChinese ? '評價' : 'Reviews',
@@ -999,10 +919,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                ReviewStatsWidget(
-                                  stats: snapshot.data!,
-                                  onTap: () {
+                                TextButton(
+                                  onPressed: () {
                                     // Navigate to full reviews page
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
@@ -1014,16 +932,35 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                                       ),
                                     );
                                   },
+                                  child: Text(
+                                    widget.isTraditionalChinese ? '查看全部' : 'View All',
+                                  ),
                                 ),
                               ],
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      );
+                            ),
+                            const SizedBox(height: 12),
+                            ReviewStatsWidget(
+                              stats: snapshot.data!,
+                              onTap: () {
+                                // Navigate to full reviews page
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => _ReviewsPage(
+                                      restaurantId: widget.restaurant.id,
+                                      restaurantName: name,
+                                      isTraditionalChinese: widget.isTraditionalChinese,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        );
+                      }
+                      return const SizedBox.shrink();
                     },
-                  ),
-                ],
+                  );
+                },
               ),
             ),
           ],

@@ -251,6 +251,146 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
+  // ============================================================================
+  // Advanced Search Features
+  // ============================================================================
+
+  /// Advanced search with full SearchResponse metadata
+  Future<SearchResponse> advancedSearch(AdvancedSearchRequest request) async {
+    _isLoading = true;
+    if (request.page == 0) clearResults();
+    notifyListeners();
+
+    try {
+      final uri = Uri.parse(_searchEndpoint).replace(
+        queryParameters: request.toQueryParameters(),
+      );
+
+      if (kDebugMode) print('RestaurantService: Advanced search → $uri');
+      final response = await http.get(uri, headers: _getHeaders());
+
+      if (response.statusCode == 200) {
+        final searchResponse = SearchResponse.fromJson(jsonDecode(response.body));
+
+        // Update internal state
+        _searchResults = request.page == 0
+            ? List<Restaurant>.from(searchResponse.hits)
+            : [..._searchResults, ...searchResponse.hits];
+        _totalHits = searchResponse.nbHits;
+        _currentPage = searchResponse.page;
+        _totalPages = searchResponse.nbPages;
+
+        // Notify listeners
+        _searchResultsController.add(List<Restaurant>.from(_searchResults));
+        _metadataController.add(SearchMetadata(_totalHits));
+
+        _errorMessage = null;
+        _isLoading = false;
+        notifyListeners();
+
+        if (kDebugMode) {
+          print('RestaurantService: Advanced search completed');
+          print('  Results: ${searchResponse.hits.length} hits');
+          print('  Page: ${searchResponse.page}/${searchResponse.nbPages - 1}');
+          print('  Total: ${searchResponse.nbHits} hits');
+          if (searchResponse.processingTimeMS != null) {
+            print('  Processing time: ${searchResponse.processingTimeMS}ms');
+          }
+        }
+
+        return searchResponse;
+      } else {
+        throw Exception('Search failed with status: ${response.statusCode}');
+      }
+    } catch (e) {
+      _errorMessage = 'Advanced search error: $e';
+      _isLoading = false;
+      _searchResults = [];
+      notifyListeners();
+      if (kDebugMode) print('RestaurantService Error: $e');
+      rethrow;
+    }
+  }
+
+  /// Get facet values for a specific facet (e.g., districts, keywords)
+  /// Facet names: District_EN, District_TC, Keyword_EN, Keyword_TC
+  Future<List<FacetValue>> getFacetValues(
+    String facetName, {
+    String? query,
+  }) async {
+    try {
+      final endpoint = AppConfig.getEndpoint('API/Algolia/Restaurants/facets/$facetName');
+      final uri = Uri.parse(endpoint).replace(
+        queryParameters: {
+          if (query != null && query.isNotEmpty) 'query': query,
+        },
+      );
+
+      if (kDebugMode) print('RestaurantService: Getting facets → $uri');
+      final response = await http.get(uri, headers: _getHeaders());
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final facets = (data['facetHits'] as List?)
+                ?.map((f) => FacetValue.fromJson(f as Map<String, dynamic>))
+                .toList() ??
+            [];
+
+        if (kDebugMode) {
+          print('RestaurantService: Got ${facets.length} facet values for $facetName');
+        }
+
+        return facets;
+      } else {
+        throw Exception('Failed to get facets: ${response.statusCode}');
+      }
+    } catch (error) {
+      if (kDebugMode) print('Error getting facet values: $error');
+      rethrow;
+    }
+  }
+
+  /// Search restaurants near a location (geo search)
+  Future<SearchResponse> searchNearby({
+    required double latitude,
+    required double longitude,
+    int radiusMeters = 5000,
+    String? query,
+    List<String>? districts,
+    List<String>? keywords,
+    int page = 0,
+    int hitsPerPage = 20,
+  }) async {
+    final request = AdvancedSearchRequest(
+      query: query,
+      districts: districts,
+      keywords: keywords,
+      page: page,
+      hitsPerPage: hitsPerPage,
+      aroundLatLng: '$latitude,$longitude',
+      aroundRadius: radiusMeters,
+    );
+
+    return advancedSearch(request);
+  }
+
+  /// Quick search for nearby restaurants (returns list directly)
+  Future<List<Restaurant>> getNearbyRestaurants({
+    required double latitude,
+    required double longitude,
+    int radiusMeters = 5000,
+    int limit = 10,
+  }) async {
+    final response = await searchNearby(
+      latitude: latitude,
+      longitude: longitude,
+      radiusMeters: radiusMeters,
+      hitsPerPage: limit,
+    );
+
+    return response.hits;
+  }
+
   @override
   void dispose() {
     _searchResultsController.close();

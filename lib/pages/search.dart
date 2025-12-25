@@ -4,6 +4,8 @@ import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/restaurant_service.dart';
 import '../models.dart';
+import '../constants/districts.dart';
+import '../constants/keywords.dart';
 import 'restaurant_detail.dart';
 
 /// Search Page with Infinite Scroll Pagination (Version 5)
@@ -235,9 +237,9 @@ class _SearchPageState extends State<SearchPage> {
                   Expanded(
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: HongKongDistricts.all.length,
+                      itemCount: HKDistricts.all.length,
                       itemBuilder: (context, index) {
-                        final district = HongKongDistricts.all[index];
+                        final district = HKDistricts.all[index];
                         final isSelected = tempSelected.contains(district.en);
 
                         return CheckboxListTile(
@@ -649,7 +651,7 @@ class _SearchPageState extends State<SearchPage> {
                 children: [
                   // District chips
                   ..._selectedDistrictsEn.map((districtEn) {
-                    final district = HongKongDistricts.findByEn(districtEn);
+                    final district = HKDistricts.findByEn(districtEn);
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Chip(

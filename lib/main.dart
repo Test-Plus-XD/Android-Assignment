@@ -14,6 +14,7 @@ import 'services/menu_service.dart';
 import 'services/image_service.dart';
 import 'services/chat_service.dart';
 import 'services/gemini_service.dart';
+import 'services/store_service.dart';
 import 'pages/home.dart';
 import 'pages/search.dart';
 import 'pages/account.dart';
@@ -251,6 +252,15 @@ class PourRiceApp extends StatelessWidget {
         // GeminiService - AI assistant (no auth required)
         ChangeNotifierProvider(
           create: (_) => GeminiService(),
+        ),
+
+        // StoreService - restaurant owner management (needs AuthService)
+        ChangeNotifierProxyProvider<AuthService, StoreService>(
+          create: (context) => StoreService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? StoreService(authService),
         ),
       ],
       child: const AppRoot(),
