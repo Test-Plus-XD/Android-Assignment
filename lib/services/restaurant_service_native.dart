@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:algolia_helper_flutter/algolia_helper_flutter.dart';
+import 'package:algolia_helper_flutter/algolia_helper_flutter.dart' as algolia;
 import 'package:http/http.dart' as http;
 import '../config.dart';
-import '../models.dart';
+import '../models.dart' hide SearchResponse;
 
 // Search metadata containing result count
 class SearchMetadata {
   final int nbHits;
   const SearchMetadata(this.nbHits);
-  factory SearchMetadata.fromResponse(SearchResponse response) {
+  factory SearchMetadata.fromResponse(algolia.SearchResponse response) {
     return SearchMetadata(response.nbHits);
   }
 }
@@ -22,7 +22,7 @@ class HitsPage {
   final int? nextPageKey;
   const HitsPage(this.items, this.pageKey, this.nextPageKey);
 
-  factory HitsPage.fromResponse(SearchResponse response) {
+  factory HitsPage.fromResponse(algolia.SearchResponse response) {
     final items = response.hits.map((hit) => Restaurant.fromJson(hit)).toList();
     // Debug: log pagination info
     if (kDebugMode) print('Algolia response → page: ${response.page}, nbPages: ${response.nbPages}, hits this page: ${response.hits.length}, totalHits: ${response.nbHits}');
@@ -45,9 +45,9 @@ class RestaurantService with ChangeNotifier {
   //static final String _apiEndpoint = '$_apiBaseUrl/API/Restaurants';
   static final String _apiEndpoint = AppConfig.getEndpoint('API/Restaurants');
   // Algolia search components
-  late final HitsSearcher _hitsSearcher;
+  late final algolia.HitsSearcher _hitsSearcher;
   // Stream subscriptions
-  StreamSubscription<SearchResponse>? _responsesSubscription;
+  StreamSubscription<algolia.SearchResponse>? _responsesSubscription;
 
   // Cached state
   List<Restaurant> _searchResults = [];
@@ -66,7 +66,7 @@ class RestaurantService with ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   // Reactive streams
-  Stream<SearchResponse> get responsesStream => _hitsSearcher.responses;
+  Stream<algolia.SearchResponse> get responsesStream => _hitsSearcher.responses;
   Stream<SearchMetadata> get metadataStream =>
       _hitsSearcher.responses.map(SearchMetadata.fromResponse);
   Stream<HitsPage> get pagesStream =>
@@ -79,7 +79,7 @@ class RestaurantService with ChangeNotifier {
 
   // Initialises Algolia searcher
   void _initialiseAlgolia() {
-    _hitsSearcher = HitsSearcher(
+    _hitsSearcher = algolia.HitsSearcher(
       applicationID: _algoliaAppId,
       apiKey: _algoliaSearchKey,
       indexName: _algoliaIndexName,

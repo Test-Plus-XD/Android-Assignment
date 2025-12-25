@@ -13,16 +13,14 @@ import '../services/chat_service.dart';
 import '../models.dart';
 import 'chat_page.dart';
 import '../widgets/reviews/review_stats.dart';
-import '../widgets/reviews/review_list.dart';
-import '../widgets/reviews/review_form.dart';
 import '../widgets/menu/menu_item_card.dart';
-import '../widgets/menu/menu_list.dart';
-import '../widgets/menu/menu_item_form.dart';
 import '../widgets/ai/gemini_chat_button.dart';
 import '../widgets/restaurant_detail/hero_image_section.dart';
 import '../widgets/restaurant_detail/restaurant_info_card.dart';
 import '../widgets/restaurant_detail/contact_actions.dart';
 import '../widgets/restaurant_detail/opening_hours_card.dart';
+import 'restaurant_reviews_page.dart';
+import 'restaurant_menu_page.dart';
 
 /// Restaurant Detail Page - Native Android Integration
 /// 
@@ -57,10 +55,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   int _numberOfGuests = 1;
   // Loading states
   bool _isBooking = false;
-  // Map type and controls visibility
+  // Map type toggle
   MapType _currentMapType = MapType.normal;
-  // Map type toggle states
-  final bool _showMapControls = true;
 
   @override
   void dispose() {
@@ -485,58 +481,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     }
   }
 
-  /// Build a grid tile card for information display
-  ///
-  /// Creates a consistent card layout for the "田"-shaped grid.
-  Widget _buildGridTile({
-    required IconData icon,
-    required String label,
-    required String value,
-    VoidCallback? onTap,
-  }) {
-    return Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (onTap != null) Icon(Icons.arrow_forward_ios, size: 12),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   /// Build contact action tile
   ///
   /// Creates an interactive card for contact methods with appropriate icons.
@@ -868,7 +812,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                                         // Navigate to full menu page
                                         Navigator.of(context).push(
                                           MaterialPageRoute(
-                                            builder: (context) => _MenuPage(
+                                            builder: (context) => RestaurantMenuPage(
                                               restaurantId: widget.restaurant.id,
                                               restaurantName: name,
                                               isTraditionalChinese: widget.isTraditionalChinese,
@@ -924,7 +868,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                                     // Navigate to full reviews page
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
-                                        builder: (context) => _ReviewsPage(
+                                        builder: (context) => RestaurantReviewsPage(
                                           restaurantId: widget.restaurant.id,
                                           restaurantName: name,
                                           isTraditionalChinese: widget.isTraditionalChinese,
@@ -945,7 +889,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                                 // Navigate to full reviews page
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (context) => _ReviewsPage(
+                                    builder: (context) => RestaurantReviewsPage(
                                       restaurantId: widget.restaurant.id,
                                       restaurantName: name,
                                       isTraditionalChinese: widget.isTraditionalChinese,
@@ -986,245 +930,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           widget.isTraditionalChinese ? '預訂' : 'Book',
         ),
       ),
-    );
-  }
-}
-
-/// Reviews Page
-///
-/// Full-screen page for viewing and managing reviews.
-class _ReviewsPage extends StatelessWidget {
-  final String restaurantId;
-  final String restaurantName;
-  final bool isTraditionalChinese;
-
-  const _ReviewsPage({
-    required this.restaurantId,
-    required this.restaurantName,
-    required this.isTraditionalChinese,
-  });
-
-  Future<void> _showAddReviewForm(BuildContext context) async {
-    final authService = context.read<AuthService>();
-    final reviewService = context.read<ReviewService>();
-
-    if (authService.currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isTraditionalChinese ? '請先登入以撰寫評價' : 'Please sign in to write a review',
-          ),
-          action: SnackBarAction(
-            label: isTraditionalChinese ? '登入' : 'Sign In',
-            onPressed: () {
-              Navigator.of(context).pushReplacementNamed('/login');
-            },
-          ),
-        ),
-      );
-      return;
-    }
-
-    await showReviewForm(
-      context: context,
-      restaurantId: restaurantId,
-      isTraditionalChinese: isTraditionalChinese,
-      onSubmit: (rating, comment, imageUrl) async {
-        final request = CreateReviewRequest(
-          restaurantId: restaurantId,
-          rating: rating,
-          comment: comment,
-          imageUrl: imageUrl,
-          dateTime: DateTime.now().toIso8601String(),
-        );
-
-        final reviewId = await reviewService.createReview(request);
-
-        if (context.mounted) {
-          if (reviewId != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isTraditionalChinese ? '評價已提交' : 'Review submitted successfully',
-                ),
-                backgroundColor: Colors.green,
-              ),
-            );
-            // Refresh stats
-            await reviewService.getReviewStats(restaurantId);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '${isTraditionalChinese ? '提交失敗' : 'Failed to submit review'}: ${reviewService.error}',
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          isTraditionalChinese ? '評價' : 'Reviews',
-        ),
-      ),
-      body: Column(
-        children: [
-          // Review stats at the top
-          Consumer<ReviewService>(
-            builder: (context, reviewService, child) {
-              return FutureBuilder(
-                future: reviewService.getReviewStats(restaurantId),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData && snapshot.data != null) {
-                    return ReviewStatsWidget(stats: snapshot.data!);
-                  }
-                  return const SizedBox.shrink();
-                },
-              );
-            },
-          ),
-          const Divider(),
-          // Reviews list
-          Expanded(
-            child: ReviewList(restaurantId: restaurantId),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddReviewForm(context),
-        icon: const Icon(Icons.rate_review),
-        label: Text(
-          isTraditionalChinese ? '撰寫評價' : 'Write Review',
-        ),
-      ),
-    );
-  }
-}
-
-/// Menu Page
-///
-/// Full-screen page for viewing restaurant menu.
-class _MenuPage extends StatelessWidget {
-  final String restaurantId;
-  final String restaurantName;
-  final bool isTraditionalChinese;
-
-  const _MenuPage({
-    required this.restaurantId,
-    required this.restaurantName,
-    required this.isTraditionalChinese,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final authService = context.watch<AuthService>();
-    final isOwner = false; // TODO: Implement owner check based on user type
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          isTraditionalChinese ? '菜單' : 'Menu',
-        ),
-      ),
-      body: MenuList(
-        restaurantId: restaurantId,
-        showActions: isOwner,
-        onEdit: isOwner
-            ? (item) {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => MenuItemForm(
-                    restaurantId: restaurantId,
-                    menuItem: item,
-                  ),
-                );
-              }
-            : null,
-        onDelete: isOwner
-            ? (item) async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(
-                      isTraditionalChinese ? '確認刪除' : 'Confirm Delete',
-                    ),
-                    content: Text(
-                      isTraditionalChinese
-                          ? '確定要刪除 "${item.getDisplayName(isTraditionalChinese)}" 嗎？'
-                          : 'Are you sure you want to delete "${item.getDisplayName(isTraditionalChinese)}"?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text(isTraditionalChinese ? '取消' : 'Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text(isTraditionalChinese ? '刪除' : 'Delete'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirmed == true && context.mounted) {
-                  try {
-                    final menuService = context.read<MenuService>();
-                    await menuService.deleteMenuItem(restaurantId, item.id);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            isTraditionalChinese ? '已刪除菜單項目' : 'Menu item deleted',
-                          ),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(e.toString()),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                }
-              }
-            : null,
-      ),
-      floatingActionButton: isOwner
-          ? FloatingActionButton.extended(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => MenuItemForm(
-                    restaurantId: restaurantId,
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add),
-              label: Text(
-                isTraditionalChinese ? '新增項目' : 'Add Item',
-              ),
-            )
-          : null,
     );
   }
 }
