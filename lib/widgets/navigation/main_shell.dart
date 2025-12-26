@@ -64,6 +64,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   List<Widget>? _cachedPages;
   String? _lastUserType;
   bool? _lastLoginState;
+  bool? _lastLanguage; // Track language changes
   bool _initialIndexSet = false; // Track if we've set the initial index
 
   // Gemini FAB animation controller
@@ -325,13 +326,15 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         final isLoggedIn = authService.isLoggedIn;
         final userType = userService.currentProfile?.type;
 
-        // Only rebuild pages if login state or user type changed
+        // Only rebuild pages if login state, user type, or language changed
         if (_cachedPages == null ||
             _lastLoginState != isLoggedIn ||
-            _lastUserType != userType) {
+            _lastUserType != userType ||
+            _lastLanguage != widget.isTraditionalChinese) {
           _cachedPages = _buildPages(isLoggedIn, userType);
           _lastLoginState = isLoggedIn;
           _lastUserType = userType;
+          _lastLanguage = widget.isTraditionalChinese;
 
           // Set initial index to Home page on first load or when login state changes
           if (!_initialIndexSet || _lastLoginState != isLoggedIn) {
