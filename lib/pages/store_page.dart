@@ -29,10 +29,15 @@ class _StoreDashboardPageState extends State<StoreDashboardPage> {
   @override
   void initState() {
     super.initState();
-    _loadOwnedRestaurant();
+    // Defer loading to after the build phase to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadOwnedRestaurant();
+    });
   }
 
   Future<void> _loadOwnedRestaurant() async {
+    if (!mounted) return;
+
     final storeService = context.read<StoreService>();
     await storeService.getOwnedRestaurant();
   }
@@ -308,44 +313,9 @@ class _StoreDashboardPageState extends State<StoreDashboardPage> {
               ),
               const SizedBox(height: 16),
 
-              Consumer<MenuService>(
-                builder: (context, menuService, child) {
-                  return FutureBuilder<List<MenuItem>>(
-                    future: menuService.getMenuItems(restaurant.id),
-                    builder: (context, snapshot) {
-                      final menuItemCount =
-                          snapshot.hasData ? snapshot.data!.length : 0;
-
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              context: context,
-                              icon: Icons.restaurant_menu,
-                              label: widget.isTraditionalChinese
-                                  ? '菜單項目'
-                                  : 'Menu Items',
-                              value: menuItemCount.toString(),
-                              color: Colors.orange,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildStatCard(
-                              context: context,
-                              icon: Icons.calendar_today,
-                              label: widget.isTraditionalChinese
-                                  ? '今日預訂'
-                                  : 'Today\'s Bookings',
-                              value: '0', // TODO: Implement booking count
-                              color: Colors.blue,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
+              _StatisticsSection(
+                restaurantId: restaurant.id,
+                isTraditionalChinese: widget.isTraditionalChinese,
               ),
             ],
           ),
@@ -401,6 +371,105 @@ class _StoreDashboardPageState extends State<StoreDashboardPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            Icon(icon, size: 32, color: color),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Statistics Section Widget
+///
+/// Separated from main widget to prevent setState during build.
+/// Uses FutureBuilder with cached future to avoid multiple API calls.
+class _StatisticsSection extends StatefulWidget {
+  final String restaurantId;
+  final bool isTraditionalChinese;
+
+  const _StatisticsSection({
+    required this.restaurantId,
+    required this.isTraditionalChinese,
+  });
+
+  @override
+  State<_StatisticsSection> createState() => _StatisticsSectionState();
+}
+
+class _StatisticsSectionState extends State<_StatisticsSection> {
+  Future<List<MenuItem>>? _menuItemsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialise future in initState to avoid rebuilding during build
+    _menuItemsFuture = context.read<MenuService>().getMenuItems(widget.restaurantId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<MenuItem>>(
+      future: _menuItemsFuture,
+      builder: (context, snapshot) {
+        final menuItemCount = snapshot.hasData ? snapshot.data!.length : 0;
+
+        return Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                context: context,
+                icon: Icons.restaurant_menu,
+                label: widget.isTraditionalChinese ? '菜單項目' : 'Menu Items',
+                value: menuItemCount.toString(),
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildStatCard(
+                context: context,
+                icon: Icons.calendar_today,
+                label: widget.isTraditionalChinese ? '今日預訂' : 'Today\'s Bookings',
+                value: '0', // TODO: Implement booking count
+                color: Colors.blue,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

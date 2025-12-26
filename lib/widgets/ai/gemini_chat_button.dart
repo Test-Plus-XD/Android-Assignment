@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../pages/gemini_chat_page.dart';
+import '../../pages/gemini_page.dart';
 
 /// Floating action button for AI chat
 ///
@@ -50,7 +50,7 @@ class _GeminiChatButtonState extends State<GeminiChatButton>
   void _openChat() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => GeminiChatPage(
+        builder: (context) => GeminiChatRoomPage(
           isTraditionalChinese: widget.isTraditionalChinese,
           restaurantName: widget.restaurantName,
           restaurantCuisine: widget.restaurantCuisine,
@@ -117,7 +117,7 @@ class GeminiChatIconButton extends StatelessWidget {
   void _openChat(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => GeminiChatPage(
+        builder: (context) => GeminiChatRoomPage(
           isTraditionalChinese: isTraditionalChinese,
           restaurantName: restaurantName,
           restaurantCuisine: restaurantCuisine,

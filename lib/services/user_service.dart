@@ -12,6 +12,7 @@ class UserService with ChangeNotifier {
   User? _currentProfile;
   bool _isLoading = false;
   String? _errorMessage;
+  String? _lastFetchedUid; // Track which UID we last fetched to avoid redundant calls
 
   UserService(this._authService) {
     _authService.addListener(_onAuthChanged);
@@ -34,12 +35,20 @@ class UserService with ChangeNotifier {
 
   void _onAuthChanged() {
     if (_authService.isLoggedIn && _authService.uid != null) {
+      // Skip if we already fetched this user's profile
+      if (_lastFetchedUid == _authService.uid) {
+        return;
+      }
+
       // Use microtask to ensure this doesn't block the UI/Build cycle
       Future.microtask(() async {
-        final profile = await getUserProfile(_authService.uid!);
+        final uid = _authService.uid;
+        if (uid == null) return;
+
+        final profile = await getUserProfile(uid);
         if (profile == null && _authService.currentUser != null) {
           final newProfile = User(
-            uid: _authService.uid!,
+            uid: uid,
             email: _authService.currentUser!.email,
             displayName: _authService.currentUser!.displayName,
             photoURL: _authService.currentUser!.photoURL,
@@ -49,9 +58,11 @@ class UserService with ChangeNotifier {
           );
           await createUserProfile(newProfile);
         }
+        _lastFetchedUid = uid;
       });
     } else {
       _currentProfile = null;
+      _lastFetchedUid = null;
       notifyListeners();
     }
   }

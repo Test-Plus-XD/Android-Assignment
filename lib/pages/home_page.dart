@@ -98,6 +98,7 @@ class _FrontPageState extends State<FrontPage> {
   Future<void> _loadAllRestaurantsFromApi() async {
     if (_allRestaurants.isNotEmpty && !_loadingFeatured) return;
 
+    if (!mounted) return;
     setState(() => _loadingFeatured = true);
 
     try {
@@ -138,7 +139,9 @@ class _FrontPageState extends State<FrontPage> {
   /// see different restaurants on each visit, improving content discovery.
   void _extractFeaturedRestaurants() {
     if (_allRestaurants.isEmpty) {
-      setState(() => _cachedFeatured = []);
+      if (mounted) {
+        setState(() => _cachedFeatured = []);
+      }
       return;
     }
 
@@ -152,9 +155,11 @@ class _FrontPageState extends State<FrontPage> {
     /// If fewer than 10 restaurants exist, take all available
     final featuredCount = restaurantsCopy.length >= 10 ? 10 : restaurantsCopy.length;
 
-    setState(() {
-      _cachedFeatured = restaurantsCopy.take(featuredCount).toList();
-    });
+    if (mounted) {
+      setState(() {
+        _cachedFeatured = restaurantsCopy.take(featuredCount).toList();
+      });
+    }
   }
 
   /// Calculates and caches the 10 nearest restaurants
@@ -168,6 +173,7 @@ class _FrontPageState extends State<FrontPage> {
   /// The calculation happens client-side to avoid additional API calls
   /// and to provide real-time distance information.
   Future<void> _calculateNearbyRestaurants() async {
+    if (!mounted) return;
     setState(() => _loadingNearby = true);
 
     try {
@@ -193,8 +199,8 @@ class _FrontPageState extends State<FrontPage> {
               ),
             ),
           );
+          setState(() => _loadingNearby = false);
         }
-        setState(() => _loadingNearby = false);
         return;
       }
 
@@ -213,8 +219,8 @@ class _FrontPageState extends State<FrontPage> {
               ),
             ),
           );
+          setState(() => _loadingNearby = false);
         }
-        setState(() => _loadingNearby = false);
         return;
       }
 
@@ -259,7 +265,9 @@ class _FrontPageState extends State<FrontPage> {
             ),
           ),
         );
-        setState(() => _loadingNearby = false);
+        if (mounted) {
+          setState(() => _loadingNearby = false);
+        }
       }
     }
   }
@@ -269,6 +277,7 @@ class _FrontPageState extends State<FrontPage> {
   /// This method is called when user pulls down to refresh.
   /// It clears all caches and reloads everything from the API.
   Future<void> _refreshAll() async {
+    if (!mounted) return;
     setState(() {
       _loadingFeatured = true;
       _loadingNearby = true;
@@ -594,7 +603,12 @@ class _FrontPageState extends State<FrontPage> {
                       enlargeCenterPage: true,
                       viewportFraction: 0.82,
                       onPageChanged: (index, reason) {
-                        setState(() => _currentIndex = index);
+                        /// Check if widget is still mounted before updating state
+                        /// The carousel continues to auto-play after navigation,
+                        /// so this prevents setState calls on disposed widgets
+                        if (mounted) {
+                          setState(() => _currentIndex = index);
+                        }
                       },
                     ),
                   ),

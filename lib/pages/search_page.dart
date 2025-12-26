@@ -82,6 +82,10 @@ class _SearchPageState extends State<SearchPage> {
 
   // Handles scroll events to show/hide search bar
   void _onScroll() {
+    /// Check if widget is still mounted before updating state
+    /// The scroll listener continues to fire after navigation
+    if (!mounted) return;
+
     final currentOffset = _scrollController.offset;
     final difference = currentOffset - _lastScrollOffset;
 
@@ -214,10 +218,14 @@ class _SearchPageState extends State<SearchPage> {
                             // Apply button
                             FilledButton(
                               onPressed: () {
-                                setState(() {
-                                  _selectedDistrictsEn.clear();
-                                  _selectedDistrictsEn.addAll(tempSelected);
-                                });
+                                /// Check if widget is still mounted before updating state
+                                /// Modal dialogs might outlive the parent widget
+                                if (mounted) {
+                                  setState(() {
+                                    _selectedDistrictsEn.clear();
+                                    _selectedDistrictsEn.addAll(tempSelected);
+                                  });
+                                }
                                 Navigator.pop(context);
                                 _performSearch();
                               },
@@ -329,10 +337,14 @@ class _SearchPageState extends State<SearchPage> {
                             ),
                             FilledButton(
                               onPressed: () {
-                                setState(() {
-                                  _selectedKeywordsEn.clear();
-                                  _selectedKeywordsEn.addAll(tempSelected);
-                                });
+                                /// Check if widget is still mounted before updating state
+                                /// Modal dialogs might outlive the parent widget
+                                if (mounted) {
+                                  setState(() {
+                                    _selectedKeywordsEn.clear();
+                                    _selectedKeywordsEn.addAll(tempSelected);
+                                  });
+                                }
                                 Navigator.pop(context);
                                 _performSearch();
                               },
@@ -662,9 +674,12 @@ class _SearchPageState extends State<SearchPage> {
                         ),
                         deleteIcon: const Icon(Icons.close, size: 16),
                         onDeleted: () {
-                          setState(() {
-                            _selectedDistrictsEn.remove(districtEn);
-                          });
+                          /// Check if widget is still mounted before updating state
+                          if (mounted) {
+                            setState(() {
+                              _selectedDistrictsEn.remove(districtEn);
+                            });
+                          }
                           _performSearch();
                         },
                         backgroundColor: Theme.of(context)
@@ -696,9 +711,12 @@ class _SearchPageState extends State<SearchPage> {
                         ),
                         deleteIcon: const Icon(Icons.close, size: 16),
                         onDeleted: () {
-                          setState(() {
-                            _selectedKeywordsEn.remove(keywordEn);
-                          });
+                          /// Check if widget is still mounted before updating state
+                          if (mounted) {
+                            setState(() {
+                              _selectedKeywordsEn.remove(keywordEn);
+                            });
+                          }
                           _performSearch();
                         },
                         backgroundColor: Theme.of(context)
@@ -721,10 +739,13 @@ class _SearchPageState extends State<SearchPage> {
                   if (_selectedDistrictsEn.length + _selectedKeywordsEn.length > 1)
                     TextButton.icon(
                       onPressed: () {
-                        setState(() {
-                          _selectedDistrictsEn.clear();
-                          _selectedKeywordsEn.clear();
-                        });
+                        /// Check if widget is still mounted before updating state
+                        if (mounted) {
+                          setState(() {
+                            _selectedDistrictsEn.clear();
+                            _selectedKeywordsEn.clear();
+                          });
+                        }
                         _performSearch();
                       },
                       icon: const Icon(Icons.clear_all, size: 16),

@@ -12,13 +12,13 @@ import '../widgets/ai/suggestion_chips.dart';
 /// - Context-aware responses (restaurant-specific or general)
 /// - Bilingual support (EN/TC)
 /// - Loading states and error handling
-class GeminiChatPage extends StatefulWidget {
+class GeminiChatRoomPage extends StatefulWidget {
   final bool isTraditionalChinese;
   final String? restaurantName;
   final String? restaurantCuisine;
   final String? restaurantDistrict;
 
-  const GeminiChatPage({
+  const GeminiChatRoomPage({
     required this.isTraditionalChinese,
     this.restaurantName,
     this.restaurantCuisine,
@@ -27,10 +27,10 @@ class GeminiChatPage extends StatefulWidget {
   });
 
   @override
-  State<GeminiChatPage> createState() => _GeminiChatPageState();
+  State<GeminiChatRoomPage> createState() => _GeminiChatRoomPageState();
 }
 
-class _GeminiChatPageState extends State<GeminiChatPage> {
+class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = [];

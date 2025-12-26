@@ -11,7 +11,7 @@ import '../services/review_service.dart';
 import '../services/menu_service.dart';
 import '../services/chat_service.dart';
 import '../models.dart';
-import 'chat_page.dart';
+import 'chat_room_page.dart';
 import '../widgets/reviews/review_stats.dart';
 import '../widgets/menu/menu_item_card.dart';
 import '../widgets/ai/gemini_chat_button.dart';
@@ -251,7 +251,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ChatPage(
+          builder: (context) => ChatRoomPage(
             roomId: roomId!,
             isTraditionalChinese: widget.isTraditionalChinese,
           ),
@@ -438,7 +438,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         );
       }
     } finally {
-      setState(() => _isBooking = false);
+      if (mounted) {
+        setState(() => _isBooking = false);
+      }
     }
   }
 
@@ -789,56 +791,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
             /// Menu Section - Restaurant menu items
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Consumer<MenuService>(
-                    builder: (context, menuService, child) {
-                      return FutureBuilder<List<MenuItem>>(
-                        future: menuService.getMenuItems(widget.restaurant.id),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      widget.isTraditionalChinese ? '菜單' : 'Menu',
-                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        // Navigate to full menu page
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (context) => RestaurantMenuPage(
-                                              restaurantId: widget.restaurant.id,
-                                              restaurantName: name,
-                                              isTraditionalChinese: widget.isTraditionalChinese,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      child: Text(widget.isTraditionalChinese ? '查看全部' : 'View All'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                // Show first 3 menu items as preview
-                                ...snapshot.data!.take(3).map((item) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: MenuItemCard(item: item),
-                                )),
-                              ],
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      );
-                    },
-                  ),
-                ),
+              child: _MenuSection(
+                restaurant: widget.restaurant,
+                name: name,
+                isTraditionalChinese: widget.isTraditionalChinese,
+              ),
+            ),
 
             const SizedBox(height: 16),
 
@@ -930,6 +888,85 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           widget.isTraditionalChinese ? '預訂' : 'Book',
         ),
       ),
+    );
+  }
+}
+
+/// Menu Section Widget
+///
+/// Separated from main widget to prevent setState during build.
+/// Uses FutureBuilder with cached future to avoid multiple API calls.
+class _MenuSection extends StatefulWidget {
+  final Restaurant restaurant;
+  final String name;
+  final bool isTraditionalChinese;
+
+  const _MenuSection({
+    required this.restaurant,
+    required this.name,
+    required this.isTraditionalChinese,
+  });
+
+  @override
+  State<_MenuSection> createState() => _MenuSectionState();
+}
+
+class _MenuSectionState extends State<_MenuSection> {
+  Future<List<MenuItem>>? _menuItemsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialise future in initState to avoid rebuilding during build
+    _menuItemsFuture = context.read<MenuService>().getMenuItems(widget.restaurant.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<MenuItem>>(
+      future: _menuItemsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.isTraditionalChinese ? '菜單' : 'Menu',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      // Navigate to full menu page
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => RestaurantMenuPage(
+                            restaurantId: widget.restaurant.id,
+                            restaurantName: widget.name,
+                            isTraditionalChinese: widget.isTraditionalChinese,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Text(widget.isTraditionalChinese ? '查看全部' : 'View All'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Show first 3 menu items as preview
+              ...snapshot.data!.take(3).map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: MenuItemCard(item: item),
+              )),
+            ],
+          );
+        }
+        return const SizedBox.shrink();
+      },
     );
   }
 }

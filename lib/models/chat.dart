@@ -14,6 +14,7 @@ class ChatRoom {
   final DateTime? lastMessageAt;
   final int messageCount;
   final List<User>? participantsData;
+  final List<ChatMessage>? recentMessages;
 
   ChatRoom({
     required this.roomId,
@@ -26,6 +27,7 @@ class ChatRoom {
     this.lastMessageAt,
     this.messageCount = 0,
     this.participantsData,
+    this.recentMessages,
   });
 
   factory ChatRoom.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,13 @@ class ChatRoom {
     if (json['participantsData'] != null) {
       participantsData = (json['participantsData'] as List)
           .map((userData) => User.fromJson(userData as Map<String, dynamic>))
+          .toList();
+    }
+
+    List<ChatMessage>? recentMessages;
+    if (json['recentMessages'] != null) {
+      recentMessages = (json['recentMessages'] as List)
+          .map((messageData) => ChatMessage.fromJson(messageData as Map<String, dynamic>))
           .toList();
     }
 
@@ -47,6 +56,7 @@ class ChatRoom {
       lastMessageAt: json['lastMessageAt'] != null ? DateTime.parse(json['lastMessageAt'] as String) : null,
       messageCount: json['messageCount'] as int? ?? 0,
       participantsData: participantsData,
+      recentMessages: recentMessages,
     );
   }
 
@@ -62,6 +72,7 @@ class ChatRoom {
       if (lastMessageAt != null) 'lastMessageAt': lastMessageAt!.toIso8601String(),
       'messageCount': messageCount,
       if (participantsData != null) 'participantsData': participantsData!.map((u) => u.toJson()).toList(),
+      if (recentMessages != null) 'recentMessages': recentMessages!.map((m) => m.toJson()).toList(),
     };
   }
 

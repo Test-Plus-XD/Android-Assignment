@@ -21,7 +21,7 @@ import 'config.dart';
 
 /// Understanding the Architecture
 ///
-/// This Flutter app follows a layered architecture similar to Angular:
+/// This Flutter app follows a layered architecture:
 ///
 /// 1. Services Layer (Business Logic):
 ///    - AuthService: Handles authentication (login/logout/register)
@@ -70,16 +70,16 @@ void main() async {
     AppConfig.printConfig();
   }
 
-  // Initialize Firebase with proper error handling
+  // Initialise Firebase with proper error handling
   try {
-    // Check if Firebase is already initialized
+    // Check if Firebase is already initialised
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-      print('Firebase initialized successfully');
+      print('Firebase initialised successfully');
     } else {
-      print('Firebase already initialized, using existing instance');
+      print('Firebase already initialised, using existing instance');
     }
   } catch (e) {
     // If initialization fails, log the error but don't crash
@@ -87,18 +87,17 @@ void main() async {
     // In production, show an error screen here
   }
 
-  // Initialize NotificationService with error handling
+  // Initialise NotificationService with error handling
   // This sets up notification channels and timezone data
   // We do it here once, before the app starts, so notifications work immediately
   final notificationService = NotificationService();
   try {
     await notificationService.initialise();
-    print('Notification service initialized successfully');
+    print('Notification service initialised successfully');
   } catch (e) {
     print('Notification service Initialization error: $e');
     // App can still run without notifications, so we continue
   }
-
   // Start the app, passing notification service instance
   runApp(PourRiceApp(notificationService: notificationService));
 }
@@ -110,7 +109,7 @@ void main() async {
 ///
 /// Provider Dependency Graph:
 /// - AppState: Global UI preferences (independent)
-/// - NotificationService: Pre-initialized (independent)
+/// - NotificationService: Pre-initialised (independent)
 /// - LocationService: GPS functionality (independent)
 /// - AuthService: Authentication (independent)
 /// - UserService: Depends on AuthService (needs auth tokens)
@@ -142,7 +141,7 @@ class PourRiceApp extends StatelessWidget {
     /// 2. Dependent services after (UserService, BookingService, etc. that need AuthService)
     ///
     /// ChangeNotifierProvider: Creates a new service instance
-    /// ChangeNotifierProvider.value: Uses an existing instance (e.g., pre-initialized NotificationService)
+    /// ChangeNotifierProvider.value: Uses an existing instance (e.g., pre-initialised NotificationService)
     /// ChangeNotifierProxyProvider: Creates a service that depends on another service
     return MultiProvider(
       providers: [
@@ -151,7 +150,7 @@ class PourRiceApp extends StatelessWidget {
           create: (_) => AppState(),
         ),
 
-        // NotificationService - already initialized in main()
+        // NotificationService - already initialised in main()
         ChangeNotifierProvider.value(
           value: notificationService,
         ),

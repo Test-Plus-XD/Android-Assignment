@@ -707,8 +707,8 @@ class _AccountPageState extends State<AccountPage> {
         final prefs = _editedPreferences ?? user.getPreferences();
         final typeDisplay = _editedType ?? user.type ?? '';
         final typeLabels = widget.isTraditionalChinese
-            ? {'Diner': '食客', '': '無'}
-            : {'Diner': 'Diner', '': 'None'};
+            ? {'Diner': '食客', 'Restaurant': '商戶', '': '無'}
+            : {'Diner': 'Diner', 'Restaurant': 'Restaurant', '': 'None'};
 
         // Display profile
         return SingleChildScrollView(
@@ -849,7 +849,7 @@ class _AccountPageState extends State<AccountPage> {
                     const Divider(height: 1),
                     _buildInfoRow(
                       accountTypeLabel,
-                      typeDisplay.isEmpty ? 'N/A' : (typeLabels[typeDisplay] ?? typeDisplay),
+                      typeLabels[typeDisplay] ?? typeDisplay,
                       icon: Icons.category,
                       editable: true,
                       onEdit: _showTypeSelector,
