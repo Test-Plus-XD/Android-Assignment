@@ -202,8 +202,13 @@ class PourRiceApp extends StatelessWidget {
           create: (context) => MenuService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? MenuService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);
+              return previous;
+            }
+            return MenuService(authService);
+          },
         ),
 
         // ImageService - independent (no auth required for image operations)
