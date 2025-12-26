@@ -6,10 +6,21 @@ import '../models.dart';
 import 'auth_service.dart';
 
 /// Service for managing restaurant menu items via REST API
+///
+/// This service uses per-restaurant caching to prevent state clashes when
+/// multiple pages (e.g., RestaurantDetailPage, StoreDashboardPage) load
+/// menu items for different restaurants simultaneously.
+///
+/// Key features:
+/// - Map-based caching: Each restaurant's menu is cached separately by ID
+/// - Intelligent refresh: Returns cached data by default, with forceRefresh option
+/// - Isolated state: Loading and error states tracked per restaurant
+/// - No data conflicts: Multiple pages can safely load different restaurant menus
 class MenuService extends ChangeNotifier {
   AuthService _authService;
 
   // State management - cache menu items per restaurant ID to avoid clashes
+  // Each restaurant ID maps to its own menu items, loading state, and error state
   final Map<String, List<MenuItem>> _menuItemsCache = {};
   final Map<String, bool> _loadingStates = {};
   final Map<String, String?> _errorStates = {};
@@ -19,7 +30,8 @@ class MenuService extends ChangeNotifier {
   bool get isLoading => _loadingStates.values.any((loading) => loading);
   String? get error => _errorStates.values.firstWhere((e) => e != null, orElse: () => null);
 
-  // New getters for specific restaurant
+  // Restaurant-specific getters - use these to access menu data for a specific restaurant
+  // This prevents state clashes when multiple pages load different restaurants
   List<MenuItem> getMenuItemsForRestaurant(String restaurantId) =>
       _menuItemsCache[restaurantId] ?? [];
   bool isLoadingForRestaurant(String restaurantId) =>
@@ -41,6 +53,20 @@ class MenuService extends ChangeNotifier {
   }
 
   /// Fetches all menu items for a specific restaurant
+  ///
+  /// Uses intelligent caching to improve performance:
+  /// - Returns cached data if available (unless forceRefresh is true)
+  /// - Each restaurant's menu is cached separately by ID
+  /// - Use forceRefresh: true after create/update/delete operations
+  ///
+  /// Example:
+  /// ```dart
+  /// // Load menu (uses cache if available)
+  /// final menu = await menuService.getMenuItems('restaurant123');
+  ///
+  /// // Force refresh after adding a new item
+  /// await menuService.getMenuItems('restaurant123', forceRefresh: true);
+  /// ```
   Future<List<MenuItem>> getMenuItems(String restaurantId, {bool forceRefresh = false}) async {
     // Return cached data if available and not forcing refresh
     if (!forceRefresh && _menuItemsCache.containsKey(restaurantId)) {

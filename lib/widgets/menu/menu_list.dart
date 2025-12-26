@@ -53,7 +53,9 @@ class _MenuListState extends State<MenuList> {
     final isTC = appState.isTraditionalChinese;
     final theme = Theme.of(context);
 
-    // Get menu items for this specific restaurant
+    // Get menu items for this specific restaurant using restaurant-specific getters
+    // This prevents state clashes when multiple pages load different restaurant menus
+    // (e.g., RestaurantDetailPage showing one restaurant while StoreDashboardPage shows another)
     final menuItems = menuService.getMenuItemsForRestaurant(widget.restaurantId);
     final isLoading = menuService.isLoadingForRestaurant(widget.restaurantId);
     final error = menuService.getErrorForRestaurant(widget.restaurantId);
