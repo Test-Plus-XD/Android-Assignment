@@ -53,15 +53,22 @@ class _MenuListState extends State<MenuList> {
     final isTC = appState.isTraditionalChinese;
     final theme = Theme.of(context);
 
+    // Get menu items for this specific restaurant using restaurant-specific getters
+    // This prevents state clashes when multiple pages load different restaurant menus
+    // (e.g., RestaurantDetailPage showing one restaurant while StoreDashboardPage shows another)
+    final menuItems = menuService.getMenuItemsForRestaurant(widget.restaurantId);
+    final isLoading = menuService.isLoadingForRestaurant(widget.restaurantId);
+    final error = menuService.getErrorForRestaurant(widget.restaurantId);
+
     // Loading state
-    if (menuService.isLoading && menuService.menuItems.isEmpty) {
+    if (isLoading && menuItems.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(),
       );
     }
 
     // Error state
-    if (menuService.error != null && menuService.menuItems.isEmpty) {
+    if (error != null && menuItems.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -78,7 +85,7 @@ class _MenuListState extends State<MenuList> {
             ),
             const SizedBox(height: 8),
             Text(
-              menuService.error!,
+              error,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -96,7 +103,7 @@ class _MenuListState extends State<MenuList> {
     }
 
     // Empty state
-    if (menuService.menuItems.isEmpty) {
+    if (menuItems.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -125,7 +132,7 @@ class _MenuListState extends State<MenuList> {
     }
 
     // Group menu items by category
-    final groupedItems = menuService.getMenuItemsByCategory();
+    final groupedItems = menuService.getMenuItemsByCategory(widget.restaurantId);
     final categories = groupedItems.keys.toList()..sort();
 
     return RefreshIndicator(

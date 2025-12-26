@@ -198,12 +198,20 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // MenuService - needs AuthService for tokens
+        // Uses per-restaurant caching to prevent state clashes between pages
+        // The update function preserves existing instance and updates AuthService reference
+        // This maintains the menu cache while ensuring auth tokens stay current
         ChangeNotifierProxyProvider<AuthService, MenuService>(
           create: (context) => MenuService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? MenuService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);  // Update auth without losing cached menus
+              return previous;
+            }
+            return MenuService(authService);
+          },
         ),
 
         // ImageService - independent (no auth required for image operations)

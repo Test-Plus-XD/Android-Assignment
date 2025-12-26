@@ -204,6 +204,7 @@ class MyService extends ChangeNotifier {
 - **ChatService**: Socket.IO real-time + REST persistence
 - **GeminiService**: AI assistant interactions
 - **BookingService**: Table reservations CRUD
+- **MenuService**: Restaurant menu items CRUD with per-restaurant caching (prevents state clashes when multiple pages load different restaurant menus)
 - **UserService**: Profile management
 
 ### Backend APIs

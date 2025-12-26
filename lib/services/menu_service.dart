@@ -6,19 +6,38 @@ import '../models.dart';
 import 'auth_service.dart';
 
 /// Service for managing restaurant menu items via REST API
+///
+/// This service uses per-restaurant caching to prevent state clashes when
+/// multiple pages (e.g., RestaurantDetailPage, StoreDashboardPage) load
+/// menu items for different restaurants simultaneously.
+///
+/// Key features:
+/// - Map-based caching: Each restaurant's menu is cached separately by ID
+/// - Intelligent refresh: Returns cached data by default, with forceRefresh option
+/// - Isolated state: Loading and error states tracked per restaurant
+/// - No data conflicts: Multiple pages can safely load different restaurant menus
 class MenuService extends ChangeNotifier {
   AuthService _authService;
 
-  // State management
-  List<MenuItem> _menuItems = [];
-  bool _isLoading = false;
-  String? _error;
-  String? _currentRestaurantId;
+  // State management - cache menu items per restaurant ID to avoid clashes
+  // Each restaurant ID maps to its own menu items, loading state, and error state
+  final Map<String, List<MenuItem>> _menuItemsCache = {};
+  final Map<String, bool> _loadingStates = {};
+  final Map<String, String?> _errorStates = {};
 
-  // Getters
-  List<MenuItem> get menuItems => _menuItems;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
+  // Getters for backward compatibility (returns empty if no current restaurant)
+  List<MenuItem> get menuItems => [];
+  bool get isLoading => _loadingStates.values.any((loading) => loading);
+  String? get error => _errorStates.values.firstWhere((e) => e != null, orElse: () => null);
+
+  // Restaurant-specific getters - use these to access menu data for a specific restaurant
+  // This prevents state clashes when multiple pages load different restaurants
+  List<MenuItem> getMenuItemsForRestaurant(String restaurantId) =>
+      _menuItemsCache[restaurantId] ?? [];
+  bool isLoadingForRestaurant(String restaurantId) =>
+      _loadingStates[restaurantId] ?? false;
+  String? getErrorForRestaurant(String restaurantId) =>
+      _errorStates[restaurantId];
 
   MenuService(this._authService);
 
@@ -34,10 +53,28 @@ class MenuService extends ChangeNotifier {
   }
 
   /// Fetches all menu items for a specific restaurant
-  Future<List<MenuItem>> getMenuItems(String restaurantId) async {
-    _isLoading = true;
-    _error = null;
-    _currentRestaurantId = restaurantId;
+  ///
+  /// Uses intelligent caching to improve performance:
+  /// - Returns cached data if available (unless forceRefresh is true)
+  /// - Each restaurant's menu is cached separately by ID
+  /// - Use forceRefresh: true after create/update/delete operations
+  ///
+  /// Example:
+  /// ```dart
+  /// // Load menu (uses cache if available)
+  /// final menu = await menuService.getMenuItems('restaurant123');
+  ///
+  /// // Force refresh after adding a new item
+  /// await menuService.getMenuItems('restaurant123', forceRefresh: true);
+  /// ```
+  Future<List<MenuItem>> getMenuItems(String restaurantId, {bool forceRefresh = false}) async {
+    // Return cached data if available and not forcing refresh
+    if (!forceRefresh && _menuItemsCache.containsKey(restaurantId)) {
+      return _menuItemsCache[restaurantId]!;
+    }
+
+    _loadingStates[restaurantId] = true;
+    _errorStates[restaurantId] = null;
     notifyListeners();
 
     try {
@@ -52,21 +89,22 @@ class MenuService extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        _menuItems = data.map((json) => MenuItem.fromJson(json)).toList();
-        _menuItems.sort((a, b) => (a.category ?? '').compareTo(b.category ?? ''));
+        final menuItems = data.map((json) => MenuItem.fromJson(json)).toList();
+        menuItems.sort((a, b) => (a.category ?? '').compareTo(b.category ?? ''));
+        _menuItemsCache[restaurantId] = menuItems;
       } else if (response.statusCode == 404) {
-        _menuItems = [];
+        _menuItemsCache[restaurantId] = [];
       } else {
         throw Exception('Failed to load menu items: ${response.statusCode}');
       }
     } catch (e) {
-      _error = e.toString();
-      _menuItems = [];
+      _errorStates[restaurantId] = e.toString();
+      _menuItemsCache[restaurantId] = [];
     } finally {
-      _isLoading = false;
+      _loadingStates[restaurantId] = false;
       notifyListeners();
     }
-    return _menuItems;
+    return _menuItemsCache[restaurantId] ?? [];
   }
 
   Future<MenuItem?> getMenuItem(String restaurantId, String menuItemId) async {
@@ -89,8 +127,8 @@ class MenuService extends ChangeNotifier {
   }
 
   Future<String> createMenuItem(String restaurantId, CreateMenuItemRequest request) async {
-    _isLoading = true;
-    _error = null;
+    _loadingStates[restaurantId] = true;
+    _errorStates[restaurantId] = null;
     notifyListeners();
 
     try {
@@ -111,24 +149,25 @@ class MenuService extends ChangeNotifier {
       if (response.statusCode == 201) {
         final data = json.decode(response.body);
         final menuItemId = data['id'] as String;
-        if (_currentRestaurantId == restaurantId) await getMenuItems(restaurantId);
+        // Refresh the cache for this restaurant
+        await getMenuItems(restaurantId, forceRefresh: true);
         return menuItemId;
       } else {
         final errorData = json.decode(response.body);
         throw Exception(errorData['error'] ?? 'Failed to create menu item');
       }
     } catch (e) {
-      _error = e.toString();
+      _errorStates[restaurantId] = e.toString();
       rethrow;
     } finally {
-      _isLoading = false;
+      _loadingStates[restaurantId] = false;
       notifyListeners();
     }
   }
 
   Future<void> updateMenuItem(String restaurantId, String menuItemId, UpdateMenuItemRequest request) async {
-    _isLoading = true;
-    _error = null;
+    _loadingStates[restaurantId] = true;
+    _errorStates[restaurantId] = null;
     notifyListeners();
 
     try {
@@ -147,23 +186,24 @@ class MenuService extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        if (_currentRestaurantId == restaurantId) await getMenuItems(restaurantId);
+        // Refresh the cache for this restaurant
+        await getMenuItems(restaurantId, forceRefresh: true);
       } else {
         final errorData = json.decode(response.body);
         throw Exception(errorData['error'] ?? 'Failed to update menu item');
       }
     } catch (e) {
-      _error = e.toString();
+      _errorStates[restaurantId] = e.toString();
       rethrow;
     } finally {
-      _isLoading = false;
+      _loadingStates[restaurantId] = false;
       notifyListeners();
     }
   }
 
   Future<void> deleteMenuItem(String restaurantId, String menuItemId) async {
-    _isLoading = true;
-    _error = null;
+    _loadingStates[restaurantId] = true;
+    _errorStates[restaurantId] = null;
     notifyListeners();
 
     try {
@@ -181,24 +221,28 @@ class MenuService extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        _menuItems.removeWhere((item) => item.id == menuItemId);
+        // Update cache by removing the deleted item
+        if (_menuItemsCache.containsKey(restaurantId)) {
+          _menuItemsCache[restaurantId]!.removeWhere((item) => item.id == menuItemId);
+        }
         notifyListeners();
       } else {
         final errorData = json.decode(response.body);
         throw Exception(errorData['error'] ?? 'Failed to delete menu item');
       }
     } catch (e) {
-      _error = e.toString();
+      _errorStates[restaurantId] = e.toString();
       rethrow;
     } finally {
-      _isLoading = false;
+      _loadingStates[restaurantId] = false;
       notifyListeners();
     }
   }
 
-  Map<String, List<MenuItem>> getMenuItemsByCategory() {
+  Map<String, List<MenuItem>> getMenuItemsByCategory(String restaurantId) {
     final Map<String, List<MenuItem>> grouped = {};
-    for (final item in _menuItems) {
+    final menuItems = _menuItemsCache[restaurantId] ?? [];
+    for (final item in menuItems) {
       final category = item.category ?? 'Other';
       if (!grouped.containsKey(category)) grouped[category] = [];
       grouped[category]!.add(item);
@@ -207,9 +251,16 @@ class MenuService extends ChangeNotifier {
   }
 
   void clearCache() {
-    _menuItems = [];
-    _currentRestaurantId = null;
-    _error = null;
+    _menuItemsCache.clear();
+    _loadingStates.clear();
+    _errorStates.clear();
+    notifyListeners();
+  }
+
+  void clearCacheForRestaurant(String restaurantId) {
+    _menuItemsCache.remove(restaurantId);
+    _loadingStates.remove(restaurantId);
+    _errorStates.remove(restaurantId);
     notifyListeners();
   }
 }
