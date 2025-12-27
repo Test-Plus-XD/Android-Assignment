@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/review_service.dart';
 import '../services/menu_service.dart';
 import '../services/chat_service.dart';
+import '../services/store_service.dart';
 import '../models.dart';
 import 'chat_room_page.dart';
 import '../widgets/reviews/review_stats.dart';
@@ -19,6 +20,8 @@ import '../widgets/restaurant_detail/hero_image_section.dart';
 import '../widgets/restaurant_detail/restaurant_info_card.dart';
 import '../widgets/restaurant_detail/contact_actions.dart';
 import '../widgets/restaurant_detail/opening_hours_card.dart';
+import '../widgets/restaurant_detail/review_summary_card.dart';
+import '../widgets/restaurant_detail/claim_restaurant_button.dart';
 import 'restaurant_reviews_page.dart';
 import 'restaurant_menu_page.dart';
 
@@ -57,11 +60,28 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   bool _isBooking = false;
   // Map type toggle
   MapType _currentMapType = MapType.normal;
+  // Review statistics
+  ReviewStats? _reviewStats;
+  Future<ReviewStats>? _reviewStatsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviewStats();
+  }
 
   @override
   void dispose() {
     _mapController?.dispose();
     super.dispose();
+  }
+
+  /// Load review statistics for the restaurant
+  void _loadReviewStats() {
+    final reviewService = context.read<ReviewService>();
+    setState(() {
+      _reviewStatsFuture = reviewService.getRestaurantStats(widget.restaurant.id);
+    });
   }
 
   /// Calculate distance from user's location
@@ -684,6 +704,65 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
 
             const SizedBox(height: 16),
 
+            /// Review Summary Card
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: FutureBuilder<ReviewStats>(
+                future: _reviewStatsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return ReviewSummaryCard(
+                    reviewStats: snapshot.data,
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RestaurantReviewsPage(
+                            restaurant: widget.restaurant,
+                            isTraditionalChinese: widget.isTraditionalChinese,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            /// Claim Restaurant Button (for Restaurant users without owned restaurant)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: ClaimRestaurantButton(
+                restaurantId: widget.restaurant.id,
+                restaurantOwnerId: widget.restaurant.ownerId,
+                isTraditionalChinese: widget.isTraditionalChinese,
+                onClaimed: () {
+                  // Refresh the page or show success message
+                  setState(() {
+                    // Trigger a rebuild to reflect the claimed status
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        widget.isTraditionalChinese
+                            ? '您現在可以管理這間餐廳了'
+                            : 'You can now manage this restaurant',
+                      ),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             /// Map Section - Google Maps integration
             if (widget.restaurant.latitude != null &&
                 widget.restaurant.longitude != null) ...[
@@ -890,21 +969,35 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       ///
       /// Prominent call-to-action button for booking.
       /// Positioned at bottom for thumb-friendly access.
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isBooking ? null : _showBookingDialog,
-        icon: _isBooking
-            ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.white,
-          ),
-        )
-            : const Icon(Icons.calendar_today),
-        label: Text(
-          widget.isTraditionalChinese ? '預訂' : 'Book',
-        ),
+      /// Only shown for logged-in Diner users (not for Restaurant owners or guests)
+      floatingActionButton: Builder(
+        builder: (context) {
+          final authService = context.watch<AuthService>();
+          final userType = authService.userType;
+          final isLoggedIn = authService.isLoggedIn;
+
+          // Only show booking button for logged-in Diner users
+          if (!isLoggedIn || userType != 'Diner') {
+            return const SizedBox.shrink();
+          }
+
+          return FloatingActionButton.extended(
+            onPressed: _isBooking ? null : _showBookingDialog,
+            icon: _isBooking
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+                : const Icon(Icons.calendar_today),
+            label: Text(
+              widget.isTraditionalChinese ? '預訂' : 'Book',
+            ),
+          );
+        },
       ),
     );
   }

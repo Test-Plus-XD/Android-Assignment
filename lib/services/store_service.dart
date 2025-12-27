@@ -137,6 +137,11 @@ class StoreService extends ChangeNotifier {
     }
   }
 
+  /// Alias for updateRestaurant for consistency with store info editing
+  Future<bool> updateRestaurantInfo(String restaurantId, Map<String, dynamic> updates) {
+    return updateRestaurant(restaurantId, updates);
+  }
+
   Future<String?> uploadRestaurantImage(String restaurantId, String imagePath) async {
     _isLoading = true;
     _error = null;

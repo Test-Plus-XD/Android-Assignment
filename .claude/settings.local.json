@@ -1,17 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(flutter pub get:*)",
-      "Bash(Get-ChildItem -Path . -Filter \"*.meta\" -Recurse -File)",
-      "Bash(Remove-Item -Force)",
-      "Bash(find:*)",
-      "Bash(test:*)",
-      "Bash(flutter analyze:*)",
-      "Bash(cat:*)",
-      "Bash(dart format:*)",
-      "Bash(wc:*)",
-      "Bash(flutter pub:*)",
-      "Bash(grep:*)"
-    ]
+      "Bash(bash count_loc.sh:*)",
+      "Bash(bash \"D:\\temp\\Android Assignment\\count_loc.sh\")"
+    ],
+    "deny": [],
+    "ask": []
   }
 }

@@ -5,6 +5,9 @@ import '../services/auth_service.dart';
 import '../services/menu_service.dart';
 import '../models.dart';
 import '../widgets/qr/menu_qr_generator.dart';
+import 'store_info_edit_page.dart';
+import 'store_menu_manage_page.dart';
+import 'store_bookings_page.dart';
 
 /// Store Dashboard Page
 ///
@@ -228,16 +231,14 @@ class _StoreDashboardPageState extends State<StorePage> {
                         ? '新增、編輯、刪除菜單項目'
                         : 'Add, edit, delete menu items',
                     onTap: () {
-                      // TODO: Navigate to menu management
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            widget.isTraditionalChinese
-                                ? '菜單管理功能開發中'
-                                : 'Menu management coming soon',
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => StoreMenuManagePage(
+                            restaurantId: restaurant.id,
+                            isTraditionalChinese: widget.isTraditionalChinese,
                           ),
                         ),
-                      );
+                      ).then((_) => _loadOwnedRestaurant());
                     },
                   ),
                   _buildActionCard(
@@ -248,13 +249,11 @@ class _StoreDashboardPageState extends State<StorePage> {
                         ? '查看和管理預訂'
                         : 'View and manage bookings',
                     onTap: () {
-                      // TODO: Navigate to bookings management
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            widget.isTraditionalChinese
-                                ? '預訂管理功能開發中'
-                                : 'Bookings management coming soon',
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => StoreBookingsPage(
+                            restaurantId: restaurant.id,
+                            isTraditionalChinese: widget.isTraditionalChinese,
                           ),
                         ),
                       );
@@ -288,16 +287,18 @@ class _StoreDashboardPageState extends State<StorePage> {
                         ? '更新餐廳資訊'
                         : 'Update restaurant info',
                     onTap: () {
-                      // TODO: Navigate to settings
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            widget.isTraditionalChinese
-                                ? '設定功能開發中'
-                                : 'Settings coming soon',
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => StoreInfoEditPage(
+                            restaurant: restaurant,
+                            isTraditionalChinese: widget.isTraditionalChinese,
                           ),
                         ),
-                      );
+                      ).then((result) {
+                        if (result == true) {
+                          _loadOwnedRestaurant();
+                        }
+                      });
                     },
                   ),
                 ],

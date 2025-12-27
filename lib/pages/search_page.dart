@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../services/restaurant_service.dart';
 import '../models.dart';
 import '../constants/districts.dart';
 import '../constants/keywords.dart';
-import 'restaurant_detail_page.dart';
+import '../widgets/search/restaurant_card.dart';
+import '../widgets/search/search_filter_section.dart';
 
 /// Search Page with Infinite Scroll Pagination (Version 5)
 //
@@ -51,8 +51,6 @@ class _SearchPageState extends State<SearchPage> {
   String _currentQuery = '';
   /// Number of results to fetch per page
   static const int _pageSize = 12;
-  /// Card height for restaurant cards (used for consistent sizing)
-  static const double _cardHeight = 220.0;
 
   @override
   void initState() {
@@ -134,6 +132,22 @@ class _SearchPageState extends State<SearchPage> {
         hitsPerPage: _pageSize,
         isInitialSearch: isInitialSearch,
       );
+
+      // Show toast with search results count on initial search (page 0)
+      if (isInitialSearch && mounted) {
+        final totalHits = restaurantService.totalHits;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese
+                  ? '找到 $totalHits 間餐廳'
+                  : 'Found $totalHits restaurant${totalHits != 1 ? 's' : ''}',
+            ),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
 
       // Return the items for this page
       return hitsPage.items;
@@ -398,373 +412,7 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  /// Builds a single restaurant card with background image and overlay
-  ///
-  /// Design approach:
-  /// - Full-width card with fixed height for consistent scrolling
-  /// - Restaurant image fills the entire card as background
-  /// - Gradient overlay from bottom ensures text readability
-  /// - Restaurant info positioned at bottom with white text
-  /// - Rounded corners and subtle shadow for depth
-  Widget _buildRestaurantCard(Restaurant restaurant) {
-    final displayName = restaurant.getDisplayName(widget.isTraditionalChinese);
-    final displayDistrict = restaurant.getDisplayDistrict(widget.isTraditionalChinese);
-    final displayAddress = restaurant.getDisplayAddress(widget.isTraditionalChinese);
-    final displayKeywords = restaurant.getDisplayKeywords(widget.isTraditionalChinese);
 
-    return Container(
-      height: _cardHeight,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        elevation: 4,
-        shadowColor: Colors.black26,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => RestaurantDetailPage(
-                  restaurant: restaurant,
-                  isTraditionalChinese: widget.isTraditionalChinese,
-                ),
-              ),
-            );
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Background image - fills the entire card
-              CachedNetworkImage(
-                imageUrl: restaurant.imageUrl ?? '',
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  color: Colors.grey.shade300,
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  color: Colors.grey.shade300,
-                  child: const Icon(
-                    Icons.restaurant,
-                    size: 64,
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
-
-              // Gradient overlay for text readability
-              // Gradient goes from transparent at top to dark at bottom
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.3),
-                      Colors.black.withValues(alpha: 0.8),
-                    ],
-                    stops: const [0.0, 0.3, 0.6, 1.0],
-                  ),
-                ),
-              ),
-
-              // Content overlay positioned at bottom
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 16,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Restaurant name - large and prominent
-                    Text(
-                      displayName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black54,
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    // Keywords as small chips
-                    if (displayKeywords.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: displayKeywords.take(3).map((keyword) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              keyword,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                    const SizedBox(height: 8),
-
-                    // District with location icon
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on,
-                          size: 14,
-                          color: Colors.white70,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            displayDistrict,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 2),
-
-                    // Address
-                    Text(
-                      displayAddress,
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-
-              // Top-right decorative element (optional: could show rating/favourite)
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.restaurant_menu,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Builds the filter section with buttons and selected filter chips
-  ///
-  /// Design:
-  /// - Two filter buttons that open multi-select dialogs
-  /// - Selected filters shown as removable chips below
-  /// - Chips have smooth animations when added/removed
-  Widget _buildFilterSection() {
-    final hasFilters = _selectedDistrictsEn.isNotEmpty ||
-        _selectedKeywordsEn.isNotEmpty;
-
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Filter buttons row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                // District filter button
-                Expanded(
-                  child: _FilterButton(
-                    label: widget.isTraditionalChinese ? '地區' : 'Districts',
-                    count: _selectedDistrictsEn.length,
-                    onTap: _showDistrictFilterDialog,
-                    isTraditionalChinese: widget.isTraditionalChinese,
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // Category filter button
-                Expanded(
-                  child: _FilterButton(
-                    label: widget.isTraditionalChinese ? '分類' : 'Categories',
-                    count: _selectedKeywordsEn.length,
-                    onTap: _showKeywordFilterDialog,
-                    isTraditionalChinese: widget.isTraditionalChinese,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Selected filters displayed as chips
-          if (hasFilters)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(
-                left: 16,
-                right: 16,
-                bottom: 12,
-              ),
-              child: Row(
-                children: [
-                  // District chips
-                  ..._selectedDistrictsEn.map((districtEn) {
-                    final district = HKDistricts.findByEn(districtEn);
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Chip(
-                        label: Text(
-                          district?.getLabel(widget.isTraditionalChinese) ??
-                              districtEn,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        deleteIcon: const Icon(Icons.close, size: 16),
-                        onDeleted: () {
-                          /// Check if widget is still mounted before updating state
-                          if (mounted) {
-                            setState(() {
-                              _selectedDistrictsEn.remove(districtEn);
-                            });
-                          }
-                          _performSearch();
-                        },
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .primaryContainer,
-                        labelStyle: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onPrimaryContainer,
-                        ),
-                        deleteIconColor: Theme.of(context)
-                            .colorScheme
-                            .onPrimaryContainer,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    );
-                  }),
-
-                  // Keyword chips
-                  ..._selectedKeywordsEn.map((keywordEn) {
-                    final keyword = RestaurantKeywords.findByEn(keywordEn);
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Chip(
-                        label: Text(
-                          keyword?.getLabel(widget.isTraditionalChinese) ??
-                              keywordEn,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        deleteIcon: const Icon(Icons.close, size: 16),
-                        onDeleted: () {
-                          /// Check if widget is still mounted before updating state
-                          if (mounted) {
-                            setState(() {
-                              _selectedKeywordsEn.remove(keywordEn);
-                            });
-                          }
-                          _performSearch();
-                        },
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .secondaryContainer,
-                        labelStyle: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSecondaryContainer,
-                        ),
-                        deleteIconColor: Theme.of(context)
-                            .colorScheme
-                            .onSecondaryContainer,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    );
-                  }),
-
-                  // Clear all button (when multiple filters selected)
-                  if (_selectedDistrictsEn.length + _selectedKeywordsEn.length > 1)
-                    TextButton.icon(
-                      onPressed: () {
-                        /// Check if widget is still mounted before updating state
-                        if (mounted) {
-                          setState(() {
-                            _selectedDistrictsEn.clear();
-                            _selectedKeywordsEn.clear();
-                          });
-                        }
-                        _performSearch();
-                      },
-                      icon: const Icon(Icons.clear_all, size: 16),
-                      label: Text(
-                        widget.isTraditionalChinese ? '清除全部' : 'Clear All',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -854,7 +502,34 @@ class _SearchPageState extends State<SearchPage> {
                   ),
                 ),
                 // Filter section
-                _buildFilterSection(),
+                SearchFilterSection(
+                  isTraditionalChinese: widget.isTraditionalChinese,
+                  selectedDistrictsEn: _selectedDistrictsEn,
+                  selectedKeywordsEn: _selectedKeywordsEn,
+                  onDistrictFilterTap: _showDistrictFilterDialog,
+                  onKeywordFilterTap: _showKeywordFilterDialog,
+                  onDistrictRemoved: (districtEn) {
+                    if (mounted) {
+                      setState(() => _selectedDistrictsEn.remove(districtEn));
+                    }
+                    _performSearch();
+                  },
+                  onKeywordRemoved: (keywordEn) {
+                    if (mounted) {
+                      setState(() => _selectedKeywordsEn.remove(keywordEn));
+                    }
+                    _performSearch();
+                  },
+                  onClearAll: () {
+                    if (mounted) {
+                      setState(() {
+                        _selectedDistrictsEn.clear();
+                        _selectedKeywordsEn.clear();
+                      });
+                    }
+                    _performSearch();
+                  },
+                ),
               ],
             ),
           ),
@@ -877,7 +552,10 @@ class _SearchPageState extends State<SearchPage> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   builderDelegate: PagedChildBuilderDelegate<Restaurant>(
                     itemBuilder: (context, restaurant, index) {
-                      return _buildRestaurantCard(restaurant);
+                      return RestaurantCard(
+                        restaurant: restaurant,
+                        isTraditionalChinese: widget.isTraditionalChinese,
+                      );
                     },
 
                     // Replace CircularProgressIndicator with Eclipse.gif
@@ -1066,104 +744,5 @@ class _SearchPageState extends State<SearchPage> {
     _scrollController.dispose();
     _pagingController.dispose();
     super.dispose();
-  }
-}
-
-/// Custom filter button widget
-///
-/// Displays a tappable button that shows:
-/// - Filter label (Districts/Categories)
-/// - Badge with count of selected items (if any)
-/// - Visual feedback when filters are active
-class _FilterButton extends StatelessWidget {
-  final String label;
-  final int count;
-  final VoidCallback onTap;
-  final bool isTraditionalChinese;
-
-  const _FilterButton({
-    required this.label,
-    required this.count,
-    required this.onTap,
-    required this.isTraditionalChinese,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasSelection = count > 0;
-    final theme = Theme.of(context);
-
-    return Material(
-      color: hasSelection
-          ? theme.colorScheme.primaryContainer
-          : theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: hasSelection
-                  ? theme.colorScheme.primary
-                  : Colors.grey.shade400,
-              width: hasSelection ? 2 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.filter_list,
-                size: 18,
-                color: hasSelection
-                    ? theme.colorScheme.primary
-                    : Colors.grey.shade600,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: hasSelection ? FontWeight.bold : FontWeight.normal,
-                  color: hasSelection
-                      ? theme.colorScheme.primary
-                      : theme.textTheme.bodyLarge?.color,
-                ),
-              ),
-              if (hasSelection) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    count.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(width: 4),
-              Icon(
-                Icons.arrow_drop_down,
-                color: hasSelection
-                    ? theme.colorScheme.primary
-                    : Colors.grey.shade600,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

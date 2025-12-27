@@ -116,7 +116,10 @@ lib/
 │   ├── restaurant_menu_page.dart          # Full menu view
 │   ├── restaurant_reviews_page.dart       # Restaurant reviews list
 │   ├── search_page.dart                   # Algolia search with filters
-│   └── store_page.dart                    # Restaurant owner dashboard
+│   ├── store_page.dart                    # Restaurant owner dashboard
+│   ├── store_bookings_page.dart           # Restaurant bookings management
+│   ├── store_info_edit_page.dart          # Restaurant info editing
+│   └── store_menu_manage_page.dart        # Restaurant menu management
 │
 ├── widgets/
 │   ├── drawer.dart                        # Navigation drawer
@@ -148,7 +151,9 @@ lib/
 │   │   └── upload_progress_indicator.dart # Upload progress display
 │   │
 │   ├── menu/
+│   │   ├── bulk_import_review_dialog.dart # DocuPipe bulk import review dialog
 │   │   ├── menu_item_card.dart            # Menu item display card
+│   │   ├── menu_item_dialog.dart          # Menu item create/edit dialog
 │   │   ├── menu_item_form.dart            # Menu item create/edit form
 │   │   └── menu_list.dart                 # Grouped menu items list
 │   │
@@ -160,10 +165,12 @@ lib/
 │   │   └── menu_qr_generator.dart         # QR code generator for restaurant menus
 │   │
 │   ├── restaurant_detail/
+│   │   ├── claim_restaurant_button.dart   # Claim restaurant button (Restaurant users)
 │   │   ├── contact_actions.dart           # Phone/email/website buttons
 │   │   ├── hero_image_section.dart        # Hero image with distance overlay
 │   │   ├── opening_hours_card.dart        # Opening hours display
-│   │   └── restaurant_info_card.dart      # Restaurant info summary
+│   │   ├── restaurant_info_card.dart      # Restaurant info summary
+│   │   └── review_summary_card.dart       # Review stats summary with stars
 │   │
 │   ├── reviews/
 │   │   ├── review_card.dart               # Individual review display
@@ -175,7 +182,9 @@ lib/
 │   └── search/
 │       ├── filter_button.dart             # Filter toggle button
 │       ├── filter_dialog.dart             # Search filters dialog
-│       └── restaurant_search_card.dart    # Search result card
+│       ├── restaurant_card.dart           # Restaurant card for search results
+│       ├── restaurant_search_card.dart    # Search result card (legacy)
+│       └── search_filter_section.dart     # Filter section with chips
 
 android/
 ├── app/
@@ -186,14 +195,14 @@ android/
 │       └── kotlin/.../MainActivity.kt     # Main activity
 ```
 
-**Total: 91 Dart files**
+**Total: 99 Dart files**
 - Root level: 4 files
 - config/: 2 files
 - constants/: 4 files
 - models/: 10 files
 - services/: 14 files
-- pages/: 13 files
-- widgets/: 44 files (across 11 subdirectories)
+- pages/: 16 files
+- widgets/: 49 files (across 11 subdirectories)
 
 ### Navigation System
 
@@ -720,6 +729,46 @@ _socket!.emit('my-event', {
 });
 ```
 
+### Using Store Management Features
+
+**Restaurant Owner Dashboard** (`store_page.dart`):
+- Overview of restaurant information
+- Quick action cards for menu, bookings, reviews, and settings
+- Statistics display (menu items count, today's bookings)
+- QR code generator for menu sharing
+
+**Restaurant Information Editing** (`store_info_edit_page.dart`):
+- Edit restaurant name (EN/TC), address (EN/TC)
+- Select district from Hong Kong districts list
+- Choose multiple keywords/tags for restaurant categorization
+- Set number of seats
+- Update contact information (phone, email, website)
+- Select payment methods (multiple selection)
+- Configure opening hours for each day of the week
+- Set location coordinates (latitude/longitude)
+
+**Menu Management** (`store_menu_manage_page.dart`):
+- View all menu items in a list
+- Add new menu items with inline dialog
+- Edit existing menu items
+- Delete menu items with confirmation
+- **Bulk Import via DocuPipe**: Upload menu documents (PDF, images, text) for AI-powered extraction
+  - Supports PDF, JPG, JPEG, PNG, WEBP, TXT, JSON files
+  - Automatically extracts menu items with bilingual support (EN/TC)
+  - Review extracted items before saving
+  - Batch save all extracted items to database
+- Each item includes: Name (EN/TC), Description (EN/TC), Price, Image URL
+- Refresh functionality to reload menu items
+
+**Bookings Management** (`store_bookings_page.dart`):
+- View all restaurant bookings
+- Filter by status: all, pending, confirmed, completed, cancelled
+- Statistics cards showing today's bookings, pending count, and total bookings
+- Action buttons for pending bookings: Confirm or Reject
+- Mark confirmed bookings as completed
+- Display booking details: customer name, date/time, party size, special requests
+- Pull-to-refresh support
+
 ### Using QR Code Features
 
 **For Restaurant Owners (Generate QR Code)**:
@@ -779,15 +828,29 @@ flutter build apk
 
 ## Project Statistics
 
-- **Total Dart Files**: 91
-- **Lines of Code**: ~15,500+ (excluding generated files)
-- **Pages**: 13 UI screens
+- **Total Dart Files**: 99
+- **Lines of Code**: ~20,142 (non-empty, non-comment lines, excluding generated files)
+  - Main files: 225 lines
+  - Config: 145 lines
+  - Constants: 409 lines
+  - Models: 1,248 lines
+  - Services: 3,261 lines
+  - Pages: 7,330 lines (refactored for maintainability)
+  - Widgets: 7,524 lines (49 components across 11 subdirectories)
+- **Pages**: 16 UI screens
 - **Services**: 14 business logic services
-- **Widgets**: 44 reusable components (across 11 subdirectories)
+- **Widgets**: 49 reusable components (across 11 subdirectories)
 - **Models**: 10 domain models
 - **Constants**: 4 static data files
 - **Languages**: English + Traditional Chinese (full bilingual)
 - **Platforms**: Android (primary), Web/iOS (configured)
+
+### Recent Refactoring (2025-12-27)
+- Extracted 5 new widget files from large page files for better code organization
+- Reduced `search_page.dart` from 1000 → 623 lines
+- Reduced `store_menu_manage_page.dart` from 822 → 547 lines
+- Added review summary card and claim restaurant button to restaurant detail page
+- All page files now under 950 lines for improved maintainability
 
 ---
 
