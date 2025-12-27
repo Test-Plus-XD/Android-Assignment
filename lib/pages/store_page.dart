@@ -4,6 +4,7 @@ import '../services/store_service.dart';
 import '../services/auth_service.dart';
 import '../services/menu_service.dart';
 import '../models.dart';
+import '../widgets/qr/menu_qr_generator.dart';
 
 /// Store Dashboard Page
 ///
@@ -13,19 +14,19 @@ import '../models.dart';
 /// - Quick stats
 /// - Menu management access
 /// - Settings access
-class StoreDashboardPage extends StatefulWidget {
+class StorePage extends StatefulWidget {
   final bool isTraditionalChinese;
 
-  const StoreDashboardPage({
+  const StorePage({
     required this.isTraditionalChinese,
     super.key,
   });
 
   @override
-  State<StoreDashboardPage> createState() => _StoreDashboardPageState();
+  State<StorePage> createState() => _StoreDashboardPageState();
 }
 
-class _StoreDashboardPageState extends State<StoreDashboardPage> {
+class _StoreDashboardPageState extends State<StorePage> {
   @override
   void initState() {
     super.initState();
@@ -304,6 +305,26 @@ class _StoreDashboardPageState extends State<StoreDashboardPage> {
 
               const SizedBox(height: 24),
 
+              // QR Code Section
+              // This section provides restaurant owners with a QR code
+              // that links directly to their menu. Customers can scan this
+              // code to instantly view the restaurant's menu in the app.
+              Text(
+                widget.isTraditionalChinese ? '菜單二維碼' : 'Menu QR Code',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 16),
+
+              MenuQRGenerator(
+                restaurantId: restaurant.id,
+                restaurantName: name,
+                isTraditionalChinese: widget.isTraditionalChinese,
+              ),
+
+              const SizedBox(height: 24),
+
               // Statistics Section
               Text(
                 widget.isTraditionalChinese ? '統計數據' : 'Statistics',
@@ -317,6 +338,9 @@ class _StoreDashboardPageState extends State<StoreDashboardPage> {
                 restaurantId: restaurant.id,
                 isTraditionalChinese: widget.isTraditionalChinese,
               ),
+
+              // Bottom padding to avoid nav bar overlap
+              const SizedBox(height: 80),
             ],
           ),
         ),

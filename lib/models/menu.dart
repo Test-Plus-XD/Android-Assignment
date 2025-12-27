@@ -39,12 +39,29 @@ class MenuItem {
       return null;
     }
 
+    // Handle both naming conventions: camelCase (nameEn) and snake_case (Name_EN)
+    String? getNameEn() {
+      return json['nameEn'] as String? ?? json['Name_EN'] as String?;
+    }
+
+    String? getNameTc() {
+      return json['nameTc'] as String? ?? json['Name_TC'] as String?;
+    }
+
+    String? getDescriptionEn() {
+      return json['descriptionEn'] as String? ?? json['Description_EN'] as String?;
+    }
+
+    String? getDescriptionTc() {
+      return json['descriptionTc'] as String? ?? json['Description_TC'] as String?;
+    }
+
     return MenuItem(
       id: json['id'] as String,
-      nameEn: json['nameEn'] as String?,
-      nameTc: json['nameTc'] as String?,
-      descriptionEn: json['descriptionEn'] as String?,
-      descriptionTc: json['descriptionTc'] as String?,
+      nameEn: getNameEn(),
+      nameTc: getNameTc(),
+      descriptionEn: getDescriptionEn(),
+      descriptionTc: getDescriptionTc(),
       price: json['price'] != null ? (json['price'] as num).toDouble() : null,
       category: json['category'] as String?,
       image: json['image'] as String?,

@@ -129,10 +129,10 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
             }
           });
 
-          // Scroll to bottom if message is from current user
-          if (message.userId == currentUserId) {
+          // Always scroll to bottom for any new message (not just current user)
+          WidgetsBinding.instance.addPostFrameCallback((_) {
             _scrollToBottom();
-          }
+          });
         }
       }
     });
@@ -392,6 +392,20 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
                           final message = _messages[index];
                           final isCurrentUser = message.userId == currentUserId;
 
+                          // Get photoURL from participantsData for this message's sender
+                          String? photoUrl;
+                          if (_room?.participantsData != null) {
+                            final sender = _room!.participantsData!.firstWhere(
+                              (u) => u.uid == message.userId,
+                              orElse: () => User(
+                                uid: message.userId,
+                                displayName: message.displayName,
+                                emailVerified: false,
+                              ),
+                            );
+                            photoUrl = sender.photoURL;
+                          }
+
                           return ChatBubble(
                             message: message,
                             isCurrentUser: isCurrentUser,
@@ -400,6 +414,7 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
                                 ? () => _handleEditMessage(message)
                                 : null,
                             onDelete: isCurrentUser ? () => _handleDeleteMessage(message) : null,
+                            userPhotoUrl: photoUrl, // Pass Firebase Auth photoURL
                           );
                         },
                       ),

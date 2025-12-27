@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../pages/login_page.dart';
+import '../pages/qr_scanner_page.dart';
 
 // Navigation drawer with theme and language toggles and in-drawer app icon.
 class AppNavDrawer extends StatelessWidget {
@@ -57,6 +58,24 @@ class AppNavDrawer extends StatelessWidget {
           ListTile(leading: const Icon(Icons.home), title: Text(homeLabel), onTap: () => onSelectItem(0)),
           ListTile(leading: const Icon(Icons.restaurant), title: Text(allLabel), onTap: () => onSelectItem(1)),
           ListTile(leading: const Icon(Icons.account_circle), title: Text(accountLabel), onTap: () => onSelectItem(2)),
+          // QR Scanner option
+          // This allows users to scan restaurant menu QR codes from the drawer
+          // The scanner opens the camera to detect QR codes that link to menus
+          ListTile(
+            leading: const Icon(Icons.qr_code_scanner),
+            title: Text(isTraditionalChinese ? '掃描二維碼' : 'Scan QR Code'),
+            onTap: () {
+              Navigator.pop(context); // Close the drawer first
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => QRScannerPage(
+                    isTraditionalChinese: isTraditionalChinese,
+                  ),
+                ),
+              );
+            },
+          ),
           if (isLoggedIn)
             ListTile(
                 leading: const Icon(Icons.logout),

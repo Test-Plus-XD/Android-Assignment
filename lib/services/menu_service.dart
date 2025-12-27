@@ -8,7 +8,7 @@ import 'auth_service.dart';
 /// Service for managing restaurant menu items via REST API
 ///
 /// This service uses per-restaurant caching to prevent state clashes when
-/// multiple pages (e.g., RestaurantDetailPage, StoreDashboardPage) load
+/// multiple pages (e.g., RestaurantDetailPage, StorePage) load
 /// menu items for different restaurants simultaneously.
 ///
 /// Key features:
@@ -73,9 +73,10 @@ class MenuService extends ChangeNotifier {
       return _menuItemsCache[restaurantId]!;
     }
 
+    // Update state without notifying to avoid setState during build
+    // The UI will be notified after the async operation completes
     _loadingStates[restaurantId] = true;
     _errorStates[restaurantId] = null;
-    notifyListeners();
 
     try {
       final url = Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu');
@@ -88,7 +89,20 @@ class MenuService extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final responseData = json.decode(response.body);
+        List<dynamic> data;
+
+        // Handle both response formats:
+        // 1. Direct array: [...]
+        // 2. Object with data array: {count: number, data: [...]}
+        if (responseData is List) {
+          data = responseData;
+        } else if (responseData is Map<String, dynamic> && responseData['data'] != null) {
+          data = responseData['data'] as List;
+        } else {
+          data = [];
+        }
+
         final menuItems = data.map((json) => MenuItem.fromJson(json)).toList();
         menuItems.sort((a, b) => (a.category ?? '').compareTo(b.category ?? ''));
         _menuItemsCache[restaurantId] = menuItems;

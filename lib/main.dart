@@ -19,7 +19,7 @@ import 'widgets/navigation/app_root.dart';
 import 'firebase_options.dart';
 import 'config.dart';
 
-/// Understanding the Architecture
+/// Architecture:
 ///
 /// This Flutter app follows a layered architecture:
 ///
@@ -82,7 +82,7 @@ void main() async {
       print('Firebase already initialised, using existing instance');
     }
   } catch (e) {
-    // If initialization fails, log the error but don't crash
+    // If initialisation fails, log the error but don't crash
     print('Firebase Initialization error: $e');
     // In production, show an error screen here
   }

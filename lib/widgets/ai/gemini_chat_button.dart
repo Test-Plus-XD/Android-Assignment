@@ -105,12 +105,14 @@ class GeminiChatIconButton extends StatelessWidget {
   final String? restaurantName;
   final String? restaurantCuisine;
   final String? restaurantDistrict;
+  final String? restaurantId; // For menu context
 
   const GeminiChatIconButton({
     required this.isTraditionalChinese,
     this.restaurantName,
     this.restaurantCuisine,
     this.restaurantDistrict,
+    this.restaurantId, // Optional restaurant ID
     super.key,
   });
 
@@ -122,6 +124,7 @@ class GeminiChatIconButton extends StatelessWidget {
           restaurantName: restaurantName,
           restaurantCuisine: restaurantCuisine,
           restaurantDistrict: restaurantDistrict,
+          restaurantId: restaurantId, // Pass restaurant ID for menu
         ),
       ),
     );

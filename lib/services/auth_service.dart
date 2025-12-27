@@ -3,35 +3,35 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 
 /// Authentication Service
-/// 
+///
 /// This service acts as the central hub for all user identity management.
 /// It provides a unified interface for:
 /// - Firebase Email/Password Authentication (Sign up, Login, Reset, Profile)
 /// - Google OAuth 2.0 Integration (compatible with google_sign_in 7.x)
 /// - Global Authentication State (Current User, Loading Status, Errors)
-/// 
+///
 /// It extends [ChangeNotifier], allowing UI components to automatically rebuild
 /// whenever the authentication state changes.
 class AuthService with ChangeNotifier {
   // --- Private Instances ---
-  
+
   /// The Firebase Auth instance used for backend communication with Firebase.
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  
-  /// The Google Sign-In instance. 
+
+  /// The Google Sign-In instance.
   /// Note: From version 7.0.0 onwards, this is a singleton accessed via [GoogleSignIn.instance].
   /// It requires an explicit [initialize] call before any sign-in attempts.
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
-  
+
   // --- State Variables ---
-  
-  /// The currently authenticated [User] from Firebase. 
+
+  /// The currently authenticated [User] from Firebase.
   /// This is null if the user is signed out or if the app is still determining auth state.
   User? _currentUser;
-  
+
   /// A boolean flag used to show/hide loading spinners in the UI.
   bool _isLoading = false;
-  
+
   /// Holds the last error message encountered. This can be used to display
   /// SnackBars or Alert dialogs to the user.
   String? _errorMessage;
@@ -89,7 +89,7 @@ class AuthService with ChangeNotifier {
   }
 
   /// Establishes a permanent stream listener for Firebase Auth.
-  /// 
+  ///
   /// Every time a user signs in, logs out, or their token expires, Firebase
   /// broadcasts an event. We catch it here to update [_currentUser] and
   /// trigger UI updates via [notifyListeners].

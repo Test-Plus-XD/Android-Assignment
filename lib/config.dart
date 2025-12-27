@@ -51,7 +51,7 @@ class AppConfig {
   // API passcode for authentication (matches .env)
   static const String apiPasscode = 'PourRice';
   // Placeholder URL
-  static const String placeholderUrl = 'https://firebasestorage.googleapis.com/v0/b/cross-platform-assignmen-b97cc.firebasestorage.app/o/Placeholder.png?alt=media&token=2ceff686-bda6-43c8-ab7d-5551117569f1';
+  static const String placeholderUrl = 'https://firebasestorage.googleapis.com/v0/b/cross-platform-assignmen-b97cc.firebasestorage.app/o/Placeholder.jpg?alt=media&token=068887ee-1ac3-4107-a15a-210b268b5183';
 
   /// Socket.IO Server URL (Railway)
   /// Used for real-time chat functionality

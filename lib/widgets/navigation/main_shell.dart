@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
-import '../../services/gemini_service.dart';
 import '../../pages/home_page.dart';
 import '../../pages/search_page.dart';
 import '../../pages/account_page.dart';
@@ -21,21 +20,21 @@ import '../drawer.dart';
 /// Navigation changes based on user authentication and account type:
 ///
 /// Not logged in (Guest):
-/// - Search (left)
-/// - Home (middle-left, emphasised)
+/// - Search (middle-left)
+/// - Home (centre, emphasised with FAB in notch)
 /// - Account (middle-right)
 ///
 /// Logged in as Diner:
 /// - Chat (far left)
 /// - Search (left)
-/// - Home (centre, emphasised)
+/// - Home (centre, emphasised with FAB in notch)
 /// - Account (right)
 /// - Bookings (far right)
 ///
 /// Logged in as Restaurant:
 /// - Chat (far left)
 /// - Search (left)
-/// - Home (centre, emphasised)
+/// - Home (centre, emphasised with FAB in notch)
 /// - Account (right)
 /// - Store Dashboard (far right)
 class MainShell extends StatefulWidget {
@@ -65,7 +64,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   String? _lastUserType;
   bool? _lastLoginState;
   bool? _lastLanguage; // Track language changes
-  bool _initialIndexSet = false; // Track if we've set the initial index
+  bool _initialIndexSet = false; // Track to set the initial index
 
   // Gemini FAB animation controller
   late AnimationController _fabAnimationController;
@@ -137,14 +136,41 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   /// Handle Bottom Navigation Tap
   ///
   /// Updates the current page with smooth animation.
+  /// For guests, maps navigation indices to correct page indices.
   void _onNavTapped(int index) {
-    setState(() => _currentIndex = index);
+    final authService = context.read<AuthService>();
+    final isLoggedIn = authService.isLoggedIn;
+    
+    int pageIndex = index;
+    
+    // For guests, map navigation indices to page indices
+    // Nav items: [Search(0), Account(1)] -> Pages: [Search(0), Home(1), Account(2)]
+    if (!isLoggedIn) {
+      if (index == 1) {
+        pageIndex = 2; // Account nav item (1) -> Account page (2)
+      }
+      // index 0 (Search) stays as 0
+    }
+    
+    setState(() => _currentIndex = pageIndex);
     _pageController.animateToPage(
-      index,
+      pageIndex,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
     _showFab(); // Show FAB on interaction
+  }
+
+  /// Map page index back to navigation index for display
+  ///
+  /// For guests: Pages [Search(0), Home(1), Account(2)] -> Nav [Search(0), Account(1)]
+  int _getNavIndexFromPageIndex(int pageIndex, bool isLoggedIn) {
+    if (!isLoggedIn) {
+      if (pageIndex == 0) return 0; // Search page -> Search nav
+      if (pageIndex == 2) return 1; // Account page -> Account nav
+      return 0; // Default to Search for Home page (not in nav)
+    }
+    return pageIndex; // For logged in users, indices match
   }
 
   /// Build Navigation Items Based on User Type
@@ -155,25 +181,18 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     final isTC = widget.isTraditionalChinese;
     final theme = Theme.of(context);
 
-    // Guest navigation (not logged in): Search - Home - Account
+    // Guest navigation (not logged in): Search - Account (no Home since FAB handles it)
     if (!isLoggedIn) {
       return [
         BottomBarItem(
-          icon: const Icon(Icons.restaurant),
+          icon: const Icon(Icons.restaurant_outlined),
           selectedIcon: const Icon(Icons.restaurant),
           selectedColor: theme.colorScheme.primary,
           unSelectedColor: Colors.grey,
           title: Text(isTC ? '餐廳' : 'Search'),
         ),
         BottomBarItem(
-          icon: const Icon(Icons.home),
-          selectedIcon: const Icon(Icons.home),
-          selectedColor: theme.colorScheme.primary,
-          unSelectedColor: Colors.grey,
-          title: Text(isTC ? '主頁' : 'Home'),
-        ),
-        BottomBarItem(
-          icon: const Icon(Icons.account_circle),
+          icon: const Icon(Icons.account_circle_outlined),
           selectedIcon: const Icon(Icons.account_circle),
           selectedColor: theme.colorScheme.primary,
           unSelectedColor: Colors.grey,
@@ -242,7 +261,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   List<Widget> _buildPages(bool isLoggedIn, String? userType) {
     final isTC = widget.isTraditionalChinese;
 
-    // Guest pages (not logged in): Search - Home - Account
+    // Guest pages (not logged in): Search - Home - Account (Home not in nav but accessible via FAB)
     if (!isLoggedIn) {
       return [
         SearchPage(isTraditionalChinese: isTC),
@@ -288,7 +307,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       ),
       // Bookings (Diner) or Store Dashboard (Restaurant)
       if (userType == 'Restaurant')
-        StoreDashboardPage(isTraditionalChinese: isTC)
+        StorePage(isTraditionalChinese: isTC)
       else
         BookingsPage(isTraditionalChinese: isTC),
     ];
@@ -300,7 +319,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   List<String> _buildPageTitles(bool isLoggedIn, String? userType) {
     final isTC = widget.isTraditionalChinese;
 
-    // Guest titles: Search - Home - Account
+    // Guest titles: Search - Home - Account (Home not in nav but accessible via FAB)
     if (!isLoggedIn) {
       return isTC
           ? ['餐廳列表', '主頁', '我的帳戶']
@@ -336,9 +355,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           _lastUserType = userType;
           _lastLanguage = widget.isTraditionalChinese;
 
-          // Set initial index to Home page on first load or when login state changes
+          // Set initial index on first load or when login state changes
           if (!_initialIndexSet || _lastLoginState != isLoggedIn) {
-            _currentIndex = isLoggedIn ? 2 : 1; // Home page index
+            _currentIndex = isLoggedIn ? 2 : 1; // Home page for both, different indices
             _initialIndexSet = true;
             
             // Jump to Home page without animation on initial load
@@ -462,15 +481,22 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
               items: navItems,
               hasNotch: true, // Enabled notch for centre emphasis
               fabLocation: StylishBarFabLocation.center, // Aligns items around the centre
-              currentIndex: _currentIndex,
+              currentIndex: _getNavIndexFromPageIndex(_currentIndex, isLoggedIn),
               onTap: _onNavTapped,
               backgroundColor: Theme.of(context).bottomNavigationBarTheme.backgroundColor,
             ),
             // The Home FAB in the centre notch
             floatingActionButton: FloatingActionButton(
               onPressed: () {
-                // Navigate to the Home index (2 for logged in, 1 for guest)
-                _onNavTapped(isLoggedIn ? 2 : 1);
+                // Navigate directly to Home page index (2 for logged in, 1 for guest)
+                final homePageIndex = isLoggedIn ? 2 : 1;
+                setState(() => _currentIndex = homePageIndex);
+                _pageController.animateToPage(
+                  homePageIndex,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+                _showFab(); // Show FAB on interaction
               },
               backgroundColor: Theme.of(context).colorScheme.primary,
               shape: const CircleBorder(),

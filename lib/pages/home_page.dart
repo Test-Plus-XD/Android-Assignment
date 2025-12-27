@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import '../services/restaurant_service.dart';
 import '../services/location_service.dart';
+import '../services/auth_service.dart';
 import '../models.dart';
 import 'restaurant_detail_page.dart';
 
@@ -13,7 +14,7 @@ import 'restaurant_detail_page.dart';
 /// rather than using Algolia search. The restaurants are then processed
 /// locally to create featured and nearby lists.
 ///
-/// Architecture decisions:
+/// Architecture:
 /// - Fetch once from API and cache results in memory
 /// - Featured list: Random selection of 10 restaurants
 /// - Nearby list: 10 closest restaurants based on GPS distance
@@ -645,8 +646,9 @@ class _FrontPageState extends State<FrontPage> {
                 icon: const Icon(Icons.restaurant_menu),
                 label: Text(browseLabel),
                 onPressed: () {
-                  /// Navigate to restaurants tab (index 1)
-                  widget.onNavigate?.call(1);
+                  final isLoggedIn = context.read<AuthService>().isLoggedIn;
+                  /// Navigate to restaurants tab (index 1 if logged in, index 0 if guest)
+                  widget.onNavigate?.call(isLoggedIn ? 1 : 0);
                 },
               ),
             ),

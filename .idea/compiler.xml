@@ -2,15 +2,15 @@
 <project version="4">
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel>
-      <module name="android.cloud_firestore" target="21" />
-      <module name="android.firebase_auth" target="21" />
-      <module name="android.firebase_core" target="21" />
-      <module name="android.flutter_local_notifications" target="21" />
-      <module name="android.geolocator_android" target="21" />
-      <module name="android.google_sign_in_android" target="21" />
-      <module name="android.permission_handler_android" target="21" />
-      <module name="android.shared_preferences_android" target="21" />
+      <module name="com.baseflow.geolocator.android.geolocator_android" target="21" />
+      <module name="com.baseflow.permissionhandler.android.permission_handler_android" target="21" />
+      <module name="com.dexterous.flutterlocalnotifications.android.flutter_local_notifications" target="21" />
       <module name="dev.fluttercommunity.plus.share.android.share_plus" target="21" />
+      <module name="io.flutter.plugins.firebase.auth.android.firebase_auth" target="21" />
+      <module name="io.flutter.plugins.firebase.cloudfirestore.android.cloud_firestore" target="21" />
+      <module name="io.flutter.plugins.firebase.core.android.firebase_core" target="21" />
+      <module name="io.flutter.plugins.googlesignin.android.google_sign_in_android" target="21" />
+      <module name="io.flutter.plugins.sharedpreferences.android.shared_preferences_android" target="21" />
       <module name="io.flutter.plugins.urllauncher.android.url_launcher_android" target="21" />
       <module name="vn.hunghd.flutter.plugins.imagecropper.android.image_cropper" target="21" />
     </bytecodeTargetLevel>

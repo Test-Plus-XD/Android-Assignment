@@ -6,6 +6,9 @@ import '../services/user_service.dart';
 import '../widgets/chat/chat_room_list.dart';
 import 'chat_room_page.dart';
 
+// Note: ChatService uses lazy initialisation via ensureConnected()
+// Socket.IO connection is only established when user visits this page
+
 /// Chat Page
 ///
 /// Lists all chat rooms for the current user
@@ -35,15 +38,10 @@ class _ChatPageState extends State<ChatPage> {
     if (!mounted) return;
 
     final chatService = context.read<ChatService>();
-    final authService = context.read<AuthService>();
 
-    // Connect to socket if not connected
-    if (!chatService.isConnected && authService.currentUser != null) {
-      await chatService.connect(authService.currentUser!.uid);
-    }
-
-    // Load rooms
-    await chatService.getChatRooms();
+    // Use ensureConnected for lazy initialisation
+    // This connects to Socket.IO and loads rooms only when needed
+    await chatService.ensureConnected();
   }
 
   void _navigateToChat(String roomId) {

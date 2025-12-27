@@ -30,6 +30,8 @@ A Flutter mobile app for discovering vegetarian/vegan restaurants in Hong Kong w
 - Table bookings with notifications
 - Reviews & ratings system
 - Restaurant owner dashboard
+- QR code menu scanner (scan to view restaurant menus)
+- QR code generator for restaurant owners
 - Bilingual UI (English/Traditional Chinese)
 - Dark/Light theme toggle
 
@@ -42,6 +44,7 @@ A Flutter mobile app for discovering vegetarian/vegan restaurants in Hong Kong w
 - **AI**: Google Gemini 2.5
 - **Maps**: Google Maps Flutter
 - **Notifications**: flutter_local_notifications
+- **QR Codes**: qr_flutter 4.1.0 (generation), mobile_scanner 7.1.4 (scanning)
 
 ### Environment
 - **API Base**: `https://vercel-express-api-alpha.vercel.app`
@@ -57,51 +60,149 @@ A Flutter mobile app for discovering vegetarian/vegan restaurants in Hong Kong w
 
 ```
 lib/
-├── main.dart                    # App entry + Provider setup
+├── main.dart                              # App entry point + Provider setup
+├── config.dart                            # API endpoints & constants (AppConfig)
+├── firebase_options.dart                  # Firebase configuration (auto-generated)
+├── models.dart                            # Barrel export file for all models
+│
 ├── config/
-│   ├── app_state.dart          # Theme/language state management
-│   ├── theme.dart              # Material Design 3 theming
-│   └── config.dart             # API endpoints & constants
-├── models/                      # Domain models (Restaurant, User, Booking, etc.)
-├── services/                    # Business logic (ChangeNotifier services)
-│   ├── auth_service.dart       # Firebase Auth
-│   ├── restaurant_service.dart # Algolia + REST API
-│   ├── chat_service.dart       # Socket.IO + REST
-│   ├── gemini_service.dart     # AI assistant
-│   ├── booking_service.dart    # Bookings CRUD
-│   └── ...
-├── pages/                       # UI screens
-│   ├── home_page.dart          # Featured + nearby restaurants
-│   ├── search_page.dart        # Algolia search with filters
-│   ├── restaurant_detail_page.dart
-│   ├── chat_page.dart          # Real-time chat
-│   ├── gemini_page.dart        # AI assistant chat
-│   └── ...
-├── widgets/                     # Reusable components
-│   ├── navigation/             # App structure (MainShell, AppRoot)
-│   ├── reviews/                # Review cards, forms, ratings
-│   ├── menu/                   # Menu item widgets
-│   ├── booking/                # Booking forms & cards
-│   ├── chat/                   # Chat bubbles, input, typing
-│   ├── carousel/               # Various carousel types
-│   └── ...
-└── constants/                   # Static data (districts, keywords, etc.)
+│   ├── app_state.dart                     # Theme/language state management
+│   └── theme.dart                         # Material Design 3 theming
+│
+├── constants/
+│   ├── districts.dart                     # Hong Kong districts data
+│   ├── keywords.dart                      # Restaurant keywords/tags
+│   ├── payments.dart                      # Payment methods
+│   └── weekdays.dart                      # Day of week constants
+│
+├── models/
+│   ├── booking.dart                       # Booking model
+│   ├── chat.dart                          # ChatRoom, ChatMessage, TypingIndicator
+│   ├── docupipe.dart                      # Document pipeline model
+│   ├── gemini.dart                        # GeminiMessage model
+│   ├── image.dart                         # Image upload model
+│   ├── menu.dart                          # MenuItem, CreateMenuItemRequest
+│   ├── restaurant.dart                    # Restaurant model
+│   ├── review.dart                        # Review, ReviewStats models
+│   ├── search.dart                        # SearchFilters model
+│   └── user.dart                          # User model
+│
+├── services/
+│   ├── auth_service.dart                  # Firebase Auth (login/logout/register)
+│   ├── booking_service.dart               # Table reservations CRUD
+│   ├── chat_service.dart                  # Socket.IO + REST chat
+│   ├── docupipe_service.dart              # Document processing service
+│   ├── gemini_service.dart                # Google Gemini AI assistant
+│   ├── image_service.dart                 # Firebase Storage image upload
+│   ├── location_service.dart              # GPS + distance calculations
+│   ├── menu_service.dart                  # Restaurant menu items CRUD
+│   ├── notification_service.dart          # Local notifications
+│   ├── restaurant_service.dart            # Algolia search + REST API
+│   ├── restaurant_service_native.dart     # Native restaurant operations
+│   ├── review_service.dart                # Reviews CRUD
+│   ├── store_service.dart                 # Restaurant owner dashboard
+│   └── user_service.dart                  # User profile management
+│
+├── pages/
+│   ├── account_page.dart                  # User account & settings
+│   ├── bookings_page.dart                 # User's bookings list
+│   ├── chat_page.dart                     # Chat rooms list
+│   ├── chat_room_page.dart                # Individual chat room
+│   ├── gemini_page.dart                   # AI assistant chat interface
+│   ├── home_page.dart                     # Featured + nearby restaurants
+│   ├── login_page.dart                    # Login/register screen
+│   ├── qr_scanner_page.dart               # QR code scanner for menu links
+│   ├── restaurant_detail_page.dart        # Restaurant details view
+│   ├── restaurant_menu_page.dart          # Full menu view
+│   ├── restaurant_reviews_page.dart       # Restaurant reviews list
+│   ├── search_page.dart                   # Algolia search with filters
+│   └── store_page.dart                    # Restaurant owner dashboard
+│
+├── widgets/
+│   ├── drawer.dart                        # Navigation drawer
+│   │
+│   ├── ai/
+│   │   ├── gemini_chat_button.dart        # Gemini floating action button
+│   │   └── suggestion_chips.dart          # AI suggestion chips
+│   │
+│   ├── booking/
+│   │   ├── booking_card.dart              # Individual booking display
+│   │   ├── booking_form.dart              # Booking creation form
+│   │   └── booking_list.dart              # List of bookings
+│   │
+│   ├── carousel/
+│   │   ├── hero_carousel.dart             # Hero image carousel
+│   │   ├── menu_carousel.dart             # Menu items carousel
+│   │   ├── offer_carousel.dart            # Offers/promotions carousel
+│   │   └── restaurant_carousel.dart       # Restaurant cards carousel
+│   │
+│   ├── chat/
+│   │   ├── chat_bubble.dart               # Message bubble with image support
+│   │   ├── chat_input.dart                # Message input with image attach
+│   │   ├── chat_room_list.dart            # Chat rooms list item
+│   │   └── typing_indicator.dart          # "User is typing..." indicator
+│   │
+│   ├── images/
+│   │   ├── image_picker_button.dart       # Image selection button
+│   │   ├── image_preview.dart             # Image preview widget
+│   │   └── upload_progress_indicator.dart # Upload progress display
+│   │
+│   ├── menu/
+│   │   ├── menu_item_card.dart            # Menu item display card
+│   │   ├── menu_item_form.dart            # Menu item create/edit form
+│   │   └── menu_list.dart                 # Grouped menu items list
+│   │
+│   ├── navigation/
+│   │   ├── app_root.dart                  # Root widget with MaterialApp
+│   │   └── main_shell.dart                # Main navigation shell
+│   │
+│   ├── qr/
+│   │   └── menu_qr_generator.dart         # QR code generator for restaurant menus
+│   │
+│   ├── restaurant_detail/
+│   │   ├── contact_actions.dart           # Phone/email/website buttons
+│   │   ├── hero_image_section.dart        # Hero image with distance overlay
+│   │   ├── opening_hours_card.dart        # Opening hours display
+│   │   └── restaurant_info_card.dart      # Restaurant info summary
+│   │
+│   ├── reviews/
+│   │   ├── review_card.dart               # Individual review display
+│   │   ├── review_form.dart               # Review creation form
+│   │   ├── review_list.dart               # Reviews list
+│   │   ├── review_stats.dart              # Rating statistics widget
+│   │   └── star_rating.dart               # Star rating input/display
+│   │
+│   └── search/
+│       ├── filter_button.dart             # Filter toggle button
+│       ├── filter_dialog.dart             # Search filters dialog
+│       └── restaurant_search_card.dart    # Search result card
 
 android/
 ├── app/
-│   ├── build.gradle.kts        # Android build config
-│   ├── google-services.json    # Firebase Android config
-│   └── src/main/AndroidManifest.xml  # Permissions & metadata
+│   ├── build.gradle.kts                   # Android build config
+│   ├── google-services.json               # Firebase Android config
+│   └── src/main/
+│       ├── AndroidManifest.xml            # Permissions & metadata
+│       └── kotlin/.../MainActivity.kt     # Main activity
 ```
+
+**Total: 91 Dart files**
+- Root level: 4 files
+- config/: 2 files
+- constants/: 4 files
+- models/: 10 files
+- services/: 14 files
+- pages/: 13 files
+- widgets/: 44 files (across 11 subdirectories)
 
 ### Navigation System
 
 **Role-Based Bottom Navigation**:
-- **Guest**: Search - Home - Account (3 items)
-- **Diner**: Chat - Search - Home - Account - Bookings (5 items)
-- **Restaurant**: Chat - Search - Home - Account - Store Dashboard (5 items)
+- **Guest**: Search (middle-left) - Home (centre, FAB) - Account (middle-right) (3 items)
+- **Diner**: Chat - Search - Home (centre, FAB) - Account - Bookings (5 items)
+- **Restaurant**: Chat - Search - Home (centre, FAB) - Account - Store Dashboard (5 items)
 
-**Gemini AI FAB**: Bottom-left floating button for AI assistant access.
+**Gemini AI FAB**: Bottom-left floating button for AI assistant access (logged in users only).
 
 ---
 
@@ -619,6 +720,34 @@ _socket!.emit('my-event', {
 });
 ```
 
+### Using QR Code Features
+
+**For Restaurant Owners (Generate QR Code)**:
+1. Navigate to Store Dashboard page (available to users with 'Restaurant' account type)
+2. Scroll to the "Menu QR Code" section
+3. The QR code is automatically generated with format: `pourrice://menu/{restaurantId}`
+4. Use the "Expand" button to show full-screen QR for easy scanning
+5. Use the "Share" button to export QR code as PNG image for printing or social media
+
+**For Diners (Scan QR Code)**:
+1. Open the navigation drawer (hamburger menu)
+2. Tap "Scan QR Code" option
+3. Point camera at restaurant's QR code
+4. App automatically detects and validates the QR code format
+5. App fetches restaurant details and navigates to the menu page
+
+**QR Code Format**:
+- Deep link URL: `pourrice://menu/{restaurantId}`
+- The scanner validates this format and extracts the restaurant ID
+- It then calls `RestaurantService.getRestaurantById()` to verify the restaurant exists
+- Finally navigates to `RestaurantMenuPage` with the restaurant details
+
+**Technical Notes**:
+- QR codes use error correction level H (30% redundancy)
+- Scanner requires camera permission (already configured in AndroidManifest.xml)
+- Scanner supports torch (flashlight) for low-light environments
+- QR generator uses `RepaintBoundary` to capture widget as PNG for sharing
+
 ### Troubleshooting
 
 **Build Errors**:
@@ -650,16 +779,18 @@ flutter build apk
 
 ## Project Statistics
 
-- **Lines of Code**: ~15,000+ (excluding generated files)
-- **Pages**: 15+ UI screens
-- **Services**: 10+ business logic services
-- **Widgets**: 50+ reusable components
-- **Models**: 20+ domain models
+- **Total Dart Files**: 91
+- **Lines of Code**: ~15,500+ (excluding generated files)
+- **Pages**: 13 UI screens
+- **Services**: 14 business logic services
+- **Widgets**: 44 reusable components (across 11 subdirectories)
+- **Models**: 10 domain models
+- **Constants**: 4 static data files
 - **Languages**: English + Traditional Chinese (full bilingual)
 - **Platforms**: Android (primary), Web/iOS (configured)
 
 ---
 
-**Last Updated**: 2025-12-26
+**Last Updated**: 2025-12-27
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

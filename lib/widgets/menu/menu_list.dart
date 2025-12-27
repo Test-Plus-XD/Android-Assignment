@@ -55,7 +55,7 @@ class _MenuListState extends State<MenuList> {
 
     // Get menu items for this specific restaurant using restaurant-specific getters
     // This prevents state clashes when multiple pages load different restaurant menus
-    // (e.g., RestaurantDetailPage showing one restaurant while StoreDashboardPage shows another)
+    // (e.g., RestaurantDetailPage showing one restaurant while StorePage shows another)
     final menuItems = menuService.getMenuItemsForRestaurant(widget.restaurantId);
     final isLoading = menuService.isLoadingForRestaurant(widget.restaurantId);
     final error = menuService.getErrorForRestaurant(widget.restaurantId);

@@ -30,7 +30,7 @@ class AppState with ChangeNotifier {
 
   /// Load Preferences from SharedPreferences
   ///
-  /// Called once during initialization to restore user's saved preferences.
+  /// Called once during initialisation to restore user's saved preferences.
   /// Defaults to light mode and English if no preferences exist.
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();

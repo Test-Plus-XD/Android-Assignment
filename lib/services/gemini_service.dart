@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models.dart';
+import '../utils/ai_response_processor.dart';
 
 /// Gemini AI Service
 ///
@@ -76,7 +77,8 @@ class GeminiService extends ChangeNotifier {
         final geminiResponse = GeminiGenerateResponse.fromJson(data);
         _isLoading = false;
         notifyListeners();
-        return geminiResponse.result;
+        // Clean the response before returning
+        return AIResponseProcessor.cleanResponse(geminiResponse.result);
       } else {
         _errorMessage =
             'Failed to generate content: ${response.statusCode} ${response.body}';
@@ -143,7 +145,8 @@ class GeminiService extends ChangeNotifier {
 
         _isLoading = false;
         notifyListeners();
-        return geminiResponse.result;
+        // Clean the response before returning
+        return AIResponseProcessor.cleanResponse(geminiResponse.result);
       } else {
         _errorMessage = 'Failed to chat: ${response.statusCode} ${response.body}';
         if (kDebugMode) print(_errorMessage);
@@ -204,7 +207,8 @@ class GeminiService extends ChangeNotifier {
         final geminiResponse = GeminiRestaurantDescriptionResponse.fromJson(data);
         _isLoading = false;
         notifyListeners();
-        return geminiResponse.description;
+        // Clean the response before returning
+        return AIResponseProcessor.cleanResponse(geminiResponse.description);
       } else {
         _errorMessage =
             'Failed to generate description: ${response.statusCode} ${response.body}';
@@ -222,25 +226,126 @@ class GeminiService extends ChangeNotifier {
     }
   }
 
-  /// Ask a question about a specific restaurant
+  /// Ask a question about a specific restaurant with menu context
   ///
-  /// Helper method that uses the chat endpoint with context
+  /// PRIORITY: Menu-related questions are answered first
+  /// This method accepts optional menu items to provide context about the restaurant's menu
+  ///
+  /// Parameters:
+  /// - [question]: User's question
+  /// - [restaurantName]: Name of the restaurant
+  /// - [cuisine]: Type of cuisine
+  /// - [district]: Restaurant location
+  /// - [menuItems]: Optional list of menu items for menu-specific queries
+  ///
+  /// Returns AI response focusing on menu if menu-related question is detected
   Future<String?> askAboutRestaurant(
     String question,
     String restaurantName, {
     String? cuisine,
     String? district,
+    List<MenuItem>? menuItems,
   }) async {
     final context = StringBuffer();
     context.write('Restaurant: $restaurantName');
     if (cuisine != null) context.write(', Cuisine: $cuisine');
     if (district != null) context.write(', Location: $district');
 
+    // Add menu context if available and question seems menu-related
+    if (menuItems != null && menuItems.isNotEmpty) {
+      final isMenuRelated = _isMenuRelatedQuestion(question);
+
+      if (isMenuRelated) {
+        // Prioritize menu items in the context
+        context.write('\n\nMENU ITEMS (answer questions about the menu using this information first):');
+        for (final item in menuItems.take(20)) { // Limit to 20 items to avoid token limits
+          final name = item.nameEn ?? item.nameTc ?? 'Unknown';
+          final description = item.descriptionEn ?? item.descriptionTc ?? '';
+          final price = item.price != null ? '\$${item.price}' : '';
+          context.write('\n- $name${price.isNotEmpty ? ' ($price)' : ''}');
+          if (description.isNotEmpty) {
+            context.write(': $description');
+          }
+        }
+      }
+    }
+
     final prompt = '$context\n\nQuestion: $question';
 
     return chat(
       prompt,
       useInternalHistory: false,
+    );
+  }
+
+  /// Detect if a question is menu-related
+  ///
+  /// Checks for common menu-related keywords in the question
+  bool _isMenuRelatedQuestion(String question) {
+    final lowerQuestion = question.toLowerCase();
+    final menuKeywords = [
+      'menu', 'dish', 'food', 'meal', 'eat', 'serve', 'offer',
+      'recommend', 'popular', 'special', 'signature', 'price',
+      'cost', 'expensive', 'cheap', 'affordable', 'item',
+      '菜單', '菜', '食', '餐', '推薦', '價錢', '價格', '平', '貴'
+    ];
+
+    return menuKeywords.any((keyword) => lowerQuestion.contains(keyword));
+  }
+
+  /// Get menu suggestions and recommendations
+  ///
+  /// Specifically designed for menu-related queries
+  /// This method is available to ALL users (including guests)
+  Future<String?> getMenuSuggestions({
+    String? restaurantName,
+    List<MenuItem>? menuItems,
+    List<String>? dietaryRestrictions,
+    bool isTraditionalChinese = false,
+  }) async {
+    final prompt = StringBuffer();
+
+    if (restaurantName != null) {
+      prompt.write('Restaurant: $restaurantName\n\n');
+    }
+
+    // Add menu items if available
+    if (menuItems != null && menuItems.isNotEmpty) {
+      prompt.write('MENU ITEMS:\n');
+      for (final item in menuItems.take(20)) {
+        final name = isTraditionalChinese
+            ? (item.nameTc ?? item.nameEn ?? 'Unknown')
+            : (item.nameEn ?? item.nameTc ?? 'Unknown');
+        final description = isTraditionalChinese
+            ? (item.descriptionTc ?? item.descriptionEn ?? '')
+            : (item.descriptionEn ?? item.descriptionTc ?? '');
+        final price = item.price != null ? '\$${item.price}' : '';
+
+        prompt.write('- $name${price.isNotEmpty ? ' ($price)' : ''}');
+        if (description.isNotEmpty) {
+          prompt.write(': $description');
+        }
+        prompt.write('\n');
+      }
+      prompt.write('\n');
+    }
+
+    // Add dietary restrictions if provided
+    if (dietaryRestrictions != null && dietaryRestrictions.isNotEmpty) {
+      prompt.write('Dietary restrictions: ${dietaryRestrictions.join(', ')}\n\n');
+      prompt.write('Based on the menu above, recommend dishes that fit these dietary restrictions. ');
+    } else {
+      prompt.write('Based on the menu above, recommend the most popular or signature dishes. ');
+    }
+
+    prompt.write(isTraditionalChinese
+        ? '請提供3個推薦菜式並解釋為何推薦。'
+        : 'Provide 3 recommendations with reasons why you recommend them.');
+
+    return generate(
+      prompt.toString(),
+      temperature: 0.7,
+      maxTokens: 400,
     );
   }
 

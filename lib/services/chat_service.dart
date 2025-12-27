@@ -7,29 +7,27 @@ import '../config.dart';
 import '../models.dart';
 import 'auth_service.dart';
 
-/// Chat Service
-///
-/// Manages real-time chat functionality using Socket.IO for real-time events
-/// and REST API for message persistence.
+// Chat Service
+// Manages real-time chat functionality using Socket.IO for real-time events
+// and REST API for message persistence via the Vercel backend.
+// All API endpoints require the /API/ prefix to match the Express router mounting.
 class ChatService extends ChangeNotifier {
   AuthService _authService;
   IO.Socket? _socket;
-
-  // State
+  // State variables for managing chat data and connection status
   List<ChatRoom> _rooms = [];
   Map<String, List<ChatMessage>> _messagesCache = {};
   bool _isConnected = false;
   bool _isLoading = false;
   String? _error;
-
-  // Streams for real-time events
+  // Stream controllers for broadcasting real-time events to UI components
   final _messageController = StreamController<ChatMessage>.broadcast();
   final _typingController = StreamController<TypingIndicator>.broadcast();
   final _connectionController = StreamController<bool>.broadcast();
 
   ChatService(this._authService);
 
-  // Getters
+  // Public getters for accessing service state
   List<ChatRoom> get rooms => _rooms;
   bool get isConnected => _isConnected;
   bool get isLoading => _isLoading;
@@ -38,20 +36,19 @@ class ChatService extends ChangeNotifier {
   Stream<TypingIndicator> get typingStream => _typingController.stream;
   Stream<bool> get connectionStatusStream => _connectionController.stream;
 
-  /// Update the AuthService dependency without recreating the service instance
+  // Updates the AuthService dependency without recreating the service instance
+  // This is called by the Provider when the AuthService changes
+  // Note: We use LAZY INITIALIZATION - Socket.IO connection is NOT established here.
+  // Connection is only established when user navigates to a chat-related page
+  // (ChatPage, ChatRoomPage, or starts a chat from RestaurantDetailPage)
   void updateAuth(AuthService authService) {
     if (_authService != authService) {
       final wasLoggedIn = _authService.isLoggedIn;
       _authService = authService;
-      
-      if (_authService.isLoggedIn && !wasLoggedIn) {
-        // Just logged in, connect to socket
-        if (_authService.uid != null) {
-          connect(_authService.uid!);
-          getChatRooms();
-        }
-      } else if (!_authService.isLoggedIn && wasLoggedIn) {
-        // Logged out, disconnect and clear
+
+      // Only clean up on logout - do NOT auto-connect on login
+      if (!_authService.isLoggedIn && wasLoggedIn) {
+        // User logged out, clean up connection and cached data
         disconnect();
         _rooms.clear();
         _messagesCache.clear();
@@ -60,7 +57,38 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  /// Get cached messages for a room
+  /// Ensures the chat service is connected and rooms are loaded.
+  /// This is the primary entry point for lazy initialisation.
+  /// Call this from chat-related pages (ChatPage, ChatRoomPage, RestaurantDetailPage)
+  /// before performing any chat operations.
+  ///
+  /// Returns true if connection was successful, false otherwise.
+  Future<bool> ensureConnected() async {
+    if (!_authService.isLoggedIn) {
+      _error = 'Not authenticated';
+      return false;
+    }
+
+    final userId = _authService.uid;
+    if (userId == null) {
+      _error = 'User ID not available';
+      return false;
+    }
+
+    // Connect if not already connected
+    if (!_isConnected) {
+      await connect(userId);
+    }
+
+    // Load rooms if not already loaded
+    if (_rooms.isEmpty && !_isLoading) {
+      await getChatRooms();
+    }
+
+    return _isConnected;
+  }
+
+  // Returns cached messages for a specific room without making an API call
   List<ChatMessage> getCachedMessages(String roomId) {
     return _messagesCache[roomId] ?? [];
   }
@@ -78,14 +106,12 @@ class ChatService extends ChangeNotifier {
   // CONNECTION MANAGEMENT
   // ============================================================================
 
-  /// Connect to Socket.IO server
-  ///
-  /// Establishes a WebSocket connection to the Railway Socket server and prepares
-  /// for user registration. The connection flow is:
-  /// 1. Retrieve Firebase authentication token
+  /// Establishes a WebSocket connection to the Railway Socket.IO server
+  /// The connection flow is:
+  /// 1. Retrieve Firebase authentication token for server-side verification
   /// 2. Initialise Socket.IO client with WebSocket transport
   /// 3. Set up event listeners for real-time communication
-  /// 4. Connect to server (registration happens in onConnect handler)
+  /// 4. Connect to server (registration happens automatically in onConnect handler)
   Future<void> connect(String userId) async {
     if (_isConnected) return;
 
@@ -102,7 +128,7 @@ class ChatService extends ChangeNotifier {
       }
 
       // Socket.IO client is configured with WebSocket-only transport for real-time communication
-      // Auto-connect is disabled to allow listener setup before connection
+      // Auto-connect is disabled to allow listener setup before connection establishment
       _socket = IO.io(
         AppConfig.socketIOUrl,
         IO.OptionBuilder()
@@ -120,9 +146,6 @@ class ChatService extends ChangeNotifier {
       _socket!.connect();
 
       if (kDebugMode) print('ChatService: Connection initiated for user: $userId');
-
-      // User registration occurs automatically in the onConnect event handler
-      // once the WebSocket connection is successfully established
     } catch (e) {
       if (kDebugMode) print('ChatService: Connection error: $e');
       _error = 'Failed to connect to chat server';
@@ -130,7 +153,7 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  /// Disconnect from Socket.IO server
+  // Disconnects from the Socket.IO server and cleans up resources
   void disconnect() {
     if (_socket != null) {
       if (kDebugMode) print('ChatService: Disconnecting...');
@@ -143,9 +166,7 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  /// Setup Socket.IO event listeners
-  ///
-  /// Configures all real-time event handlers for the Socket.IO connection.
+  /// Configures all Socket.IO event listeners for the real-time connection
   /// Listeners are organised into categories:
   /// - Connection lifecycle (connect, disconnect, errors)
   /// - User registration and authentication
@@ -231,7 +252,7 @@ class ChatService extends ChangeNotifier {
 
         // Room metadata is updated to reflect the latest message
         // This ensures the room list shows current activity
-        final roomIndex = _rooms.indexWhere((r) => r.roomId == message.roomId);
+        final roomIndex = _rooms.indexWhere((room) => room.roomId == message.roomId);
         if (roomIndex != -1) {
           final updatedRoom = ChatRoom(
             roomId: _rooms[roomIndex].roomId,
@@ -289,15 +310,12 @@ class ChatService extends ChangeNotifier {
   // ROOM OPERATIONS
   // ============================================================================
 
-  /// Get all chat rooms for current user
-  ///
-  /// Retrieves the user's chat room list from the Vercel API, including:
+  /// Retrieves all chat rooms for the current user from the Vercel API
+  /// The /API/Chat/Records/:uid endpoint provides comprehensive room data including:
   /// - Room metadata (ID, name, type, participants)
   /// - Participant user profiles (display names, photos)
   /// - Recent message history (last 50 messages per room)
-  ///
-  /// The /API/Chat/Records/:uid endpoint provides a complete chat overview
-  /// in a single request, reducing API calls and improving performance.
+  /// This single request reduces API calls and improves performance
   Future<void> getChatRooms() async {
     if (!_authService.isLoggedIn) {
       _error = 'Not authenticated';
@@ -320,9 +338,9 @@ class ChatService extends ChangeNotifier {
         return;
       }
 
-      // The Chat/Records endpoint returns comprehensive room data including recent messages
-      // This matches the Ionic app implementation for consistent behaviour across platforms
-      final url = AppConfig.getEndpoint('Chat/Records/$userId');
+      // FIXED: Added /API/ prefix to match Express router mounting
+      // The Vercel API routes are mounted at /API/Chat/
+      final url = AppConfig.getEndpoint('API/Chat/Records/$userId');
 
       if (kDebugMode) print('ChatService: Fetching chat records from $url');
 
@@ -353,7 +371,7 @@ class ChatService extends ChangeNotifier {
         });
 
         // Recent messages from each room are cached locally to avoid redundant API calls
-        // When opening a chat, these cached messages display immediately while fresh data loads
+        // When opening a chat, these cached messages display immediately whilst fresh data loads
         for (final room in _rooms) {
           if (room.recentMessages != null && room.recentMessages!.isNotEmpty) {
             _messagesCache[room.roomId] = room.recentMessages!;
@@ -377,11 +395,12 @@ class ChatService extends ChangeNotifier {
     }
   }
 
-  /// Get single chat room details
+  // Retrieves details for a single chat room by ID
   Future<ChatRoom?> getChatRoom(String roomId) async {
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId');
+      // FIXED: Added /API/ prefix to match Express router mounting
+      final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId');
 
       final response = await http.get(
         Uri.parse(url),
@@ -401,15 +420,24 @@ class ChatService extends ChangeNotifier {
     return null;
   }
 
-  /// Create new chat room
+  // Creates a new chat room with the specified participants
   Future<String?> createChatRoom(
-    List<String> participants, {
-    String? roomName,
-    String type = 'direct',
-  }) async {
+      List<String> participants, {
+        String? roomName,
+        String? roomId, // Add support for custom room ID
+        String type = 'direct',
+      }) async {
     try {
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('Chat/Rooms');
+      // FIXED: Added /API/ prefix to match Express router mounting
+      final url = AppConfig.getEndpoint('API/Chat/Rooms');
+
+      final requestBody = {
+        'participants': participants,
+        if (roomName != null) 'roomName': roomName,
+        if (roomId != null) 'roomId': roomId, // Include custom room ID if provided
+        'type': type,
+      };
 
       final response = await http.post(
         Uri.parse(url),
@@ -418,18 +446,14 @@ class ChatService extends ChangeNotifier {
           'x-api-passcode': AppConfig.apiPasscode,
           'Content-Type': 'application/json',
         },
-        body: json.encode({
-          'participants': participants,
-          if (roomName != null) 'roomName': roomName,
-          'type': type,
-        }),
+        body: json.encode(requestBody),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = json.decode(response.body);
-        final roomId = data['roomId'] as String;
+        final returnedRoomId = data['roomId'] as String;
         await getChatRooms();
-        return roomId;
+        return returnedRoomId;
       }
     } catch (e) {
       if (kDebugMode) print('ChatService: Error creating room: $e');
@@ -437,15 +461,12 @@ class ChatService extends ChangeNotifier {
     return null;
   }
 
-  /// Join a chat room (Socket.IO)
-  ///
-  /// Subscribes the current user to a chat room's real-time events.
+  /// Subscribes the current user to a chat room's real-time events via Socket.IO
   /// Once joined, the client will receive:
   /// - New messages sent to this room
   /// - Typing indicators from other participants
   /// - User join/leave notifications
-  ///
-  /// The server acknowledges the join with a 'joined-room' event.
+  /// The server acknowledges the join with a 'joined-room' event
   Future<void> joinRoom(String roomId) async {
     if (!_isConnected || _socket == null) {
       if (kDebugMode) print('ChatService: Cannot join room - not connected');
@@ -467,12 +488,9 @@ class ChatService extends ChangeNotifier {
     });
   }
 
-  /// Leave a chat room (Socket.IO)
-  ///
-  /// Unsubscribes the current user from a chat room's real-time events.
+  /// Unsubscribes the current user from a chat room's real-time events via Socket.IO
   /// After leaving, the client will no longer receive messages or notifications
-  /// from this room. This is called automatically when the user navigates away
-  /// from a chat page to conserve bandwidth and reduce server load.
+  /// from this room. This is called automatically when navigating away from a chat page
   Future<void> leaveRoom(String roomId) async {
     if (!_isConnected || _socket == null) return;
 
@@ -492,14 +510,10 @@ class ChatService extends ChangeNotifier {
   // MESSAGE OPERATIONS
   // ============================================================================
 
-  /// Get messages for a room
-  ///
   /// Retrieves message history for a chat room using a two-tier approach:
   /// 1. First checks local cache (populated by getChatRooms with recent messages)
   /// 2. If cache miss, fetches from API with configurable message limit
-  ///
-  /// This strategy provides instant message display when opening frequently-used
-  /// chats whilst still supporting full history access for older conversations.
+  /// This strategy provides instant message display for frequently-used chats
   Future<List<ChatMessage>> getMessages(String roomId, {int limit = 50}) async {
     try {
       // Cached messages provide instant display without network delay
@@ -513,7 +527,8 @@ class ChatService extends ChangeNotifier {
 
       // Cache miss: fetch full message history from the API
       final token = await _authService.getIdToken();
-      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages?limit=$limit');
+      // FIXED: Added /API/ prefix to match Express router mounting
+      final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId/Messages?limit=$limit');
 
       if (kDebugMode) print('ChatService: Fetching messages from $url');
 
@@ -547,20 +562,14 @@ class ChatService extends ChangeNotifier {
     return [];
   }
 
-  /// Send a message
-  ///
   /// Transmits a message to all participants in a chat room using a hybrid approach:
-  ///
   /// Primary path (Socket.IO):
   /// - Message is sent via WebSocket for instant delivery to online users
-  /// - Railway Socket server receives the 'send-message' event
-  /// - Server broadcasts to all room participants via 'new-message' event
+  /// - Railway Socket server broadcasts to all room participants
   /// - Server persists message to Firestore via Vercel API automatically
-  ///
   /// Fallback path (Direct API):
   /// - If Socket.IO connection is unavailable, message saves directly to API
   /// - Ensures message delivery even during network issues or reconnection
-  /// - Messages are retrieved on next room entry
   Future<bool> sendMessage(String roomId, String text, {String? imageUrl}) async {
     try {
       final userId = _authService.uid;
@@ -594,7 +603,8 @@ class ChatService extends ChangeNotifier {
         // Fallback delivery: Direct API persistence when WebSocket is unavailable
         // This ensures messages are never lost due to connectivity issues
         final token = await _authService.getIdToken();
-        final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages');
+        // FIXED: Added /API/ prefix to match Express router mounting
+        final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId/Messages');
 
         final response = await http.post(
           Uri.parse(url),
@@ -605,6 +615,7 @@ class ChatService extends ChangeNotifier {
           },
           body: json.encode({
             'message': text,
+            'userId': userId,
             'displayName': displayName,
             if (imageUrl != null) 'imageUrl': imageUrl,
           }),
@@ -623,14 +634,10 @@ class ChatService extends ChangeNotifier {
     return false;
   }
 
-  /// Edit a message
-  ///
-  /// Modifies an existing message's content. The API enforces ownership verification
-  /// by requiring the userId in the request body, ensuring users can only edit their
-  /// own messages. The edited flag is set to true and an editedAt timestamp is recorded.
-  ///
-  /// Local cache is updated immediately for instant UI feedback whilst the server
-  /// processes the edit request.
+  /// Modifies an existing message's content
+  /// The API enforces ownership verification by requiring the userId in the request body,
+  /// ensuring users can only edit their own messages
+  /// Local cache is updated immediately for instant UI feedback
   Future<bool> editMessage(String roomId, String messageId, String newText) async {
     try {
       final token = await _authService.getIdToken();
@@ -641,7 +648,8 @@ class ChatService extends ChangeNotifier {
         return false;
       }
 
-      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages/$messageId');
+      // FIXED: Added /API/ prefix to match Express router mounting
+      final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId/Messages/$messageId');
 
       if (kDebugMode) print('ChatService: Editing message $messageId');
 
@@ -664,7 +672,7 @@ class ChatService extends ChangeNotifier {
         // Local cache is updated to reflect the edit immediately
         // This provides instant UI feedback without waiting for a server broadcast
         if (_messagesCache.containsKey(roomId)) {
-          final index = _messagesCache[roomId]!.indexWhere((m) => m.messageId == messageId);
+          final index = _messagesCache[roomId]!.indexWhere((message) => message.messageId == messageId);
           if (index != -1) {
             _messagesCache[roomId]![index] = _messagesCache[roomId]![index].copyWith(
               message: newText,
@@ -684,14 +692,10 @@ class ChatService extends ChangeNotifier {
     return false;
   }
 
-  /// Delete a message
-  ///
-  /// Performs a soft delete on a message. The message content is replaced with
-  /// "[Message deleted]" and the deleted flag is set to true. The API enforces
-  /// ownership verification by requiring the userId in the request body.
-  ///
-  /// Note: DELETE requests with body content require special handling in Dart's
-  /// http package using the Request class instead of the convenience methods.
+  /// Performs a soft delete on a message
+  /// The message content is replaced with "[Message deleted]" and the deleted flag is set to true
+  /// The API enforces ownership verification by requiring the userId in the request body
+  /// Note: DELETE requests with body content require special handling using the Request class
   Future<bool> deleteMessage(String roomId, String messageId) async {
     try {
       final token = await _authService.getIdToken();
@@ -702,12 +706,13 @@ class ChatService extends ChangeNotifier {
         return false;
       }
 
-      final url = AppConfig.getEndpoint('Chat/Rooms/$roomId/Messages/$messageId');
+      // FIXED: Added /API/ prefix to match Express router mounting
+      final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId/Messages/$messageId');
 
       if (kDebugMode) print('ChatService: Deleting message $messageId');
 
       // Dart's http package requires the Request class for DELETE operations with a body
-      // The standard http.delete() method doesn't support request bodies
+      // The standard http.delete() method does not support request bodies
       final request = http.Request('DELETE', Uri.parse(url));
       request.headers.addAll({
         'Authorization': 'Bearer $token',
@@ -724,7 +729,7 @@ class ChatService extends ChangeNotifier {
         // Local cache is updated to show the soft delete immediately
         // The message remains in the list but displays as "[Message deleted]"
         if (_messagesCache.containsKey(roomId)) {
-          final index = _messagesCache[roomId]!.indexWhere((m) => m.messageId == messageId);
+          final index = _messagesCache[roomId]!.indexWhere((message) => message.messageId == messageId);
           if (index != -1) {
             _messagesCache[roomId]![index] = _messagesCache[roomId]![index].copyWith(
               deleted: true,
@@ -744,15 +749,10 @@ class ChatService extends ChangeNotifier {
     return false;
   }
 
-  /// Emit typing indicator
-  ///
-  /// Broadcasts the user's typing status to other participants in the room.
+  /// Broadcasts the user's typing status to other participants in the room
   /// The server relays this to all other clients via the 'user-typing' event,
-  /// allowing them to display "User is typing..." indicators in real-time.
-  ///
-  /// The isTyping flag should be:
-  /// - true when the user starts typing (first character entered)
-  /// - false when the user stops typing or sends a message
+  /// allowing them to display "User is typing..." indicators in real-time
+  /// The isTyping flag should be true when typing starts and false when it stops
   void sendTypingIndicator(String roomId, bool isTyping) {
     if (!_isConnected || _socket == null) return;
 
@@ -771,6 +771,7 @@ class ChatService extends ChangeNotifier {
     });
   }
 
+  // Clears the current error state
   void clearError() {
     _error = null;
     notifyListeners();

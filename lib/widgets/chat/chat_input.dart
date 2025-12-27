@@ -38,6 +38,7 @@ class _ChatInputState extends State<ChatInput> {
   String? _uploadedImageUrl;
   bool _isSending = false;
   bool _isTyping = false;
+  bool _canSend = false; // Add explicit state for send button
 
   @override
   void initState() {
@@ -55,9 +56,19 @@ class _ChatInputState extends State<ChatInput> {
 
   void _onTextChanged() {
     final hasText = _controller.text.trim().isNotEmpty;
+    final canSend = hasText || _uploadedImageUrl != null;
+    
     if (hasText != _isTyping) {
-      _isTyping = hasText;
+      setState(() {
+        _isTyping = hasText;
+      });
       widget.onTypingChanged?.call(_isTyping);
+    }
+    
+    if (canSend != _canSend) {
+      setState(() {
+        _canSend = canSend;
+      });
     }
   }
 
@@ -70,6 +81,9 @@ class _ChatInputState extends State<ChatInput> {
         _selectedImage = image;
         _uploadedImageUrl = null;
       });
+
+      // Upload image immediately in background (like Ionic app does)
+      await _uploadImage();
     }
   }
 
@@ -84,7 +98,10 @@ class _ChatInputState extends State<ChatInput> {
         folder: 'Chat',
       );
       if (url != null) {
-        setState(() => _uploadedImageUrl = url);
+        setState(() {
+          _uploadedImageUrl = url;
+          _canSend = _controller.text.trim().isNotEmpty || url != null;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -108,27 +125,32 @@ class _ChatInputState extends State<ChatInput> {
     setState(() {
       _selectedImage = null;
       _uploadedImageUrl = null;
+      _canSend = _controller.text.trim().isNotEmpty;
     });
   }
 
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty && _selectedImage == null && _uploadedImageUrl == null) return;
+
+    // Require either text or uploaded image
+    if (text.isEmpty && _uploadedImageUrl == null) {
+      return;
+    }
 
     setState(() => _isSending = true);
 
     try {
-      // Upload image first if present and not already uploaded
-      if (_selectedImage != null && _uploadedImageUrl == null) {
-        await _uploadImage();
-      }
-
-      // Send message
-      await widget.onSend(text, imageUrl: _uploadedImageUrl);
+      // Send message with text and/or image URL
+      // Use placeholder text "Image" if only sending image (like Ionic app)
+      final messageText = text.isNotEmpty ? text : 'Image';
+      await widget.onSend(messageText, imageUrl: _uploadedImageUrl);
 
       // Clear input
       _controller.clear();
       _removeImage();
+      setState(() {
+        _canSend = false;
+      });
       widget.onTypingChanged?.call(false);
     } catch (e) {
       if (mounted) {
@@ -151,9 +173,6 @@ class _ChatInputState extends State<ChatInput> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final canSend = _controller.text.trim().isNotEmpty ||
-        _selectedImage != null ||
-        _uploadedImageUrl != null;
 
     return Container(
       decoration: BoxDecoration(
@@ -217,7 +236,7 @@ class _ChatInputState extends State<ChatInput> {
                       enabled: !_isSending,
                       maxLines: null,
                       textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => canSend ? _sendMessage() : null,
+                      onSubmitted: (_) => _canSend ? _sendMessage() : null,
                       decoration: InputDecoration(
                         hintText: widget.isTraditionalChinese ? '輸入訊息...' : 'Type a message...',
                         border: OutlineInputBorder(
@@ -248,13 +267,13 @@ class _ChatInputState extends State<ChatInput> {
                             ),
                           )
                         : const Icon(Icons.send),
-                    onPressed: canSend && !_isSending ? _sendMessage : null,
+                    onPressed: _canSend && !_isSending ? _sendMessage : null,
                     tooltip: widget.isTraditionalChinese ? '發送' : 'Send',
                     style: IconButton.styleFrom(
-                      backgroundColor: canSend && !_isSending
+                      backgroundColor: _canSend && !_isSending
                           ? theme.colorScheme.primary
                           : theme.colorScheme.surfaceContainerHighest,
-                      foregroundColor: canSend && !_isSending
+                      foregroundColor: _canSend && !_isSending
                           ? theme.colorScheme.onPrimary
                           : theme.colorScheme.onSurfaceVariant,
                     ),

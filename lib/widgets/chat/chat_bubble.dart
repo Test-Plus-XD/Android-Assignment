@@ -6,10 +6,10 @@ import '../../models.dart';
 /// Chat Bubble Widget
 ///
 /// Displays a single chat message with:
-/// - User avatar
+/// - User avatar with Firebase Auth profile picture (photoURL)
 /// - Message content
 /// - Timestamp
-/// - Optional image attachment
+/// - Optional image attachment (from imageUrl field or detected in message text)
 /// - Edit/delete menu for own messages
 /// - Edited indicator
 class ChatBubble extends StatelessWidget {
@@ -18,6 +18,7 @@ class ChatBubble extends StatelessWidget {
   final bool isTraditionalChinese;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final String? userPhotoUrl; // Firebase Auth photoURL
 
   const ChatBubble({
     super.key,
@@ -26,7 +27,27 @@ class ChatBubble extends StatelessWidget {
     this.isTraditionalChinese = false,
     this.onEdit,
     this.onDelete,
+    this.userPhotoUrl, // Optional photoURL from Firebase Auth
   });
+
+  /// Regular expression to detect image URLs in message text
+  /// Matches URLs ending with common image extensions or Firebase Storage URLs
+  static final RegExp _imageUrlRegex = RegExp(
+    r'(https?://[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp)(?:\?[^\s]*)?)|'
+    r'(https?://firebasestorage\.googleapis\.com/[^\s]+)',
+    caseSensitive: false,
+  );
+
+  /// Extracts image URLs from message text
+  List<String> _extractImageUrls(String text) {
+    final matches = _imageUrlRegex.allMatches(text);
+    return matches.map((m) => m.group(0)!).toList();
+  }
+
+  /// Returns the message text with image URLs removed (for cleaner display)
+  String _getTextWithoutImageUrls(String text) {
+    return text.replaceAll(_imageUrlRegex, '').trim();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,22 +82,32 @@ class ChatBubble extends StatelessWidget {
             mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Avatar (for other users)
+              // Avatar (for other users) with Firebase Auth photoURL
               if (!isCurrentUser)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: theme.colorScheme.primary,
-                    child: Text(
-                      message.displayName.isNotEmpty ? message.displayName[0].toUpperCase() : '?',
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                  child: userPhotoUrl != null && userPhotoUrl!.isNotEmpty
+                      ? CircleAvatar(
+                          radius: 16,
+                          backgroundImage: CachedNetworkImageProvider(userPhotoUrl!),
+                          backgroundColor: theme.colorScheme.primary,
+                          onBackgroundImageError: (_, __) {
+                            // Fallback to initials if image fails to load
+                          },
+                          child: Container(), // Empty container to show background image
+                        )
+                      : CircleAvatar(
+                          radius: 16,
+                          backgroundColor: theme.colorScheme.primary,
+                          child: Text(
+                            message.displayName.isNotEmpty ? message.displayName[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              color: theme.colorScheme.onPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                 ),
 
               // Message content
@@ -96,88 +127,118 @@ class ChatBubble extends StatelessWidget {
                         bottomRight: Radius.circular(isCurrentUser ? 4 : 16),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Message text
-                        if (!message.deleted)
-                          Text(
-                            message.message,
-                            style: theme.textTheme.bodyMedium?.copyWith(color: textColor),
-                          )
-                        else
-                          Text(
-                            isTraditionalChinese ? '訊息已刪除' : 'Message deleted',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: textColor.withOpacity(0.6),
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
+                    child: Builder(
+                      builder: (context) {
+                        // Extract image URLs from message text
+                        final detectedImageUrls = message.deleted ? <String>[] : _extractImageUrls(message.message);
+                        final textWithoutUrls = message.deleted ? '' : _getTextWithoutImageUrls(message.message);
 
-                        // Image attachment
-                        if (message.imageUrl != null && !message.deleted) ...[
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: message.imageUrl!,
-                              width: 200,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                width: 200,
-                                height: 150,
-                                color: theme.colorScheme.surfaceContainerHighest,
-                                child: const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                width: 200,
-                                height: 150,
-                                color: theme.colorScheme.errorContainer,
-                                child: Icon(
-                                  Icons.broken_image,
-                                  color: theme.colorScheme.onErrorContainer,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                        // Combine imageUrl field with detected URLs (avoid duplicates)
+                        final allImageUrls = <String>[
+                          if (message.imageUrl != null) message.imageUrl!,
+                          ...detectedImageUrls.where((url) => url != message.imageUrl),
+                        ];
 
-                        // Timestamp and edited indicator
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              timeago.format(
-                                message.timestamp,
-                                locale: isTraditionalChinese ? 'zh' : 'en',
-                              ),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: textColor.withOpacity(0.7),
-                              ),
-                            ),
-                            if (message.edited && !message.deleted) ...[
-                              const SizedBox(width: 4),
+                            // Message text (without image URLs for cleaner display)
+                            if (!message.deleted && textWithoutUrls.isNotEmpty)
                               Text(
-                                '•',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: textColor.withOpacity(0.7),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
+                                textWithoutUrls,
+                                style: theme.textTheme.bodyMedium?.copyWith(color: textColor),
+                              )
+                            else if (message.deleted)
                               Text(
-                                isTraditionalChinese ? '已編輯' : 'edited',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: textColor.withOpacity(0.7),
+                                isTraditionalChinese ? '訊息已刪除' : 'Message deleted',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: textColor.withValues(alpha: 0.6),
                                   fontStyle: FontStyle.italic,
                                 ),
                               ),
-                            ],
+
+                            // Display all images (from imageUrl field and detected in text)
+                            if (allImageUrls.isNotEmpty && !message.deleted)
+                              ...allImageUrls.map((imageUrl) => Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: GestureDetector(
+                                  onTap: () => _showFullScreenImage(context, imageUrl),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: CachedNetworkImage(
+                                      imageUrl: imageUrl,
+                                      width: 200,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) => Container(
+                                        width: 200,
+                                        height: 150,
+                                        color: theme.colorScheme.surfaceContainerHighest,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) => Container(
+                                        width: 200,
+                                        height: 150,
+                                        color: theme.colorScheme.errorContainer,
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.broken_image,
+                                              color: theme.colorScheme.onErrorContainer,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              isTraditionalChinese ? '無法載入圖片' : 'Failed to load',
+                                              style: theme.textTheme.labelSmall?.copyWith(
+                                                color: theme.colorScheme.onErrorContainer,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )),
+
+                            // Timestamp and edited indicator
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  timeago.format(
+                                    message.timestamp,
+                                    locale: isTraditionalChinese ? 'zh' : 'en',
+                                  ),
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: textColor.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                                if (message.edited && !message.deleted) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '•',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: textColor.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isTraditionalChinese ? '已編輯' : 'edited',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: textColor.withValues(alpha: 0.7),
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -185,6 +246,46 @@ class ChatBubble extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// Shows the image in full screen dialog
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(8),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Full screen image
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.contain,
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                errorWidget: (context, url, error) => const Center(
+                  child: Icon(Icons.broken_image, size: 64, color: Colors.white),
+                ),
+              ),
+            ),
+            // Close button
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

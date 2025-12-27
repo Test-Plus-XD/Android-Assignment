@@ -212,9 +212,9 @@ class _AccountPageState extends State<AccountPage> {
         TextEditingController? controller,
         VoidCallback? onEdit,
       }) {
-    // Dark mode text colour support
+    // Text colour support for both light and dark modes
     final labelColour = widget.isDarkMode ? Colors.white : Colors.grey.shade600;
-    final valueColour = widget.isDarkMode ? Colors.white70 : Colors.black87;
+    final valueColour = widget.isDarkMode ? Colors.white70 : Colors.grey.shade800;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -993,6 +993,8 @@ class _AccountPageState extends State<AccountPage> {
                 ),
               ),
               const SizedBox(height: 32),
+              // Bottom padding to avoid nav bar overlap
+              const SizedBox(height: 80),
             ],
           ),
         );

@@ -199,7 +199,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
 
   /// Start a chat with the restaurant
   ///
-  /// Creates or opens a direct chat room with the restaurant
+  /// Creates or joins a chat room with ID format: restaurant-{restaurantId}
   Future<void> _startChatWithRestaurant() async {
     final authService = context.read<AuthService>();
     final chatService = context.read<ChatService>();
@@ -218,45 +218,62 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       return;
     }
 
-    // Connect to socket if not connected
-    if (!chatService.isConnected && authService.currentUser != null) {
-      await chatService.connect(authService.currentUser!.uid);
-    }
+    // Use ensureConnected for lazy initialisation
+    // This connects to Socket.IO only when the user actually needs chat
+    await chatService.ensureConnected();
 
-    // For now, create a chat room with restaurant ID as participant
-    // In a real app, you would have a restaurant owner user ID
-    final restaurantUserId = 'restaurant_${widget.restaurant.id}';
+    // Create room ID in format: restaurant-{restaurantId}
+    final roomId = 'restaurant-${widget.restaurant.id}';
     final currentUserId = authService.currentUser!.uid;
 
-    // Try to find existing room or create new one
-    String? roomId;
-    final existingRooms = chatService.rooms.where((room) =>
-        room.type == 'direct' &&
-        room.participants.contains(restaurantUserId) &&
-        room.participants.contains(currentUserId)).toList();
-
-    if (existingRooms.isNotEmpty) {
-      roomId = existingRooms.first.roomId;
-    } else {
-      // Create new room
-      roomId = await chatService.createChatRoom(
-        [currentUserId, restaurantUserId],
-        roomName: widget.isTraditionalChinese
+    try {
+      // Try to join existing room or create new one
+      final room = await chatService.getChatRoom(roomId);
+      
+      if (room == null) {
+        // Room doesn't exist, create it
+        final restaurantName = widget.isTraditionalChinese
             ? widget.restaurant.nameTc ?? widget.restaurant.nameEn
-            : widget.restaurant.nameEn ?? widget.restaurant.nameTc,
-      );
-    }
+            : widget.restaurant.nameEn ?? widget.restaurant.nameTc;
+            
+        final createdRoomId = await chatService.createChatRoom(
+          [currentUserId], // Start with current user, restaurant owner can join later
+          roomName: restaurantName,
+          roomId: roomId, // Use specific room ID format
+        );
+        
+        if (createdRoomId == null) {
+          throw Exception('Failed to create chat room');
+        }
+      } else {
+        // Room exists, join it
+        await chatService.joinRoom(roomId);
+      }
 
-    if (roomId != null && mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ChatRoomPage(
-            roomId: roomId!,
-            isTraditionalChinese: widget.isTraditionalChinese,
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatRoomPage(
+              roomId: roomId,
+              isTraditionalChinese: widget.isTraditionalChinese,
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese 
+                ? '無法開始聊天：$e' 
+                : 'Failed to start chat: $e',
+            ),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
@@ -584,12 +601,13 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       appBar: AppBar(
         title: Text(name),
         actions: [
-          // AI Assistant button
+          // AI Assistant button with menu context
           GeminiChatIconButton(
             isTraditionalChinese: widget.isTraditionalChinese,
             restaurantName: name,
             restaurantCuisine: widget.restaurant.keywordEn?.join(', '),
             restaurantDistrict: widget.restaurant.districtEn,
+            restaurantId: widget.restaurant.id, // Pass restaurant ID for menu context
           ),
           // Chat button
           IconButton(
@@ -926,6 +944,64 @@ class _MenuSectionState extends State<_MenuSection> {
     return FutureBuilder<List<MenuItem>>(
       future: _menuItemsFuture,
       builder: (context, snapshot) {
+        // Show loading state while fetching menu
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.isTraditionalChinese ? '菜單' : 'Menu',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            ],
+          );
+        }
+
+        // Show error state if loading failed
+        if (snapshot.hasError) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.isTraditionalChinese ? '菜單' : 'Menu',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.isTraditionalChinese
+                              ? '無法載入菜單'
+                              : 'Failed to load menu',
+                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        // Show menu items if available
         if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -965,6 +1041,8 @@ class _MenuSectionState extends State<_MenuSection> {
             ],
           );
         }
+
+        // Hide menu section if no items available
         return const SizedBox.shrink();
       },
     );
