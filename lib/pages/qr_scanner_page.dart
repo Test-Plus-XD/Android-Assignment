@@ -26,12 +26,10 @@ import 'restaurant_menu_page.dart';
 /// 7. User can browse menu and make informed dining decisions
 class QRScannerPage extends StatefulWidget {
   final bool isTraditionalChinese;
-
   const QRScannerPage({
     this.isTraditionalChinese = false,
     super.key,
   });
-
   @override
   State<QRScannerPage> createState() => _QRScannerPageState();
 }
@@ -46,11 +44,9 @@ class _QRScannerPageState extends State<QRScannerPage> {
     // High-speed detection for responsive scanning
     detectionSpeed: DetectionSpeed.normal,
   );
-
   /// Whether a QR code is currently being processed
   /// This prevents multiple scans from being processed simultaneously
   bool _isProcessing = false;
-
   /// Whether the torch (flashlight) is currently enabled
   /// Useful for scanning in low-light conditions
   bool _torchEnabled = false;
@@ -79,7 +75,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
           SnackBar(
             content: Text(
               widget.isTraditionalChinese
-                  ? '無法開啟閃光燈'
+                  ? '開唔到閃光燈'
                   : 'Failed to toggle torch',
             ),
           ),
@@ -101,7 +97,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
           SnackBar(
             content: Text(
               widget.isTraditionalChinese
-                  ? '無法切換相機'
+                  ? '切換唔到相機'
                   : 'Failed to switch camera',
             ),
           ),
@@ -121,57 +117,47 @@ class _QRScannerPageState extends State<QRScannerPage> {
   Future<void> _handleQRCodeDetected(BarcodeCapture capture) async {
     // Prevent processing multiple scans simultaneously
     if (_isProcessing) return;
-
     // Get the scanned QR code data
     final List<Barcode> barcodes = capture.barcodes;
     if (barcodes.isEmpty) return;
-
     final String? scannedData = barcodes.first.rawValue;
     if (scannedData == null || scannedData.isEmpty) return;
-
     // Set processing flag to prevent duplicate processing
     setState(() => _isProcessing = true);
-
     try {
       // Step 1: Validate QR code format
       // Expected format: pourrice://menu/{restaurantId}
       final Uri? uri = Uri.tryParse(scannedData);
-
       if (uri == null ||
           uri.scheme != 'pourrice' ||
           uri.host != 'menu' ||
           uri.pathSegments.isEmpty) {
         throw Exception(
           widget.isTraditionalChinese
-              ? '無效的二維碼格式'
+              ? '呢個二維碼格式唔啱'
               : 'Invalid QR code format',
         );
       }
-
       // Step 2: Extract restaurant ID from the URL
       // Format: pourrice://menu/{restaurantId}
       final String restaurantId = uri.pathSegments.first;
-
       // Step 3: Fetch restaurant details to verify it exists
       // This also gets the restaurant name for display
       final restaurantService = context.read<RestaurantService>();
       final Restaurant? restaurant = await restaurantService.getRestaurantById(restaurantId);
-
       if (restaurant == null) {
         throw Exception(
           widget.isTraditionalChinese
-              ? '找不到餐廳'
+              ? '搵唔到呢間餐廳'
               : 'Restaurant not found',
         );
       }
-
       // Step 4: Navigate to restaurant's menu page
       if (mounted) {
         // Get the restaurant name for display
         final String restaurantName = widget.isTraditionalChinese
             ? (restaurant.nameTc ?? restaurant.nameEn ?? 'Restaurant')
             : (restaurant.nameEn ?? restaurant.nameTc ?? 'Restaurant');
-
         // Navigate to menu page and pop the scanner when done
         await Navigator.pushReplacement(
           context,
@@ -195,7 +181,6 @@ class _QRScannerPageState extends State<QRScannerPage> {
             duration: const Duration(seconds: 3),
           ),
         );
-
         // Reset processing flag to allow retry
         setState(() => _isProcessing = false);
       }
@@ -205,7 +190,6 @@ class _QRScannerPageState extends State<QRScannerPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Scaffold(
       // Dark app bar for better contrast with camera viewfinder
       appBar: AppBar(
@@ -237,7 +221,6 @@ class _QRScannerPageState extends State<QRScannerPage> {
             controller: cameraController,
             onDetect: _handleQRCodeDetected,
           ),
-
           // Scanning overlay
           // This provides visual guidance to help users align the QR code
           CustomPaint(
@@ -247,7 +230,6 @@ class _QRScannerPageState extends State<QRScannerPage> {
             ),
             child: Container(),
           ),
-
           // Processing indicator
           // Shows when a QR code has been scanned and is being processed
           if (_isProcessing)
@@ -261,7 +243,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                     const SizedBox(height: 16),
                     Text(
                       widget.isTraditionalChinese
-                          ? '正在處理...'
+                          ? '處理緊...'
                           : 'Processing...',
                       style: const TextStyle(
                         color: Colors.white,
@@ -272,7 +254,6 @@ class _QRScannerPageState extends State<QRScannerPage> {
                 ),
               ),
             ),
-
           // Instructions overlay
           // Positioned at the bottom to guide users
           if (!_isProcessing)
@@ -303,7 +284,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                     const SizedBox(height: 12),
                     Text(
                       widget.isTraditionalChinese
-                          ? '將相機對準餐廳的二維碼'
+                          ? '將鏡頭對準餐廳嘅二維碼'
                           : 'Point camera at restaurant\'s QR code',
                       style: const TextStyle(
                         color: Colors.white,

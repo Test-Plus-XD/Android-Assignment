@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../../services/image_service.dart';
 import '../images/image_preview.dart';
-import 'dart:io';
 
 /// Chat Input Widget
 ///
@@ -36,9 +36,12 @@ class _ChatInputState extends State<ChatInput> {
   final FocusNode _focusNode = FocusNode();
   File? _selectedImage;
   String? _uploadedImageUrl;
+  String? _uploadedImagePath; // Store the file path for cleanup
   bool _isSending = false;
+  bool _isUploading = false;
   bool _isTyping = false;
   bool _canSend = false; // Add explicit state for send button
+  double _uploadProgress = 0.0;
 
   @override
   void initState() {
@@ -48,6 +51,11 @@ class _ChatInputState extends State<ChatInput> {
 
   @override
   void dispose() {
+    // Clean up uploaded image if not sent
+    if (_uploadedImagePath != null) {
+      _deleteUploadedImage(_uploadedImagePath!);
+    }
+
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
@@ -90,43 +98,79 @@ class _ChatInputState extends State<ChatInput> {
   Future<void> _uploadImage() async {
     if (_selectedImage == null || widget.imageService == null) return;
 
-    setState(() => _isSending = true);
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0.0;
+    });
 
     try {
-      final url = await widget.imageService!.uploadImage(
+      // Use ImageService to upload (centralised API handling)
+      final result = await widget.imageService!.uploadImage(
         imageFile: _selectedImage!,
         folder: 'Chat',
+        compress: true,
+        compressQuality: 85,
       );
-      if (url != null) {
+
+      if (result != null) {
         setState(() {
-          _uploadedImageUrl = url;
-          _canSend = _controller.text.trim().isNotEmpty || url != null;
+          _uploadedImageUrl = result['url'];
+          _uploadedImagePath = result['filePath']; // Store path for cleanup
+          _uploadProgress = 1.0;
+          _canSend = _controller.text.trim().isNotEmpty || (result['url']?.isNotEmpty ?? false);
         });
+      } else {
+        throw Exception(widget.imageService!.error ?? 'Upload failed');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.isTraditionalChinese ? '圖片上傳失敗' : 'Failed to upload image',
+              widget.isTraditionalChinese ? '圖片上傳失敗：$e' : 'Failed to upload image: $e',
             ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
+      // Remove the selected image on error
+      await _removeImage();
     } finally {
       if (mounted) {
-        setState(() => _isSending = false);
+        setState(() {
+          _isUploading = false;
+          _uploadProgress = widget.imageService?.uploadProgress ?? 0.0;
+        });
       }
     }
   }
 
-  void _removeImage() {
+  Future<void> _removeImage() async {
+    // Delete uploaded image from server if it exists
+    if (_uploadedImagePath != null) {
+      await _deleteUploadedImage(_uploadedImagePath!);
+    }
+
     setState(() {
       _selectedImage = null;
       _uploadedImageUrl = null;
+      _uploadedImagePath = null;
       _canSend = _controller.text.trim().isNotEmpty;
     });
+  }
+
+  Future<void> _deleteUploadedImage(String filePath) async {
+    if (widget.imageService == null) return;
+
+    try {
+      final success = await widget.imageService!.deleteImage(filePath);
+      if (success) {
+        print('ChatInput: Deleted unused image: $filePath');
+      }
+    } catch (e) {
+      print('ChatInput: Error deleting image: $e');
+      // Silently fail - not critical
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -145,10 +189,12 @@ class _ChatInputState extends State<ChatInput> {
       final messageText = text.isNotEmpty ? text : 'Image';
       await widget.onSend(messageText, imageUrl: _uploadedImageUrl);
 
-      // Clear input
+      // Clear input (don't delete image as it's been sent)
       _controller.clear();
-      _removeImage();
       setState(() {
+        _selectedImage = null;
+        _uploadedImageUrl = null;
+        _uploadedImagePath = null; // Clear path without deleting
         _canSend = false;
       });
       widget.onTypingChanged?.call(false);
@@ -189,7 +235,7 @@ class _ChatInputState extends State<ChatInput> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Image preview
+            // Image preview with upload progress
             if (_selectedImage != null)
               Container(
                 padding: const EdgeInsets.all(8),
@@ -199,18 +245,55 @@ class _ChatInputState extends State<ChatInput> {
                       image: _selectedImage,
                       size: 80,
                     ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: _removeImage,
-                        style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.errorContainer,
-                          foregroundColor: theme.colorScheme.onErrorContainer,
+                    // Upload progress overlay
+                    if (_isUploading && widget.imageService != null)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: CircularProgressIndicator(
+                                    value: widget.imageService!.uploadProgress,
+                                    color: Colors.white,
+                                    strokeWidth: 3,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${(widget.imageService!.uploadProgress * 100).toInt()}%',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    // Close button (disabled during upload)
+                    if (!_isUploading)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: _removeImage,
+                          style: IconButton.styleFrom(
+                            backgroundColor: theme.colorScheme.errorContainer,
+                            foregroundColor: theme.colorScheme.onErrorContainer,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -224,7 +307,7 @@ class _ChatInputState extends State<ChatInput> {
                   if (widget.allowImages && widget.imageService != null)
                     IconButton(
                       icon: const Icon(Icons.image),
-                      onPressed: _isSending ? null : _pickImage,
+                      onPressed: (_isSending || _isUploading) ? null : _pickImage,
                       tooltip: widget.isTraditionalChinese ? '添加圖片' : 'Add image',
                     ),
 
@@ -267,13 +350,13 @@ class _ChatInputState extends State<ChatInput> {
                             ),
                           )
                         : const Icon(Icons.send),
-                    onPressed: _canSend && !_isSending ? _sendMessage : null,
+                    onPressed: _canSend && !_isSending && !_isUploading ? _sendMessage : null,
                     tooltip: widget.isTraditionalChinese ? '發送' : 'Send',
                     style: IconButton.styleFrom(
-                      backgroundColor: _canSend && !_isSending
+                      backgroundColor: _canSend && !_isSending && !_isUploading
                           ? theme.colorScheme.primary
                           : theme.colorScheme.surfaceContainerHighest,
-                      foregroundColor: _canSend && !_isSending
+                      foregroundColor: _canSend && !_isSending && !_isUploading
                           ? theme.colorScheme.onPrimary
                           : theme.colorScheme.onSurfaceVariant,
                     ),

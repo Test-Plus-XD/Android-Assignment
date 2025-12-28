@@ -60,6 +60,7 @@ dependencies:
   cached_network_image: ^3.4.1      # Image caching for better performance
 
   # Image Upload
+  file_picker: ^10.3.8      # File picker for image/video uploads
   image_picker: ^1.1.5      # Android camera/gallery access
   image_cropper: ^11.0.0     # Image cropping
   flutter_image_compress: ^2.4.0      # Compress before upload

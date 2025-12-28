@@ -155,6 +155,42 @@ class BookingService with ChangeNotifier {
     }
   }
 
+  /// Get all bookings for a specific restaurant (for owners)
+  Future<List<Booking>> getRestaurantBookings(String restaurantId) async {
+    try {
+      _setLoading(true);
+
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$_apiUrl?restaurantId=$restaurantId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final bookings = (data['data'] as List<dynamic>)
+            .map((json) => Booking.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        bookings.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+        _errorMessage = null;
+        _setLoading(false);
+        notifyListeners();
+        return bookings;
+      } else {
+        _errorMessage = 'Failed to load restaurant bookings';
+        _setLoading(false);
+        notifyListeners();
+        return [];
+      }
+    } catch (e) {
+      _errorMessage = 'Error loading restaurant bookings: $e';
+      _setLoading(false);
+      notifyListeners();
+      return [];
+    }
+  }
+
   /// Get single booking by ID
   Future<Booking?> getBookingById(String id) async {
     try {

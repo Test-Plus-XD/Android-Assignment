@@ -91,18 +91,18 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
       // Restaurant-specific welcome with menu support
       if (_menuItems != null && _menuItems!.isNotEmpty) {
         return widget.isTraditionalChinese
-            ? '您好！我可以回答關於 ${widget.restaurantName} 的問題，特別是關於菜單的問題。我已經了解這家餐廳的${_menuItems!.length}項菜單，請隨時發問！'
-            : 'Hello! I can answer questions about ${widget.restaurantName}, especially about the menu. I have access to ${_menuItems!.length} menu items. Feel free to ask anything!';
+            ? '哈囉！我在這裡幫你答關於${widget.restaurantName}嘅問題，特別係菜單方面嘅。我已經有呢間餐廳${_menuItems!.length}款菜式資料，隨時問我啦！'
+            : 'Hey! I\'m here to answer any questions about ${widget.restaurantName}, especially stuff on the menu. I\'ve got details on ${_menuItems!.length} dishes, so fire away!';
       } else {
         return widget.isTraditionalChinese
-            ? '您好！我可以回答關於 ${widget.restaurantName} 的問題。請隨時發問！'
-            : 'Hello! I can answer questions about ${widget.restaurantName}. Feel free to ask anything!';
+            ? '哈囉！我在這裡幫你答關於${widget.restaurantName}嘅問題，有咩想知隨時問啦！'
+            : 'Hey! I\'m here to help with any questions about ${widget.restaurantName}. Just ask away!';
       }
     } else {
       // General welcome
       return widget.isTraditionalChinese
-          ? '您好！我是您的素食餐廳助手。我可以幫您推薦餐廳、回答問題或提供用餐建議。請問有什麼可以幫您的？'
-          : 'Hello! I\'m your vegetarian dining assistant. I can recommend restaurants, answer questions, or provide dining suggestions. How can I help you?';
+          ? '哈囉！我是你嘅素食餐廳助手嚟㗎。我可以幫你推介餐廳、答問題，或者畀啲食飯建議你。有咩可以幫到你呀？'
+          : 'Hey! I\'m your vegetarian restaurant mate. I can recommend places, answer questions, or give you some dining tips. What can I do for you?';
     }
   }
 

@@ -61,11 +61,18 @@ class _ClaimRestaurantButtonState extends State<ClaimRestaurantButton> {
 
     try {
       final storeService = context.read<StoreService>();
+      final userService = context.read<UserService>();
       final success = await storeService.claimRestaurant(widget.restaurantId);
 
       if (!mounted) return;
 
       if (success) {
+        // Refresh user profile to get the updated restaurantId
+        final authService = context.read<AuthService>();
+        if (authService.uid != null) {
+          await userService.getUserProfile(authService.uid!);
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -80,7 +87,7 @@ class _ClaimRestaurantButtonState extends State<ClaimRestaurantButton> {
         // Callback to refresh parent
         widget.onClaimed();
       } else {
-        throw Exception('Failed to claim restaurant');
+        throw Exception(storeService.error ?? 'Failed to claim restaurant');
       }
     } catch (e) {
       if (!mounted) return;
@@ -104,18 +111,25 @@ class _ClaimRestaurantButtonState extends State<ClaimRestaurantButton> {
 
   @override
   Widget build(BuildContext context) {
+    final authService = context.watch<AuthService>();
     final userService = context.watch<UserService>();
-    final userType = userService.currentProfile?.type;
-    final storeService = context.watch<StoreService>();
-    final hasOwnedRestaurant = storeService.hasOwnedRestaurant;
+    
+    // User data
+    final userProfile = userService.currentProfile;
+    final userType = userProfile?.type;
+    final userRestaurantId = userProfile?.restaurantId;
+
+    // Check if user is eligible to claim (Must be 'Restaurant' type and have no restaurantId)
+    final isUserEligible = userType == 'Restaurant' && (userRestaurantId == null || userRestaurantId.isEmpty);
+    
+    // Check if restaurant is unclaimed (Must have no ownerId)
+    final isRestaurantUnclaimed = widget.restaurantOwnerId == null || widget.restaurantOwnerId!.isEmpty;
 
     // Only show button if:
-    // 1. User is logged in as Restaurant type
-    // 2. User doesn't already own a restaurant
+    // 1. User is logged in
+    // 2. User is eligible (Restaurant type + no restaurantId)
     // 3. This restaurant is unclaimed (no ownerId)
-    if (userType != 'Restaurant' ||
-        hasOwnedRestaurant ||
-        widget.restaurantOwnerId != null) {
+    if (!authService.isLoggedIn || !isUserEligible || !isRestaurantUnclaimed) {
       return const SizedBox.shrink();
     }
 

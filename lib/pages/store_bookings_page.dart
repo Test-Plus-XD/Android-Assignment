@@ -32,10 +32,16 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
   @override
   void initState() {
     super.initState();
-    _loadBookings();
+    // Load bookings after build is complete to avoid setState during build error
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadBookings();
+      }
+    });
   }
 
   void _loadBookings() {
+    if (!mounted) return;
     setState(() {
       _bookingsFuture = context
           .read<BookingService>()
@@ -55,7 +61,7 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
   Future<void> _updateBookingStatus(Booking booking, String newStatus) async {
     try {
       final bookingService = context.read<BookingService>();
-      await bookingService.updateBooking(booking.id ?? '', {'status': newStatus});
+      await bookingService.updateBooking(booking.id, status: newStatus);
 
       if (!mounted) return;
 
@@ -468,7 +474,7 @@ class _BookingCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _getStatusColor().withOpacity(0.1),
+                    color: _getStatusColor().withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: _getStatusColor()),
                   ),

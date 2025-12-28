@@ -21,40 +21,41 @@ class SuggestionChips extends StatelessWidget {
       // Restaurant-specific suggestions
       return isTraditionalChinese
           ? [
-              '這家餐廳有什麼招牌菜？',
-              '營業時間是什麼時候？',
-              '有哪些素食選擇？',
-              '價格範圍如何？',
-              '適合什麼場合？',
-            ]
+        '呢間餐廳有咩招牌菜？',
+        '營業時間係幾點至幾點？',
+        '有咩素食選擇？',
+        '價錢範圍係點？',
+        '適合咩場合？',
+      ]
           : [
-              'What are the signature dishes?',
-              'What are the opening hours?',
-              'What vegan options are available?',
-              'What is the price range?',
-              'What occasions is this suitable for?',
-            ];
+        'What are the signature dishes?',
+        'What are the opening hours?',
+        'What vegan options are available?',
+        'What is the price range?',
+        'What occasions is this suitable for?',
+      ];
     } else {
       // General dining suggestions
       return isTraditionalChinese
           ? [
-              '推薦中環附近的素食餐廳',
-              '有機素食餐廳推薦',
-              '適合家庭聚餐的餐廳',
-              '價格實惠的純素餐廳',
-              '灣仔區的素食選擇',
-              '適合商務午餐的餐廳',
-            ]
+        '推薦觀塘附近嘅素食餐廳',
+        '有機素食餐廳有咩推薦',
+        '適合一家大細聚餐嘅餐廳',
+        '平價純素餐廳推薦',
+        '灣仔區有咩素食選擇',
+        '適合商務午餐嘅餐廳',
+      ]
           : [
-              'Recommend vegan restaurants in Central',
-              'Suggest organic vegetarian places',
-              'Family-friendly restaurants',
-              'Budget-friendly vegan options',
-              'Vegetarian choices in Wan Chai',
-              'Good for business lunch',
-            ];
+        'Recommend vegan restaurants in Central',
+        'Suggest organic vegetarian places',
+        'Family-friendly restaurants',
+        'Budget-friendly vegan options',
+        'Vegetarian choices in Wan Chai',
+        'Good for business lunch',
+      ];
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

@@ -16,10 +16,12 @@ class Restaurant {
   final double? longitude;
   final List<String>? keywordEn;
   final List<String>? keywordTc;
+  final int? seats;
+  final String? ownerId;
   final String? imageUrl;
+  final List<String>? payments;
   final Map<String, dynamic>? menu;
   final Map<String, dynamic>? openingHours;
-  final int? seats;
   final Map<String, dynamic>? contacts;
 
   Restaurant({
@@ -35,10 +37,12 @@ class Restaurant {
     this.keywordEn,
     this.keywordTc,
     this.imageUrl,
+    this.payments,
     this.menu,
     this.openingHours,
     this.seats,
     this.contacts,
+    this.ownerId,
   });
 
   /// Creates Restaurant from JSON (handles both Algolia and API responses)
@@ -79,6 +83,7 @@ class Restaurant {
 
     return Restaurant(
       id: json['objectID']?.toString() ?? json['id']?.toString() ?? '',
+      ownerId: json['ownerId'] as String? ?? json['OwnerID'] as String?,
       nameEn: json['Name_EN'] as String? ?? json['name_en'] as String?,
       nameTc: json['Name_TC'] as String? ?? json['name_tc'] as String?,
       addressEn: json['Address_EN'] as String? ?? json['address_en'] as String?,
@@ -90,6 +95,7 @@ class Restaurant {
       keywordEn: toStringList(json['Keyword_EN'] ?? json['keyword_en']),
       keywordTc: toStringList(json['Keyword_TC'] ?? json['keyword_tc']),
       imageUrl: imageUrl,
+      payments: toStringList(json['Payments'] ?? json['payments']),
       menu: toMap(json['Menu'] ?? json['menu']),
       openingHours: toMap(json['Opening_Hours'] ?? json['openingHours']),
       seats: toInt(json['Seats'] ?? json['seats']),
@@ -101,6 +107,7 @@ class Restaurant {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      if (ownerId != null) 'ownerId': ownerId,
       'Name_EN': nameEn,
       'Name_TC': nameTc,
       'Address_EN': addressEn,
@@ -112,6 +119,7 @@ class Restaurant {
       'Keyword_EN': keywordEn,
       'Keyword_TC': keywordTc,
       'ImageUrl': imageUrl,
+      'Payments': payments,
       'Menu': menu,
       'Opening_Hours': openingHours,
       'Seats': seats,

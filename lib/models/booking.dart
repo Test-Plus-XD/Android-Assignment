@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 class Booking {
   final String id;
   final String userId;
+  final String? userName; // Added for display in management views
   final String restaurantId;
   final String restaurantName;
   final DateTime dateTime;
@@ -20,6 +21,7 @@ class Booking {
   Booking({
     required this.id,
     required this.userId,
+    this.userName,
     required this.restaurantId,
     required this.restaurantName,
     required this.dateTime,
@@ -32,6 +34,9 @@ class Booking {
     this.modifiedAt,
   });
 
+  /// Getter for party size (alias for numberOfGuests used in some UI components)
+  int get partySize => numberOfGuests;
+
   factory Booking.fromJson(Map<String, dynamic> json) {
     DateTime parseDateTime(dynamic value) {
       if (value is String) return DateTime.parse(value);
@@ -42,6 +47,7 @@ class Booking {
     return Booking(
       id: json['id'] as String,
       userId: json['userId'] as String,
+      userName: json['userName'] as String?,
       restaurantId: json['restaurantId'] as String,
       restaurantName: json['restaurantName'] as String,
       dateTime: parseDateTime(json['dateTime']),
@@ -59,6 +65,7 @@ class Booking {
     return {
       'id': id,
       'userId': userId,
+      if (userName != null) 'userName': userName,
       'restaurantId': restaurantId,
       'restaurantName': restaurantName,
       'dateTime': dateTime.toIso8601String(),

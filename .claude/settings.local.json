@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(bash count_loc.sh:*)",
-      "Bash(bash \"D:\\temp\\Android Assignment\\count_loc.sh\")"
+      "Bash(bash \"D:\\temp\\Android Assignment\\count_loc.sh\")",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

@@ -65,6 +65,7 @@ class User {
   final String? phoneNumber;
   final String? type;
   final String? bio;
+  final String? restaurantId;
   final Map<String, dynamic>? preferences;
   final DateTime? createdAt;
   final DateTime? modifiedAt;
@@ -80,6 +81,7 @@ class User {
     this.phoneNumber,
     this.type,
     this.bio,
+    this.restaurantId,
     this.preferences,
     this.createdAt,
     this.modifiedAt,
@@ -110,10 +112,11 @@ class User {
       phoneNumber: json['phoneNumber'] as String?,
       type: json['type'] as String?,
       bio: json['bio'] as String?,
+      restaurantId: json['restaurantId'] as String?,
       preferences: json['preferences'] is Map<String, dynamic> ? Map<String, dynamic>.from(json['preferences']): null,
-      createdAt: toDateTime(json['createdAt']) != null ? DateTime.parse(json['createdAt'] as String) : null,
-      modifiedAt: toDateTime(json['modifiedAt']) != null ? DateTime.parse(json['modifiedAt'] as String) : null,
-      lastLoginAt: toDateTime(json['lastLoginAt']) != null ? DateTime.parse(json['lastLoginAt'] as String) : null,
+      createdAt: toDateTime(json['createdAt']),
+      modifiedAt: toDateTime(json['modifiedAt']),
+      lastLoginAt: toDateTime(json['lastLoginAt']),
       loginCount: json['loginCount'] as int?,
     );
   }
@@ -129,6 +132,7 @@ class User {
       if (phoneNumber != null) 'phoneNumber': phoneNumber,
       if (type != null) 'type': type,
       if (bio != null) 'bio': bio,
+      if (restaurantId != null) 'restaurantId': restaurantId,
       if (preferences != null) 'preferences': preferences,
     };
   }

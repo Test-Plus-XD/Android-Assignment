@@ -11,6 +11,7 @@ import '../../pages/bookings_page.dart';
 import '../../pages/store_page.dart';
 import '../../pages/gemini_page.dart';
 import '../drawer.dart';
+import '../account/account_type_selector.dart';
 
 /// Main Shell
 ///
@@ -71,6 +72,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   late Animation<double> _fabAnimation;
   late Animation<Offset> _fabSlideAnimation;
   bool _showGeminiFab = true;
+
+  // Track if we're showing the account type selector for new users
+  bool _showingAccountTypeSelector = false;
 
   @override
   void initState() {
@@ -288,7 +292,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
     return [
       // Chat
-      ChatPage(isTraditionalChinese: isTC),
+      ChatPage(
+        isTraditionalChinese: isTC,
+        onNavigate: (index) => _onNavTapped(index),
+      ),
       // Search
       SearchPage(isTraditionalChinese: isTC),
       // Home
@@ -344,6 +351,35 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       builder: (context, authService, userService, _) {
         final isLoggedIn = authService.isLoggedIn;
         final userType = userService.currentProfile?.type;
+
+        // Show account type selector for new users who haven't selected their type
+        if (isLoggedIn &&
+            userService.needsAccountTypeSelection &&
+            !_showingAccountTypeSelector &&
+            !userService.isLoading) {
+          // Use post frame callback to avoid setState during build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_showingAccountTypeSelector) {
+              setState(() => _showingAccountTypeSelector = true);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  fullscreenDialog: true,
+                  builder: (context) => AccountTypeSelectorDialog(
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                    onComplete: () {
+                      Navigator.of(context).pop();
+                      setState(() {
+                        _showingAccountTypeSelector = false;
+                        // Reset page cache to rebuild with new user type
+                        _cachedPages = null;
+                      });
+                    },
+                  ),
+                ),
+              );
+            }
+          });
+        }
 
         // Only rebuild pages if login state, user type, or language changed
         if (_cachedPages == null ||

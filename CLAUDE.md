@@ -130,6 +130,7 @@ lib/
 │   │
 │   ├── booking/
 │   │   ├── booking_card.dart              # Individual booking display
+│   │   ├── booking_dialog.dart            # Booking creation dialog
 │   │   ├── booking_form.dart              # Booking creation form
 │   │   └── booking_list.dart              # List of bookings
 │   │
@@ -157,6 +158,9 @@ lib/
 │   │   ├── menu_item_form.dart            # Menu item create/edit form
 │   │   └── menu_list.dart                 # Grouped menu items list
 │   │
+│   ├── account/
+│   │   └── account_type_selector.dart     # New user account type selection dialog
+│   │
 │   ├── navigation/
 │   │   ├── app_root.dart                  # Root widget with MaterialApp
 │   │   └── main_shell.dart                # Main navigation shell
@@ -164,13 +168,15 @@ lib/
 │   ├── qr/
 │   │   └── menu_qr_generator.dart         # QR code generator for restaurant menus
 │   │
-│   ├── restaurant_detail/
+│   ├── restaurant/
+│   │   ├── action_buttons_row.dart        # Action buttons (Call, Chat, AI, Directions, Website)
 │   │   ├── claim_restaurant_button.dart   # Claim restaurant button (Restaurant users)
-│   │   ├── contact_actions.dart           # Phone/email/website buttons
-│   │   ├── hero_image_section.dart        # Hero image with distance overlay
-│   │   ├── opening_hours_card.dart        # Opening hours display
-│   │   ├── restaurant_info_card.dart      # Restaurant info summary
-│   │   └── review_summary_card.dart       # Review stats summary with stars
+│   │   ├── contact_info_card.dart         # Contact information card
+│   │   ├── interactive_map_preview.dart   # Interactive Google Maps preview
+│   │   ├── menu_preview_section.dart      # Menu items preview carousel
+│   │   ├── opening_hours_list.dart        # Weekly opening hours list
+│   │   ├── restaurant_header.dart         # Restaurant name, rating, and distance
+│   │   └── reviews_carousel.dart          # Reviews preview carousel
 │   │
 │   ├── reviews/
 │   │   ├── review_card.dart               # Individual review display
@@ -195,14 +201,14 @@ android/
 │       └── kotlin/.../MainActivity.kt     # Main activity
 ```
 
-**Total: 99 Dart files**
+**Total: 100 Dart files**
 - Root level: 4 files
 - config/: 2 files
 - constants/: 4 files
 - models/: 10 files
 - services/: 14 files
 - pages/: 16 files
-- widgets/: 49 files (across 11 subdirectories)
+- widgets/: 50 files (across 12 subdirectories)
 
 ### Navigation System
 
@@ -828,32 +834,69 @@ flutter build apk
 
 ## Project Statistics
 
-- **Total Dart Files**: 99
-- **Lines of Code**: ~20,142 (non-empty, non-comment lines, excluding generated files)
-  - Main files: 225 lines
+- **Total Dart Files**: 100
+- **Lines of Code**: 21,031 (non-empty, non-comment lines, excluding generated files)
+  - Main files: 227 lines
   - Config: 145 lines
   - Constants: 409 lines
-  - Models: 1,248 lines
-  - Services: 3,261 lines
-  - Pages: 7,330 lines (refactored for maintainability)
-  - Widgets: 7,524 lines (49 components across 11 subdirectories)
+  - Models: 1,270 lines
+  - Services: 3,300 lines
+  - Pages: 7,000 lines (refactored for maintainability)
+  - Widgets: 7,950 lines (50 components across 12 subdirectories)
 - **Pages**: 16 UI screens
 - **Services**: 14 business logic services
-- **Widgets**: 49 reusable components (across 11 subdirectories)
+- **Widgets**: 50 reusable components (across 12 subdirectories)
 - **Models**: 10 domain models
 - **Constants**: 4 static data files
 - **Languages**: English + Traditional Chinese (full bilingual)
 - **Platforms**: Android (primary), Web/iOS (configured)
 
 ### Recent Refactoring (2025-12-27)
+#### Phase 1 (Earlier)
 - Extracted 5 new widget files from large page files for better code organization
 - Reduced `search_page.dart` from 1000 → 623 lines
 - Reduced `store_menu_manage_page.dart` from 822 → 547 lines
-- Added review summary card and claim restaurant button to restaurant detail page
+
+#### Phase 2 (Refactoring)
+- **Refactored `restaurant_detail_page.dart`**: Reduced from 875 → 635 lines (240 lines removed)
+- **Created 4 new reusable widgets**:
+  - `booking_dialog.dart` (166 lines) - Extracted booking dialog logic
+  - `action_buttons_row.dart` (93 lines) - Reusable action buttons
+  - `restaurant_header.dart` (79 lines) - Restaurant name/rating header
+  - `opening_hours_list.dart` (51 lines) - Weekly hours display
+- **Removed 5 unused widgets** in `lib/widgets/restaurant/`:
+  - `contact_actions.dart`, `hero_image_section.dart`, `opening_hours_card.dart`
+  - `restaurant_info_card.dart`, `review_summary_card.dart`
+
+#### Phase 3 (Bug Fixes & Feature Restoration)
+- **Fixed setState during build error**: Moved data loading to `addPostFrameCallback`
+- **Restored claim restaurant button** (`claim_restaurant_button.dart`, 153 lines):
+  - Allows Restaurant-type users to claim unclaimed restaurants
+  - Validates user type and ownership status
+  - Integrated with StoreService for claiming logic
 - All page files now under 950 lines for improved maintainability
+
+#### Phase 4 (2025-12-28) - Bug Fixes & UX Improvements
+- **Fixed image upload API response parsing**: Changed `downloadURL` to `imageUrl` to match API
+- **Fixed image upload MIME type handling**: Explicitly set MIME type for uploads, handles common typos like `.jepg` → `image/jpeg`
+- **Fixed bulk menu import field names**: API expects `Name_EN`, `Name_TC`, `Description_EN`, `Description_TC` (not camelCase)
+- **Fixed menu item deletion**: API returns 204 (No Content) on success, now properly handled
+- **Fixed displayName for new users**: Added delay to wait for Firebase to propagate displayName during registration
+- **Menu management now fetches fresh items**: Always uses `forceRefresh: true` when loading menu items
+- **Added new user onboarding flow**:
+  - Created `account_type_selector.dart` - full-screen dialog for account type selection
+  - New users must select Diner or Restaurant account type before using app
+  - UserService now exposes `needsAccountTypeSelection` getter
+- **Improved chat service behaviour**:
+  - Chat rooms are now refreshed each time user enters the chat page
+  - Socket.IO connection uses lazy initialization (only when needed)
+  - Chat cache is properly cleared on user logout
+- **UI cleanup**:
+  - Removed "My Bookings" title from bookings page AppBar
+  - Removed "Store Dashboard" title from store page AppBar
 
 ---
 
-**Last Updated**: 2025-12-27
+**Last Updated**: 2025-12-28
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

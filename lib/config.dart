@@ -55,6 +55,9 @@ class AppConfig {
 
   /// Socket.IO Server URL (Railway)
   /// Used for real-time chat functionality
+  /// Note: Port 443 is explicitly specified to work around a known bug in socket_io_client
+  /// where missing port defaults to :0 due to null safety, causing connection failures.
+  /// See: https://github.com/rikulo/socket.io-client-dart/issues/222
   static const String socketIOUrl = 'https://railway-socket-production.up.railway.app';
 
   /// Algolia Configuration

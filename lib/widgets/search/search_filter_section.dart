@@ -54,7 +54,7 @@ class SearchFilterSection extends StatelessWidget {
                 // District filter button
                 Expanded(
                   child: FilterButton(
-                    label: isTraditionalChinese ? '0@' : 'Districts',
+                    label: isTraditionalChinese ? '地區' : 'Districts',
                     count: selectedDistrictsEn.length,
                     onTap: onDistrictFilterTap,
                     isTraditionalChinese: isTraditionalChinese,
@@ -66,7 +66,7 @@ class SearchFilterSection extends StatelessWidget {
                 // Category filter button
                 Expanded(
                   child: FilterButton(
-                    label: isTraditionalChinese ? '^' : 'Categories',
+                    label: isTraditionalChinese ? '分類' : 'Categories',
                     count: selectedKeywordsEn.length,
                     onTap: onKeywordFilterTap,
                     isTraditionalChinese: isTraditionalChinese,
@@ -151,7 +151,7 @@ class SearchFilterSection extends StatelessWidget {
                       onPressed: onClearAll,
                       icon: const Icon(Icons.clear_all, size: 16),
                       label: Text(
-                        isTraditionalChinese ? 'dh�' : 'Clear All',
+                        isTraditionalChinese ? '清除全部' : 'Clear All',
                         style: const TextStyle(fontSize: 12),
                       ),
                       style: TextButton.styleFrom(

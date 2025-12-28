@@ -94,11 +94,11 @@ class _ReviewFormState extends State<ReviewForm> {
         // Upload image if one was selected
         if (_selectedImage != null) {
           final imageService = context.read<ImageService>();
-          imageUrl = await imageService.uploadImage(
+          imageUrl = (await imageService.uploadImage(
             imageFile: _selectedImage!,
             folder: 'Reviews',
             compress: true,
-          );
+          )) as String?;
 
           if (imageUrl == null) {
             throw Exception(

@@ -234,7 +234,8 @@ class MenuService extends ChangeNotifier {
         },
       );
 
-      if (response.statusCode == 200) {
+      // API returns 204 No Content on successful deletion
+      if (response.statusCode == 200 || response.statusCode == 204) {
         // Update cache by removing the deleted item
         if (_menuItemsCache.containsKey(restaurantId)) {
           _menuItemsCache[restaurantId]!.removeWhere((item) => item.id == menuItemId);

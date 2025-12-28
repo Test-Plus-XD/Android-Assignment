@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -12,14 +13,14 @@ import '../config.dart';
 import '../models.dart';
 
 /// [ImageService] is a [ChangeNotifier] that manages image-related operations.
-/// 
+///
 /// It provides functionality for:
 /// * Requesting necessary permissions (camera, gallery).
 /// * Picking images from different sources using [ImagePicker].
 /// * Cropping images with a customizable UI via [ImageCropper].
 /// * Compressing images to save bandwidth and storage using [FlutterImageCompress].
 /// * Uploading, deleting, and retrieving metadata for images via a remote API.
-/// 
+///
 /// It maintains state for upload progress and error messages to be consumed by the UI.
 class ImageService extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
@@ -28,6 +29,7 @@ class ImageService extends ChangeNotifier {
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   String? _error;
+  String? _lastUploadedFilePath; // Store the file path from last upload
 
   /// Returns true if an image upload is currently in progress.
   bool get isUploading => _isUploading;
@@ -37,6 +39,9 @@ class ImageService extends ChangeNotifier {
 
   /// Returns the last error message encountered, if any.
   String? get error => _error;
+
+  /// Returns the file path of the last uploaded image (for cleanup purposes)
+  String? get lastUploadedFilePath => _lastUploadedFilePath;
 
   ImageService();
 
@@ -204,13 +209,13 @@ class ImageService extends ChangeNotifier {
   }
 
   /// Uploads the [imageFile] to the remote API.
-  /// 
+  ///
   /// [folder] specifies the destination directory on the server.
   /// [compress] if true, will run [compressImage] before uploading.
-  /// 
+  ///
   /// This method updates [_uploadProgress] and [_isUploading] throughout the process.
-  /// Returns the download URL string on success, or [null] on failure.
-  Future<String?> uploadImage({
+  /// Returns a map with 'url' and 'filePath' on success, or null on failure.
+  Future<Map<String, String>?> uploadImage({
     required File imageFile,
     required String folder,
     bool compress = true,
@@ -220,6 +225,7 @@ class ImageService extends ChangeNotifier {
       _isUploading = true;
       _uploadProgress = 0.0;
       _error = null;
+      _lastUploadedFilePath = null;
       notifyListeners();
 
       File fileToUpload = imageFile;
@@ -235,23 +241,37 @@ class ImageService extends ChangeNotifier {
 
       // Construct the upload URI with the target folder as a query parameter
       final uri = Uri.parse('${AppConfig.apiBaseUrl}/API/Images/upload?folder=$folder');
-      
+
       // Use MultipartRequest for file uploads
       final request = http.MultipartRequest('POST', uri);
       request.headers['x-api-passcode'] = AppConfig.apiPasscode;
+
+      // Determine MIME type from file extension (handle common typos)
+      final ext = path.extension(fileToUpload.path).toLowerCase();
+      MediaType? contentType;
+      if (ext == '.jpg' || ext == '.jpeg' || ext == '.jepg') {
+        contentType = MediaType('image', 'jpeg');
+      } else if (ext == '.png') {
+        contentType = MediaType('image', 'png');
+      } else if (ext == '.gif') {
+        contentType = MediaType('image', 'gif');
+      } else if (ext == '.webp') {
+        contentType = MediaType('image', 'webp');
+      }
 
       request.files.add(await http.MultipartFile.fromPath(
         'image',
         fileToUpload.path,
         filename: path.basename(fileToUpload.path),
+        contentType: contentType,
       ));
 
-      _uploadProgress = 0.3;
+      _uploadProgress = 0.5;
       notifyListeners();
 
       // Send the request and wait for the streamed response
       final streamedResponse = await request.send();
-      _uploadProgress = 0.8;
+      _uploadProgress = 0.9;
       notifyListeners();
 
       // Convert streamed response to a standard response to access body
@@ -261,23 +281,36 @@ class ImageService extends ChangeNotifier {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
-        _isUploading = false;
-        notifyListeners();
-        // Expecting a JSON object with a 'downloadURL' key
-        return data['downloadURL'] as String?;
+        // API returns 'imageUrl' (not 'downloadURL')
+        final downloadUrl = data['imageUrl'] as String? ?? data['downloadURL'] as String?;
+        final fileName = data['fileName'] as String?;
+
+        if (downloadUrl != null && fileName != null) {
+          _lastUploadedFilePath = fileName;
+          _isUploading = false;
+          notifyListeners();
+
+          return {
+            'url': downloadUrl,
+            'filePath': fileName,
+          };
+        } else {
+          throw Exception('Invalid response: missing imageUrl or fileName');
+        }
       } else {
-        throw Exception('Upload failed: ${response.statusCode}');
+        throw Exception('Upload failed: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       _error = 'Failed to upload image: $e';
       _isUploading = false;
+      _lastUploadedFilePath = null;
       notifyListeners();
       return null;
     }
   }
 
   /// Deletes a remote image file identified by [filePath].
-  /// 
+  ///
   /// Returns [true] if the deletion was successful (HTTP 200).
   Future<bool> deleteImage(String filePath) async {
     try {
@@ -294,7 +327,14 @@ class ImageService extends ChangeNotifier {
         body: json.encode({'filePath': filePath}),
       );
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        // Clear the last uploaded file path if it matches the deleted file
+        if (_lastUploadedFilePath == filePath) {
+          _lastUploadedFilePath = null;
+        }
+        return true;
+      }
+      return false;
     } catch (e) {
       _error = 'Failed to delete image: $e';
       notifyListeners();

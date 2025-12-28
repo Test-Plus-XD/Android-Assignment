@@ -127,14 +127,17 @@ class ChatService extends ChangeNotifier {
         return;
       }
 
-      // Socket.IO client is configured with WebSocket-only transport for real-time communication
-      // Auto-connect is disabled to allow listener setup before connection establishment
+      // Socket.IO client is configured with websocket and polling transports for reliability
+      // The working Ionic app uses the same transport order: websocket first, then polling fallback
       _socket = IO.io(
         AppConfig.socketIOUrl,
         IO.OptionBuilder()
-            .setTransports(['websocket'])
-            .disableAutoConnect()
-            .setExtraHeaders({'userId': userId})
+            .setTransports(['websocket', 'polling']) // Use websocket first, fallback to polling
+            .enableAutoConnect() // Enable auto-connect
+            .enableReconnection() // Enable reconnection
+            .setReconnectionDelay(1000) // 1 second delay
+            .setReconnectionDelayMax(5000) // Max 5 second delay
+            .setReconnectionAttempts(5) // 5 retry attempts
             .build(),
       );
 
@@ -142,10 +145,8 @@ class ChatService extends ChangeNotifier {
       // to ensure no events are missed during the initial handshake
       _setupSocketListeners();
 
-      // Connection is initiated; the onConnect handler will handle user registration
-      _socket!.connect();
-
-      if (kDebugMode) print('ChatService: Connection initiated for user: $userId');
+      // Auto-connect is enabled, so connection will happen automatically
+      if (kDebugMode) print('ChatService: Socket.IO client initialized for user: $userId');
     } catch (e) {
       if (kDebugMode) print('ChatService: Connection error: $e');
       _error = 'Failed to connect to chat server';

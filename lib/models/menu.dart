@@ -132,11 +132,12 @@ class CreateMenuItemRequest {
   });
 
   Map<String, dynamic> toJson() {
+    // API expects Name_EN, Name_TC, Description_EN, Description_TC format
     return {
-      if (nameEn != null && nameEn!.isNotEmpty) 'nameEn': nameEn,
-      if (nameTc != null && nameTc!.isNotEmpty) 'nameTc': nameTc,
-      if (descriptionEn != null && descriptionEn!.isNotEmpty) 'descriptionEn': descriptionEn,
-      if (descriptionTc != null && descriptionTc!.isNotEmpty) 'descriptionTc': descriptionTc,
+      if (nameEn != null && nameEn!.isNotEmpty) 'Name_EN': nameEn,
+      if (nameTc != null && nameTc!.isNotEmpty) 'Name_TC': nameTc,
+      if (descriptionEn != null && descriptionEn!.isNotEmpty) 'Description_EN': descriptionEn,
+      if (descriptionTc != null && descriptionTc!.isNotEmpty) 'Description_TC': descriptionTc,
       if (price != null) 'price': price,
       if (category != null && category!.isNotEmpty) 'category': category,
       if (image != null && image!.isNotEmpty) 'image': image,
@@ -170,11 +171,12 @@ class UpdateMenuItemRequest {
   });
 
   Map<String, dynamic> toJson() {
+    // API expects Name_EN, Name_TC, Description_EN, Description_TC format
     final Map<String, dynamic> data = {};
-    if (nameEn != null) data['nameEn'] = nameEn;
-    if (nameTc != null) data['nameTc'] = nameTc;
-    if (descriptionEn != null) data['descriptionEn'] = descriptionEn;
-    if (descriptionTc != null) data['descriptionTc'] = descriptionTc;
+    if (nameEn != null) data['Name_EN'] = nameEn;
+    if (nameTc != null) data['Name_TC'] = nameTc;
+    if (descriptionEn != null) data['Description_EN'] = descriptionEn;
+    if (descriptionTc != null) data['Description_TC'] = descriptionTc;
     if (price != null) data['price'] = price;
     if (category != null) data['category'] = category;
     if (image != null) data['image'] = image;

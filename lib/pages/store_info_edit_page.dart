@@ -7,6 +7,8 @@ import '../constants/districts.dart';
 import '../constants/keywords.dart';
 import '../constants/payments.dart';
 import '../constants/weekdays.dart';
+import '../widgets/store/location_picker_dialog.dart';
+import '../widgets/store/restaurant_image_upload.dart';
 
 /// Store Information Edit Page
 ///
@@ -56,6 +58,7 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
   List<String> _selectedKeywordsTc = [];
   List<String> _selectedPayments = [];
   Map<String, String> _openingHours = {};
+  String? _imageUrl;
 
   @override
   void initState() {
@@ -71,9 +74,9 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
     _addressEnController = TextEditingController(text: r.addressEn ?? '');
     _addressTcController = TextEditingController(text: r.addressTc ?? '');
     _seatsController = TextEditingController(text: r.seats?.toString() ?? '');
-    _phoneController = TextEditingController(text: r.contacts?.phone ?? '');
-    _emailController = TextEditingController(text: r.contacts?.email ?? '');
-    _websiteController = TextEditingController(text: r.contacts?.website ?? '');
+    _phoneController = TextEditingController(text: r.contacts?['Phone']?.toString() ?? '');
+    _emailController = TextEditingController(text: r.contacts?['Email']?.toString() ?? '');
+    _websiteController = TextEditingController(text: r.contacts?['Website']?.toString() ?? '');
     _latitudeController = TextEditingController(text: r.latitude?.toString() ?? '');
     _longitudeController = TextEditingController(text: r.longitude?.toString() ?? '');
 
@@ -82,7 +85,8 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
     _selectedKeywordsEn = List<String>.from(r.keywordEn ?? []);
     _selectedKeywordsTc = List<String>.from(r.keywordTc ?? []);
     _selectedPayments = List<String>.from(r.payments ?? []);
-    _openingHours = Map<String, String>.from(r.openingHours ?? {});
+    _openingHours = (r.openingHours ?? {}).map((key, value) => MapEntry(key, value.toString()));
+    _imageUrl = r.imageUrl;
   }
 
   @override
@@ -111,6 +115,7 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
         'Name_TC': _nameTcController.text.trim().isEmpty ? null : _nameTcController.text.trim(),
         'Address_EN': _addressEnController.text.trim().isEmpty ? null : _addressEnController.text.trim(),
         'Address_TC': _addressTcController.text.trim().isEmpty ? null : _addressTcController.text.trim(),
+        'ImageUrl': _imageUrl,
         'District_EN': _selectedDistrictEn,
         'District_TC': _selectedDistrictTc,
         'Keyword_EN': _selectedKeywordsEn.isEmpty ? null : _selectedKeywordsEn,
@@ -159,7 +164,7 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
   }
 
   void _showDistrictPicker() async {
-    final selected = await showDialog<District>(
+    final selected = await showDialog<DistrictOption>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(widget.isTraditionalChinese ? '選擇地區' : 'Select District'),
@@ -167,15 +172,15 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
-            itemCount: Districts.length,
+            itemCount: HKDistricts.all.length,
             itemBuilder: (context, index) {
-              final district = Districts[index];
-              return RadioListTile<District>(
+              final district = HKDistricts.all[index];
+              return RadioListTile<DistrictOption>(
                 title: Text(widget.isTraditionalChinese ? district.tc : district.en),
                 value: district,
-                groupValue: Districts.firstWhere(
+                groupValue: HKDistricts.all.firstWhere(
                   (d) => d.en == _selectedDistrictEn,
-                  orElse: () => Districts.first,
+                  orElse: () => HKDistricts.all.first,
                 ),
                 onChanged: (value) => Navigator.of(context).pop(value),
               );
@@ -194,11 +199,11 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
   }
 
   void _showKeywordsPicker() async {
-    final selected = await showDialog<List<Keyword>>(
+    final selected = await showDialog<List<KeywordOption>>(
       context: context,
       builder: (context) {
-        final tempSelected = List<Keyword>.from(
-          Keywords.where((k) => _selectedKeywordsEn.contains(k.en)),
+        final tempSelected = List<KeywordOption>.from(
+          RestaurantKeywords.all.where((k) => _selectedKeywordsEn.contains(k.en)),
         );
 
         return StatefulBuilder(
@@ -208,9 +213,9 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
               width: double.maxFinite,
               child: ListView.builder(
                 shrinkWrap: true,
-                itemCount: Keywords.length,
+                itemCount: RestaurantKeywords.all.length,
                 itemBuilder: (context, index) {
-                  final keyword = Keywords[index];
+                  final keyword = RestaurantKeywords.all[index];
                   final isSelected = tempSelected.contains(keyword);
 
                   return CheckboxListTile(
@@ -253,11 +258,11 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
   }
 
   void _showPaymentsPicker() async {
-    final selected = await showDialog<List<PaymentMethod>>(
+    final selected = await showDialog<List<PaymentOption>>(
       context: context,
       builder: (context) {
-        final tempSelected = List<PaymentMethod>.from(
-          PaymentMethods.where((p) => _selectedPayments.contains(p.en)),
+        final tempSelected = List<PaymentOption>.from(
+          PaymentMethods.all.where((p) => _selectedPayments.contains(p.en)),
         );
 
         return StatefulBuilder(
@@ -267,9 +272,9 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
               width: double.maxFinite,
               child: ListView.builder(
                 shrinkWrap: true,
-                itemCount: PaymentMethods.length,
+                itemCount: PaymentMethods.all.length,
                 itemBuilder: (context, index) {
-                  final payment = PaymentMethods[index];
+                  final payment = PaymentMethods.all[index];
                   final isSelected = tempSelected.contains(payment);
 
                   return CheckboxListTile(
@@ -352,8 +357,32 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
     }
   }
 
+  Future<void> _openLocationPicker() async {
+    final result = await showDialog<Map<String, double>>(
+      context: context,
+      builder: (context) => LocationPickerDialog(
+        initialLatitude: double.tryParse(_latitudeController.text.trim()),
+        initialLongitude: double.tryParse(_longitudeController.text.trim()),
+        isTraditionalChinese: widget.isTraditionalChinese,
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _latitudeController.text = result['latitude']!.toStringAsFixed(6);
+        _longitudeController.text = result['longitude']!.toStringAsFixed(6);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Create a list of day objects for the loop
+    final days = List.generate(7, (i) => {
+      'en': Weekdays.enFull[i],
+      'tc': Weekdays.tc[i],
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isTraditionalChinese ? '編輯餐廳資訊' : 'Edit Restaurant Info'),
@@ -378,6 +407,18 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
         child: ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
+            // Image Upload Section
+            RestaurantImageUpload(
+              currentImageUrl: _imageUrl,
+              onImageUploaded: (imageUrl) {
+                setState(() {
+                  _imageUrl = imageUrl;
+                });
+              },
+              isTraditionalChinese: widget.isTraditionalChinese,
+            ),
+            const SizedBox(height: 24),
+
             // Basic Info Section
             _buildSectionHeader(widget.isTraditionalChinese ? '基本資訊' : 'Basic Information'),
             const SizedBox(height: 12),
@@ -506,9 +547,9 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
               subtitle: Text(
                 _selectedPayments.isNotEmpty
                     ? _selectedPayments.map((code) {
-                        final payment = PaymentMethods.firstWhere(
+                        final payment = PaymentMethods.all.firstWhere(
                           (p) => p.en == code,
-                          orElse: () => PaymentMethod(en: code, tc: code),
+                          orElse: () => PaymentOption(en: code, tc: code, icon: ''),
                         );
                         return widget.isTraditionalChinese ? payment.tc : payment.en;
                       }).join(', ')
@@ -525,14 +566,14 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
             _buildSectionHeader(widget.isTraditionalChinese ? '營業時間' : 'Opening Hours'),
             const SizedBox(height: 12),
 
-            ...Weekdays.map((weekday) => Padding(
+            ...days.map((day) => Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: ListTile(
-                title: Text(widget.isTraditionalChinese ? weekday.tc : weekday.en),
-                subtitle: Text(_openingHours[weekday.en] ??
+                title: Text(widget.isTraditionalChinese ? day['tc']! : day['en']!),
+                subtitle: Text(_openingHours[day['en']] ??
                     (widget.isTraditionalChinese ? '未設定' : 'Not set')),
                 trailing: const Icon(Icons.edit),
-                onTap: () => _editOpeningHours(weekday.en, weekday.tc),
+                onTap: () => _editOpeningHours(day['en']!, day['tc']!),
                 tileColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -560,6 +601,22 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
                 border: const OutlineInputBorder(),
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 12),
+
+            // Location picker button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openLocationPicker,
+                icon: const Icon(Icons.map),
+                label: Text(
+                  widget.isTraditionalChinese ? '在地圖上選擇位置' : 'Select Location on Map',
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
             ),
 
             const SizedBox(height: 80), // Bottom padding

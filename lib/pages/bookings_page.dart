@@ -184,59 +184,66 @@ class _BookingsPageState extends State<BookingsPage> with SingleTickerProviderSt
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isTraditionalChinese ? '我的預訂' : 'My Bookings'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(
-              text: widget.isTraditionalChinese ? '全部' : 'All',
-              icon: const Icon(Icons.list),
-            ),
-            Tab(
-              text: widget.isTraditionalChinese ? '即將到來' : 'Upcoming',
-              icon: const Icon(Icons.event_available),
-            ),
-            Tab(
-              text: widget.isTraditionalChinese ? '過去' : 'Past',
-              icon: const Icon(Icons.history),
-            ),
-          ],
-        ),
-      ),
-      body: bookingService.isLoading && bookingService.userBookings.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
+      body: Column(
+        children: [
+          Material(
+            color: Theme.of(context).colorScheme.surface,
+            elevation: 1,
+            child: TabBar(
               controller: _tabController,
-              children: [
-                // All Bookings
-                BookingList(
-                  bookings: bookingService.userBookings,
-                  isTraditionalChinese: widget.isTraditionalChinese,
-                  onRefresh: _handleRefresh,
-                  onCancelBooking: _handleCancelBooking,
-                  onViewRestaurant: _handleViewRestaurant,
-                  filterType: 'all',
+              tabs: [
+                Tab(
+                  text: widget.isTraditionalChinese ? '全部' : 'All',
+                  icon: const Icon(Icons.list),
                 ),
-                // Upcoming Bookings
-                BookingList(
-                  bookings: bookingService.userBookings,
-                  isTraditionalChinese: widget.isTraditionalChinese,
-                  onRefresh: _handleRefresh,
-                  onCancelBooking: _handleCancelBooking,
-                  onViewRestaurant: _handleViewRestaurant,
-                  filterType: 'upcoming',
+                Tab(
+                  text: widget.isTraditionalChinese ? '即將到來' : 'Upcoming',
+                  icon: const Icon(Icons.event_available),
                 ),
-                // Past Bookings
-                BookingList(
-                  bookings: bookingService.userBookings,
-                  isTraditionalChinese: widget.isTraditionalChinese,
-                  onRefresh: _handleRefresh,
-                  onViewRestaurant: _handleViewRestaurant,
-                  filterType: 'past',
+                Tab(
+                  text: widget.isTraditionalChinese ? '過去' : 'Past',
+                  icon: const Icon(Icons.history),
                 ),
               ],
             ),
+          ),
+          Expanded(
+            child: bookingService.isLoading && bookingService.userBookings.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      // All Bookings
+                      BookingList(
+                        bookings: bookingService.userBookings,
+                        isTraditionalChinese: widget.isTraditionalChinese,
+                        onRefresh: _handleRefresh,
+                        onCancelBooking: _handleCancelBooking,
+                        onViewRestaurant: _handleViewRestaurant,
+                        filterType: 'all',
+                      ),
+                      // Upcoming Bookings
+                      BookingList(
+                        bookings: bookingService.userBookings,
+                        isTraditionalChinese: widget.isTraditionalChinese,
+                        onRefresh: _handleRefresh,
+                        onCancelBooking: _handleCancelBooking,
+                        onViewRestaurant: _handleViewRestaurant,
+                        filterType: 'upcoming',
+                      ),
+                      // Past Bookings
+                      BookingList(
+                        bookings: bookingService.userBookings,
+                        isTraditionalChinese: widget.isTraditionalChinese,
+                        onRefresh: _handleRefresh,
+                        onViewRestaurant: _handleViewRestaurant,
+                        filterType: 'past',
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

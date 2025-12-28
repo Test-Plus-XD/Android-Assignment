@@ -20,7 +20,7 @@ class BulkImportReviewDialog extends StatelessWidget {
     return AlertDialog(
       title: Text(
         isTraditionalChinese
-            ? '���քܮ� (${menuItems.length})'
+            ? '檢視提取的菜單項目 (${menuItems.length})'
             : 'Review Extracted Menu Items (${menuItems.length})',
       ),
       content: SizedBox(
@@ -82,12 +82,12 @@ class BulkImportReviewDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text(isTraditionalChinese ? 'ֈ' : 'Cancel'),
+          child: Text(isTraditionalChinese ? '取消' : 'Cancel'),
         ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(
-            isTraditionalChinese ? 'eh� (${menuItems.length})' : 'Import All (${menuItems.length})',
+            isTraditionalChinese ? '匯入全部 (${menuItems.length})' : 'Import All (${menuItems.length})',
           ),
         ),
       ],

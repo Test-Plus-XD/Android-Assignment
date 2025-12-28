@@ -103,7 +103,7 @@ class _MenuQRGeneratorState extends State<MenuQRGenerator> {
           ),
         ],
         text: widget.isTraditionalChinese
-            ? '掃描此二維碼查看${widget.restaurantName}的菜單'
+            ? '掃描呢個二維碼睇${widget.restaurantName}嘅菜單'
             : 'Scan this QR code to view ${widget.restaurantName}\'s menu',
       );
     } catch (e) {
@@ -218,7 +218,7 @@ class _MenuQRGeneratorState extends State<MenuQRGenerator> {
                       const SizedBox(height: 4),
                       Text(
                         widget.isTraditionalChinese
-                            ? '顧客可掃描此二維碼查看您的菜單'
+                            ? '顧客可以掃描呢個二維碼睇你嘅菜單'
                             : 'Customers can scan this to view your menu',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -344,7 +344,7 @@ class _MenuQRGeneratorState extends State<MenuQRGenerator> {
                   Expanded(
                     child: Text(
                       widget.isTraditionalChinese
-                          ? '提示：您可以將此二維碼列印並放置在餐桌上，或在社交媒體上分享，讓顧客輕鬆瀏覽您的菜單。'
+                          ? '提示：你可以將呢個二維碼列印出嚟放喺枱面，或者喺社交媒體分享，方便啲顧客輕鬆睇你嘅菜單。'
                           : 'Tip: Print this QR code and place it on tables, or share it on social media so customers can easily browse your menu.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,

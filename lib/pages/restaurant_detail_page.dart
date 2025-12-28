@@ -1,40 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/location_service.dart';
-import '../services/booking_service.dart';
-import '../services/notification_service.dart';
-import '../services/auth_service.dart';
-import '../services/review_service.dart';
-import '../services/menu_service.dart';
-import '../services/chat_service.dart';
-import '../services/store_service.dart';
-import '../models.dart';
-import 'chat_room_page.dart';
-import '../widgets/reviews/review_stats.dart';
-import '../widgets/menu/menu_item_card.dart';
-import '../widgets/ai/gemini_chat_button.dart';
-import '../widgets/restaurant_detail/hero_image_section.dart';
-import '../widgets/restaurant_detail/restaurant_info_card.dart';
-import '../widgets/restaurant_detail/contact_actions.dart';
-import '../widgets/restaurant_detail/opening_hours_card.dart';
-import '../widgets/restaurant_detail/review_summary_card.dart';
-import '../widgets/restaurant_detail/claim_restaurant_button.dart';
-import 'restaurant_reviews_page.dart';
-import 'restaurant_menu_page.dart';
+import 'package:intl/intl.dart';
 
-/// Restaurant Detail Page - Native Android Integration
-/// 
-/// This page uses multiple native Android features working together:
-/// - Information panels presented in a responsive GridView
-/// - Google Maps integration for location display
-/// - Cached network image for the restaurant (performance-conscious)
-/// - Share functionality using Android's share sheet
-/// - URL launching for phone/email/maps
-/// - Date/time picker for bookings (still in progress)
-/// - Local notifications for reminders (still in progress)
+import '../models.dart';
+import '../services/auth_service.dart';
+import '../services/location_service.dart';
+import '../services/review_service.dart';
+import '../services/chat_service.dart';
+import '../services/user_service.dart';
+import '../services/menu_service.dart';
+import '../widgets/reviews/star_rating.dart';
+import '../widgets/restaurant/contact_info_card.dart';
+import '../widgets/restaurant/interactive_map_preview.dart';
+import '../widgets/restaurant/menu_preview_section.dart';
+import '../widgets/restaurant/reviews_carousel.dart';
+import '../widgets/restaurant/restaurant_header.dart';
+import '../widgets/restaurant/action_buttons_row.dart';
+import '../widgets/restaurant/opening_hours_list.dart';
+import '../widgets/restaurant/claim_restaurant_button.dart';
+import '../widgets/booking/booking_dialog.dart';
+import '../pages/chat_room_page.dart';
+import '../pages/restaurant_reviews_page.dart';
+import '../pages/restaurant_menu_page.dart';
+import '../pages/gemini_page.dart';
+
+/// Restaurant Detail Page
+///
+/// This is the most complex page in the app, showing all information for a
+/// specific restaurant. It demonstrates:
+/// - Advanced Layout (SliverAppBar with background image)
+/// - Integration of multiple services (Booking, Review, Location, Chat)
+/// - Interactive map integration
+/// - Dynamic UI based on authentication and user role
 class RestaurantDetailPage extends StatefulWidget {
   final Restaurant restaurant;
   final bool isTraditionalChinese;
@@ -50,38 +51,93 @@ class RestaurantDetailPage extends StatefulWidget {
 }
 
 class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
-  // Google Maps controller for map interactions
   GoogleMapController? _mapController;
-  // Booking date/time selection
-  DateTime? _selectedDateTime;
-  // Number of guests
-  int _numberOfGuests = 1;
-  // Loading states
-  bool _isBooking = false;
-  // Map type toggle
-  MapType _currentMapType = MapType.normal;
-  // Review statistics
-  ReviewStats? _reviewStats;
-  Future<ReviewStats>? _reviewStatsFuture;
+  // Review data
+  Future<ReviewStats?>? _reviewStatsFuture;
+  Future<List<Review>>? _reviewsFuture;
+  // Menu data
+  Future<List<MenuItem>>? _menuItemsFuture;
+  // Map type for satellite toggle
+  MapType _mapType = MapType.normal;
+  // Track scroll position for AppBar actions
+  bool _isCollapsed = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadReviewStats();
+    _scrollController.addListener(_onScroll);
+    // Load data after build completes to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
   }
 
   @override
   void dispose() {
     _mapController?.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
   }
 
-  /// Load review statistics for the restaurant
-  void _loadReviewStats() {
+  void _onScroll() {
+    // Detect when hero image is collapsed (after scrolling ~180 pixels)
+    final isCollapsed = _scrollController.hasClients && _scrollController.offset > 180;
+    if (isCollapsed != _isCollapsed) {
+      setState(() => _isCollapsed = isCollapsed);
+    }
+  }
+
+  /// Load all data for the page
+  void _loadData() {
     final reviewService = context.read<ReviewService>();
+    final menuService = context.read<MenuService>();
     setState(() {
-      _reviewStatsFuture = reviewService.getRestaurantStats(widget.restaurant.id);
+      _reviewStatsFuture = reviewService.getReviewStats(widget.restaurant.id);
+      _reviewsFuture = reviewService.getReviews(restaurantId: widget.restaurant.id);
+      _menuItemsFuture = menuService.getMenuItems(widget.restaurant.id);
     });
+  }
+
+  /// Check if restaurant is currently open
+  bool _isRestaurantOpen() {
+    if (widget.restaurant.openingHours == null || widget.restaurant.openingHours!.isEmpty) {
+      return false;
+    }
+    final now = DateTime.now();
+    final dayName = DateFormat('EEEE').format(now);
+    final todayHours = widget.restaurant.openingHours![dayName];
+    if (todayHours == null || todayHours.toString().toLowerCase() == 'closed') {
+      return false;
+    }
+    // Try to parse opening hours (format: "11:00 - 21:00" or "11:00-21:00")
+    final hoursStr = todayHours.toString();
+    final timeParts = hoursStr.split(RegExp(r'\s*-\s*'));
+    if (timeParts.length != 2) return true;
+    try {
+      final openTime = _parseTime(timeParts[0].trim());
+      final closeTime = _parseTime(timeParts[1].trim());
+      final currentMinutes = now.hour * 60 + now.minute;
+      return currentMinutes >= openTime && currentMinutes <= closeTime;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  int _parseTime(String timeStr) {
+    final parts = timeStr.split(':');
+    if (parts.length != 2) return 0;
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+  }
+
+  /// Check if contact info has any data
+  bool _hasContactInfo() {
+    final contacts = widget.restaurant.contacts;
+    if (contacts == null) return false;
+    return (contacts['Phone'] != null && contacts['Phone'].toString().isNotEmpty) ||
+        (contacts['Email'] != null && contacts['Email'].toString().isNotEmpty) ||
+        (contacts['Website'] != null && contacts['Website'].toString().isNotEmpty);
   }
 
   /// Calculate distance from user's location
@@ -103,7 +159,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   String _getDisplayValue(String? primary, String? fallback) {
     if (primary != null && primary.trim().isNotEmpty) return primary;
     if (fallback != null && fallback.trim().isNotEmpty) return fallback;
-    return widget.isTraditionalChinese ? '未提供' : 'Not provided';
+    return widget.isTraditionalChinese ? '尚未提供' : 'Not provided';
   }
 
   /// Share restaurant details
@@ -160,22 +216,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     }
   }
 
-  /// Open email client
-  ///
-  /// Launches user's email app with recipient pre-filled.
-  ///
-  /// URL Scheme: mailto:restaurant@example.com
-  Future<void> _sendEmail(String email) async {
-    final uri = Uri.parse('mailto:$email');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isTraditionalChinese ? '無法發送電郵' : 'Could not send email')),
-      );
-    }
-  }
-
   /// Open website in browser
   ///
   /// Launches user's default browser with restaurant website.
@@ -191,6 +231,18 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開網站' : 'Could not open website')),
+      );
+    }
+  }
+
+  /// Open email app
+  Future<void> _sendEmail(String email) async {
+    final uri = Uri.parse('mailto:$email');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開郵件應用' : 'Could not open email app')),
       );
     }
   }
@@ -286,8 +338,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.isTraditionalChinese 
-                ? '無法開始聊天：$e' 
+              widget.isTraditionalChinese
+                ? '無法開始聊天：$e'
                 : 'Failed to start chat: $e',
             ),
             backgroundColor: Theme.of(context).colorScheme.error,
@@ -297,847 +349,451 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     }
   }
 
-  /// Show booking dialog
-  ///
-  /// This is where all our services come together:
-  /// 1. User selects date/time and party size
-  /// 2. BookingService creates reservation in Firestore
-  /// 3. NotificationService schedules reminder
-  /// 4. User sees confirmation
-  ///
-  /// This demonstrates coordinating multiple services for one feature.
-  Future<void> _showBookingDialog() async {
-    // Reset state
-    _selectedDateTime = null;
-    _numberOfGuests = 1;
+  /// Open Gemini AI chat for this restaurant (accessible to guests)
+  void _openGeminiChat() {
+    final restaurantName = widget.isTraditionalChinese
+        ? widget.restaurant.nameTc ?? widget.restaurant.nameEn
+        : widget.restaurant.nameEn ?? widget.restaurant.nameTc;
 
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(
-            widget.isTraditionalChinese ? '預訂餐桌' : 'Book a Table',
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              // Date and time picker
-              children: [
-                Text(
-                  widget.isTraditionalChinese ? '日期和時間' : 'Date and Time',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today),
-                  label: Text(
-                    _selectedDateTime == null
-                        ? (widget.isTraditionalChinese ? '選擇日期時間' : 'Select date & time')
-                        : _formatDateTime(_selectedDateTime!),
-                  ),
-                  onPressed: () async {
-                    // Show date picker
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now().add(const Duration(days: 1)),
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 90)),
-                    );
-                    if (date != null && context.mounted) {
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: const TimeOfDay(hour: 17, minute: 0),
-                      );
-                      if (time != null) {
-                        setState(() {
-                          _selectedDateTime = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                        });
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Number of guests selector
-                Text(
-                  widget.isTraditionalChinese ? '人數' : 'Number of Guests',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: _numberOfGuests > 1
-                          ? () => setState(() => _numberOfGuests--)
-                          : null,
-                    ),
-                    Text(
-                      '$_numberOfGuests',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: _numberOfGuests < 20
-                          ? () => setState(() => _numberOfGuests++)
-                          : null,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: _selectedDateTime == null
-                  ? null
-                  : () {
-                Navigator.pop(context);
-                _confirmBooking();
-              },
-              child: Text(widget.isTraditionalChinese ? '確認' : 'Confirm'),
-            ),
-          ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GeminiChatRoomPage(
+          isTraditionalChinese: widget.isTraditionalChinese,
+          restaurantName: restaurantName,
+          restaurantId: widget.restaurant.id,
+          restaurantCuisine: (widget.isTraditionalChinese ? widget.restaurant.keywordTc : widget.restaurant.keywordEn)?.isNotEmpty == true
+              ? (widget.isTraditionalChinese ? widget.restaurant.keywordTc!.first : widget.restaurant.keywordEn!.first)
+              : null,
+          restaurantDistrict: widget.isTraditionalChinese ? widget.restaurant.districtTc : widget.restaurant.districtEn,
         ),
       ),
     );
   }
 
-  /// Confirm and process booking
-  ///
-  /// This is the complete booking flow:
-  /// 1. Create booking record in Firestore
-  /// 2. Schedule notification reminder (2 hours before)
-  /// 3. Show confirmation to user
-  Future<void> _confirmBooking() async {
-    if (_selectedDateTime == null) return;
-    setState(() => _isBooking = true);
-    try {
-      final bookingService = context.read<BookingService>();
-      final notificationService = context.read<NotificationService>();
-      final name = widget.isTraditionalChinese
-          ? _getDisplayValue(widget.restaurant.nameTc, widget.restaurant.nameEn)
-          : _getDisplayValue(widget.restaurant.nameEn, widget.restaurant.nameTc);
-      // Step 1: Create booking in Firestore
-      final booking = await bookingService.createBooking(
-        restaurantId: widget.restaurant.id,
-        restaurantName: name,
-        dateTime: _selectedDateTime!,
-        numberOfGuests: _numberOfGuests,
-      );
-      if (booking == null) throw Exception('Failed to create booking');
-      // Step 2: Schedule notification reminder
-      // Show notification 2 hours before booking time
-      final notificationTime = _selectedDateTime!.subtract(
-        const Duration(hours: 2),
-      );
-      // Only schedule if notification time is in future
-      if (notificationTime.isAfter(DateTime.now())) {
-        await notificationService.scheduleBookingReminder(
-          id: booking.id.hashCode, // Convert string ID to integer
-          restaurantNameEn: widget.restaurant.nameEn ?? 'Restaurant',
-          restaurantNameTc: widget.restaurant.nameTc ?? '餐廳',
-          bookingDateTime: _selectedDateTime!,
-          notificationTime: notificationTime,
-          isTraditionalChinese: widget.isTraditionalChinese,
-        );
-      }
-      // Step 3: Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.isTraditionalChinese
-                ? '預訂成功！您將在 2 小時前收到提醒。'
-                : 'Booking confirmed! You\'ll receive a reminder 2 hours before.'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      // Show error message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.isTraditionalChinese ? '預訂失敗：$e' : 'Booking failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isBooking = false);
-      }
-    }
-  }
-
-  /// Format DateTime for display
-  String _formatDateTime(DateTime dateTime) {
-    if (widget.isTraditionalChinese) {
-      return '${dateTime.year}年${dateTime.month}月${dateTime.day}日 '
-          '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year} '
-          '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-    }
-  }
-
-  /// Toggle map type between normal, satellite, and terrain
-  void _toggleMapType() {
-    setState(() {
-      _currentMapType = _currentMapType == MapType.normal
-          ? MapType.satellite
-          : _currentMapType == MapType.satellite
-          ? MapType.terrain
-          : MapType.normal;
-    });
-  }
-
-  /// Animate camera to restaurant location
-  void _centerOnRestaurant() {
-    if (_mapController != null && widget.restaurant.latitude != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: LatLng(
-              widget.restaurant.latitude!,
-              widget.restaurant.longitude!,
-            ),
-            zoom: 16,
-          ),
-        ),
-      );
-    }
-  }
-
-  /// Build contact action tile
-  ///
-  /// Creates an interactive card for contact methods with appropriate icons.
-  Widget _buildContactTile({
-    required IconData icon,
-    required String label,
-    required String value,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
+  /// Show booking dialog
+  Future<void> _showBookingDialog() async {
+    await showDialog(
+      context: context,
+      builder: (context) => BookingDialog(
+        restaurant: widget.restaurant,
+        isTraditionalChinese: widget.isTraditionalChinese,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Get display values with fallback logic
-    final name = widget.isTraditionalChinese
-        ? _getDisplayValue(widget.restaurant.nameTc, widget.restaurant.nameEn)
-        : _getDisplayValue(widget.restaurant.nameEn, widget.restaurant.nameTc);
-    final address = widget.isTraditionalChinese
-        ? _getDisplayValue(widget.restaurant.addressTc, widget.restaurant.addressEn)
-        : _getDisplayValue(widget.restaurant.addressEn, widget.restaurant.addressTc);
-    final district = widget.isTraditionalChinese
-        ? _getDisplayValue(widget.restaurant.districtTc, widget.restaurant.districtEn)
-        : _getDisplayValue(widget.restaurant.districtEn, widget.restaurant.districtTc);
-    final keywords = widget.restaurant.getDisplayKeywords(widget.isTraditionalChinese);
-    final distanceText = _getDistanceText();
-    // Extract contact information
-    final phone = widget.restaurant.contacts?['phone']?.toString();
-    final email = widget.restaurant.contacts?['email']?.toString();
-    final website = widget.restaurant.contacts?['website']?.toString();
-    // Build list of available contact methods
-    final contactMethods = <Widget>[];
-    if (phone != null && phone.trim().isNotEmpty) {
-      contactMethods.add(
-        _buildContactTile(
-          icon: Icons.phone,
-          label: widget.isTraditionalChinese ? '電話' : 'Phone',
-          value: phone,
-          onTap: () => _makePhoneCall(phone),
-        ),
-      );
-    }
-    if (email != null && email.trim().isNotEmpty) {
-      contactMethods.add(
-        _buildContactTile(
-          icon: Icons.email,
-          label: widget.isTraditionalChinese ? '電郵' : 'Email',
-          value: email,
-          onTap: () => _sendEmail(email),
-        ),
-      );
-    }
-    if (website != null && website.trim().isNotEmpty) {
-      contactMethods.add(
-        _buildContactTile(
-          icon: Icons.language,
-          label: widget.isTraditionalChinese ? '網站' : 'Website',
-          value: website,
-          onTap: () => _openWebsite(website),
-        ),
-      );
-    }
+    final theme = Theme.of(context);
+    final authService = context.watch<AuthService>();
+    final userService = context.watch<UserService>();
+    final isOwner = authService.isLoggedIn && widget.restaurant.ownerId == authService.currentUser!.uid;
+    final userType = userService.currentProfile?.type;
+    final isDiner = authService.isLoggedIn && userType == 'Diner';
+
+    // Get primary name and address for display
+    final restaurantName = widget.isTraditionalChinese
+        ? (widget.restaurant.nameTc ?? widget.restaurant.nameEn ?? '')
+        : (widget.restaurant.nameEn ?? widget.restaurant.nameTc ?? '');
+    final restaurantAddress = widget.isTraditionalChinese
+        ? (widget.restaurant.addressTc ?? widget.restaurant.addressEn ?? '')
+        : (widget.restaurant.addressEn ?? widget.restaurant.addressTc ?? '');
 
     return Scaffold(
-      // Custom app bar with share and chat buttons
-      appBar: AppBar(
-        title: Text(name),
-        actions: [
-          // AI Assistant button with menu context
-          GeminiChatIconButton(
-            isTraditionalChinese: widget.isTraditionalChinese,
-            restaurantName: name,
-            restaurantCuisine: widget.restaurant.keywordEn?.join(', '),
-            restaurantDistrict: widget.restaurant.districtEn,
-            restaurantId: widget.restaurant.id, // Pass restaurant ID for menu context
-          ),
-          // Chat button
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline),
-            tooltip: widget.isTraditionalChinese ? '聊天' : 'Chat',
-            onPressed: _startChatWithRestaurant,
-          ),
-          // Share button in app bar for easy access
-          IconButton(
-            icon: const Icon(Icons.share),
-            tooltip: widget.isTraditionalChinese ? '分享' : 'Share',
-            onPressed: _shareRestaurant,
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// Hero Image Section with overlay
-            HeroImageSection(
-              imageUrl: widget.restaurant.imageUrl,
-              distanceText: distanceText,
-              isTraditionalChinese: widget.isTraditionalChinese,
-            ),
-
-            const SizedBox(height: 16),
-
-            /// Restaurant Info Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Consumer<ReviewService>(
-                builder: (context, reviewService, child) {
-                  return FutureBuilder<ReviewStats?>(
-                    future: reviewService.getReviewStats(widget.restaurant.id),
-                    builder: (context, snapshot) {
-                      return RestaurantInfoCard(
-                        restaurant: widget.restaurant,
-                        name: name,
-                        address: address,
-                        district: district,
-                        keywords: keywords,
-                        isTraditionalChinese: widget.isTraditionalChinese,
-                        onAddressTap: _openInMaps,
-                        reviewStats: snapshot.data,
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            /// Contact Actions
-            ContactActions(
-              contacts: widget.restaurant.contacts,
-              isTraditionalChinese: widget.isTraditionalChinese,
-              onPhonePressed: _makePhoneCall,
-              onEmailPressed: _sendEmail,
-              onWebsitePressed: _openWebsite,
-            ),
-
-            const SizedBox(height: 16),
-
-            /// Opening Hours Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: OpeningHoursCard(
-                openingHours: widget.restaurant.openingHours,
-                isTraditionalChinese: widget.isTraditionalChinese,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            /// Review Summary Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: FutureBuilder<ReviewStats>(
-                future: _reviewStatsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox.shrink();
-                  }
-
-                  return ReviewSummaryCard(
-                    reviewStats: snapshot.data,
-                    isTraditionalChinese: widget.isTraditionalChinese,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RestaurantReviewsPage(
-                            restaurant: widget.restaurant,
-                            isTraditionalChinese: widget.isTraditionalChinese,
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            /// Claim Restaurant Button (for Restaurant users without owned restaurant)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: ClaimRestaurantButton(
-                restaurantId: widget.restaurant.id,
-                restaurantOwnerId: widget.restaurant.ownerId,
-                isTraditionalChinese: widget.isTraditionalChinese,
-                onClaimed: () {
-                  // Refresh the page or show success message
-                  setState(() {
-                    // Trigger a rebuild to reflect the claimed status
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        widget.isTraditionalChinese
-                            ? '您現在可以管理這間餐廳了'
-                            : 'You can now manage this restaurant',
-                      ),
-                      backgroundColor: Colors.green,
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // Collapsible Header with Image
+          // The image collapses into a regular AppBar as user scrolls
+          SliverAppBar(
+            expandedHeight: 250,
+            pinned: true,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Restaurant Image with placeholder
+                  Image.network(
+                    widget.restaurant.imageUrl ?? '',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: Colors.grey[200],
+                      child: Icon(Icons.restaurant, size: 80, color: Colors.grey[400]),
                     ),
-                  );
-                },
+                  ),
+                  // Gradient overlay to make text readable on any image
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black54],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+            actions: [
+              // Show chat buttons in AppBar when hero is collapsed
+              if (_isCollapsed) ...[
+                // Gemini AI chat (accessible to everyone including guests)
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome),
+                  onPressed: _openGeminiChat,
+                  tooltip: widget.isTraditionalChinese ? 'AI 助手' : 'AI Assistant',
+                ),
+                // Socket chat (requires login)
+                if (authService.isLoggedIn)
+                  IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    onPressed: _startChatWithRestaurant,
+                    tooltip: widget.isTraditionalChinese ? '聊天' : 'Chat',
+                  ),
+              ],
+              IconButton(
+                icon: const Icon(Icons.share),
+                onPressed: _shareRestaurant,
+                tooltip: widget.isTraditionalChinese ? '分享' : 'Share',
+              ),
+            ],
+          ),
 
-            const SizedBox(height: 16),
+          // Main Content Area
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Restaurant Header (Name, Rating, Distance)
+                  FutureBuilder<ReviewStats?>(
+                    future: _reviewStatsFuture,
+                    builder: (context, snapshot) {
+                      return RestaurantHeader(
+                        restaurantName: restaurantName,
+                        reviewStats: snapshot.data,
+                        distanceText: _getDistanceText(),
+                        isTraditionalChinese: widget.isTraditionalChinese,
+                      );
+                    },
+                  ),
 
-            /// Map Section - Google Maps integration
-            if (widget.restaurant.latitude != null &&
-                widget.restaurant.longitude != null) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  const SizedBox(height: 24),
+
+                  // Action Buttons (Call, Chat, AI, Map, Website)
+                  ActionButtonsRow(
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                    isLoggedIn: authService.isLoggedIn,
+                    phoneNumber: widget.restaurant.contacts?['Phone'],
+                    website: widget.restaurant.contacts?['Website'],
+                    onCall: () => _makePhoneCall(widget.restaurant.contacts!['Phone']),
+                    onChat: _startChatWithRestaurant,
+                    onAI: _openGeminiChat,
+                    onDirections: _openInMaps,
+                    onWebsite: () => _openWebsite(widget.restaurant.contacts!['Website']),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Claim Restaurant Button (for Restaurant-type users)
+                  ClaimRestaurantButton(
+                    restaurantId: widget.restaurant.id,
+                    restaurantOwnerId: widget.restaurant.ownerId,
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                    onClaimed: () {
+                      // Refresh the page data after claiming
+                      setState(() {
+                        _loadData();
+                      });
+                    },
+                  ),
+
+                  const Divider(height: 48),
+
+                  // Contact Info Section (above Address, only if data exists)
+                  if (_hasContactInfo()) ...[
+                    Text(
+                      widget.isTraditionalChinese ? '聯絡方式' : 'Contact',
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    ContactInfoCard(
+                      contacts: widget.restaurant.contacts!,
+                      isTraditionalChinese: widget.isTraditionalChinese,
+                      onPhoneCall: _makePhoneCall,
+                      onSendEmail: _sendEmail,
+                      onOpenWebsite: _openWebsite,
+                    ),
+                    const Divider(height: 48),
+                  ],
+
+                  // Address Section
+                  Text(
+                    widget.isTraditionalChinese ? '地址' : 'Address',
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: _openInMaps,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          widget.isTraditionalChinese ? '地圖' : 'Map',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        const Icon(Icons.location_on_outlined, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(restaurantAddress, style: theme.textTheme.bodyLarge),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.isTraditionalChinese ? '查看地圖' : 'View on map',
+                                style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                              ),
+                            ],
                           ),
-                        ),
-                        Row(
-                          children: [
-                            // Map type toggle
-                            IconButton(
-                              icon: const Icon(Icons.layers),
-                              tooltip: widget.isTraditionalChinese ? '切換地圖類型' : 'Change map type',
-                              onPressed: _toggleMapType,
-                            ),
-                            // Centre on restaurant
-                            IconButton(
-                              icon: const Icon(Icons.my_location),
-                              tooltip: widget.isTraditionalChinese ? '定位餐廳' : 'Centre on restaurant',
-                              onPressed: _centerOnRestaurant,
-                            ),
-                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: SizedBox(
-                      height: 300,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          children: [
-                            GoogleMap(
-                              initialCameraPosition: CameraPosition(
-                                target: LatLng(
-                                  widget.restaurant.latitude!,
-                                  widget.restaurant.longitude!,
-                                ),
-                                zoom: 15,
-                              ),
-                              mapType: _currentMapType,
-                              markers: {
-                                Marker(
-                                  markerId: MarkerId(widget.restaurant.id),
-                                  position: LatLng(
-                                    widget.restaurant.latitude!,
-                                    widget.restaurant.longitude!,
-                                  ),
-                                  infoWindow: InfoWindow(
-                                    title: name,
-                                    snippet: address,
-                                  ),
-                                ),
-                              },
-                              onMapCreated: (controller) => _mapController = controller,
-                              myLocationButtonEnabled: false,
-                              myLocationEnabled: true,
-                              zoomControlsEnabled: false,
-                              compassEnabled: true,
-                              mapToolbarEnabled: false,
-                              minMaxZoomPreference: const MinMaxZoomPreference(12, 20),
-                            ),
-                            // Custom zoom controls
-                            Positioned(
-                              right: 16,
-                              bottom: 80,
-                              child: Column(
-                                children: [
-                                  FloatingActionButton.small(
-                                    heroTag: 'zoom_in',
-                                    onPressed: () => _mapController?.animateCamera(CameraUpdate.zoomIn()),
-                                    child: const Icon(Icons.add),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  FloatingActionButton.small(
-                                    heroTag: 'zoom_out',
-                                    onPressed: () => _mapController?.animateCamera(CameraUpdate.zoomOut()),
-                                    child: const Icon(Icons.remove),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Open in maps button
-                            Positioned(
-                              left: 16,
-                              bottom: 16,
-                              child: ElevatedButton.icon(
-                                onPressed: _openInMaps,
-                                icon: const Icon(Icons.map, size: 18),
-                                label: Text(
-                                  widget.isTraditionalChinese ? '在地圖中打開' : 'Open in Maps',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Interactive Map Preview with zoom and satellite toggle
+                  if (widget.restaurant.latitude != null && widget.restaurant.longitude != null)
+                    InteractiveMapPreview(
+                      latitude: widget.restaurant.latitude!,
+                      longitude: widget.restaurant.longitude!,
+                      restaurantName: restaurantName,
+                      mapType: _mapType,
+                      onMapTypeChanged: (type) => setState(() => _mapType = type),
+                      onMapCreated: (controller) => _mapController = controller,
+                      isTraditionalChinese: widget.isTraditionalChinese,
                     ),
-                ),
-            ],
 
-            const SizedBox(height: 16),
+                  const Divider(height: 48),
 
-            /// Menu Section - Restaurant menu items
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: _MenuSection(
-                restaurant: widget.restaurant,
-                name: name,
-                isTraditionalChinese: widget.isTraditionalChinese,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            /// Reviews Section - Restaurant reviews and ratings
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Consumer<ReviewService>(
-                builder: (context, reviewService, child) {
-                  return FutureBuilder<ReviewStats?>(
-                    future: reviewService.getReviewStats(widget.restaurant.id),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData && snapshot.data != null) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  widget.isTraditionalChinese ? '評價' : 'Reviews',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    // Navigate to full reviews page
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (context) => RestaurantReviewsPage(
-                                          restaurantId: widget.restaurant.id,
-                                          restaurantName: name,
-                                          isTraditionalChinese: widget.isTraditionalChinese,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: Text(
-                                    widget.isTraditionalChinese ? '查看全部' : 'View All',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            ReviewStatsWidget(
-                              stats: snapshot.data!,
-                              onTap: () {
-                                // Navigate to full reviews page
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => RestaurantReviewsPage(
-                                      restaurantId: widget.restaurant.id,
-                                      restaurantName: name,
-                                      isTraditionalChinese: widget.isTraditionalChinese,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      /// Floating Book Button
-      ///
-      /// Prominent call-to-action button for booking.
-      /// Positioned at bottom for thumb-friendly access.
-      /// Only shown for logged-in Diner users (not for Restaurant owners or guests)
-      floatingActionButton: Builder(
-        builder: (context) {
-          final authService = context.watch<AuthService>();
-          final userType = authService.userType;
-          final isLoggedIn = authService.isLoggedIn;
-
-          // Only show booking button for logged-in Diner users
-          if (!isLoggedIn || userType != 'Diner') {
-            return const SizedBox.shrink();
-          }
-
-          return FloatingActionButton.extended(
-            onPressed: _isBooking ? null : _showBookingDialog,
-            icon: _isBooking
-                ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-                : const Icon(Icons.calendar_today),
-            label: Text(
-              widget.isTraditionalChinese ? '預訂' : 'Book',
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Menu Section Widget
-///
-/// Separated from main widget to prevent setState during build.
-/// Uses FutureBuilder with cached future to avoid multiple API calls.
-class _MenuSection extends StatefulWidget {
-  final Restaurant restaurant;
-  final String name;
-  final bool isTraditionalChinese;
-
-  const _MenuSection({
-    required this.restaurant,
-    required this.name,
-    required this.isTraditionalChinese,
-  });
-
-  @override
-  State<_MenuSection> createState() => _MenuSectionState();
-}
-
-class _MenuSectionState extends State<_MenuSection> {
-  Future<List<MenuItem>>? _menuItemsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    // Initialise future in initState to avoid rebuilding during build
-    _menuItemsFuture = context.read<MenuService>().getMenuItems(widget.restaurant.id);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<MenuItem>>(
-      future: _menuItemsFuture,
-      builder: (context, snapshot) {
-        // Show loading state while fetching menu
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.isTraditionalChinese ? '菜單' : 'Menu',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-            ],
-          );
-        }
-
-        // Show error state if loading failed
-        if (snapshot.hasError) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.isTraditionalChinese ? '菜單' : 'Menu',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
+                  // Opening Hours Section with Open/Closed badge
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
-                      const SizedBox(width: 12),
-                      Expanded(
+                      Text(
+                        widget.isTraditionalChinese ? '營業時間' : 'Opening Hours',
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      // Open/Closed badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _isRestaurantOpen()
+                              ? Colors.green.withValues(alpha: 0.15)
+                              : Colors.red.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _isRestaurantOpen() ? Colors.green : Colors.red,
+                            width: 1,
+                          ),
+                        ),
                         child: Text(
-                          widget.isTraditionalChinese
-                              ? '無法載入菜單'
-                              : 'Failed to load menu',
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                          _isRestaurantOpen()
+                              ? (widget.isTraditionalChinese ? '營業中' : 'Open')
+                              : (widget.isTraditionalChinese ? '休息中' : 'Closed'),
+                          style: TextStyle(
+                            color: _isRestaurantOpen() ? Colors.green[700] : Colors.red[700],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-            ],
-          );
-        }
-
-        // Show menu items if available
-        if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    widget.isTraditionalChinese ? '菜單' : 'Menu',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const SizedBox(height: 8),
+                  OpeningHoursList(
+                    hours: widget.restaurant.openingHours,
+                    isTraditionalChinese: widget.isTraditionalChinese,
                   ),
-                  TextButton(
-                    onPressed: () {
-                      // Navigate to full menu page
-                      Navigator.of(context).push(
+
+                  const Divider(height: 48),
+
+                  // Menu Section
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.isTraditionalChinese ? '菜單' : 'Menu',
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RestaurantMenuPage(
+                                restaurantId: widget.restaurant.id,
+                                restaurantName: restaurantName,
+                                isTraditionalChinese: widget.isTraditionalChinese,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(widget.isTraditionalChinese ? '查看全部' : 'See all'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  MenuPreviewSection(
+                    menuItemsFuture: _menuItemsFuture,
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                    onSeeAll: () {
+                      Navigator.push(
+                        context,
                         MaterialPageRoute(
-                          builder: (context) => RestaurantMenuPage(
+                          builder: (_) => RestaurantMenuPage(
                             restaurantId: widget.restaurant.id,
-                            restaurantName: widget.name,
+                            restaurantName: restaurantName,
                             isTraditionalChinese: widget.isTraditionalChinese,
                           ),
                         ),
                       );
                     },
-                    child: Text(widget.isTraditionalChinese ? '查看全部' : 'View All'),
                   ),
+
+                  const Divider(height: 48),
+
+                  // Reviews Section Preview
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.isTraditionalChinese ? '用戶評價' : 'User Reviews',
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RestaurantReviewsPage(
+                                restaurantId: widget.restaurant.id,
+                                restaurantName: restaurantName,
+                                isTraditionalChinese: widget.isTraditionalChinese,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(widget.isTraditionalChinese ? '查看全部' : 'See all'),
+                      ),
+                    ],
+                  ),
+                  // Review Stats Summary with stars
+                  FutureBuilder<ReviewStats?>(
+                    future: _reviewStatsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        if (kDebugMode) print('Error loading review stats: ${snapshot.error}');
+                        // Don't show error to user, just show no reviews
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            widget.isTraditionalChinese ? '暫無評論' : 'No reviews yet',
+                            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                          ),
+                        );
+                      }
+                      if (snapshot.hasData && snapshot.data != null) {
+                        final stats = snapshot.data!;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                stats.averageRating.toStringAsFixed(1),
+                                style: theme.textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  StarRating(rating: stats.averageRating, size: 20),
+                                  Text(
+                                    '${stats.totalReviews} ${widget.isTraditionalChinese ? '則評論' : 'reviews'}',
+                                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          widget.isTraditionalChinese ? '暫無評論' : 'No reviews yet',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                        ),
+                      );
+                    },
+                  ),
+                  // Reviews Carousel
+                  ReviewsCarousel(
+                    reviewsFuture: _reviewsFuture,
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                  ),
+                  const SizedBox(height: 100), // Spacing for bottom button
                 ],
               ),
-              const SizedBox(height: 12),
-              // Show first 3 menu items as preview
-              ...snapshot.data!.take(3).map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: MenuItemCard(item: item),
-              )),
-            ],
-          );
-        }
+            ),
+          ),
+        ],
+      ),
 
-        // Hide menu section if no items available
-        return const SizedBox.shrink();
-      },
+      // Bottom Booking Button - Only visible for logged-in Diner users
+      bottomSheet: (isOwner || !isDiner)
+      ? null // Owners and non-Diner users shouldn't see booking button
+      : Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: _showBookingDialog,
+                    child: Text(
+                      widget.isTraditionalChinese ? '立即預訂餐桌' : 'Book a Table',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
     );
   }
 }

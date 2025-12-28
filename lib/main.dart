@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import 'config/app_state.dart';
 import 'services/auth_service.dart';
 import 'services/booking_service.dart';
@@ -55,7 +56,7 @@ import 'config.dart';
 
 /// Main Entry Point
 ///
-/// Initialization order matters:
+/// Initialisation order matters:
 /// 1. Flutter bindings (required for async work before runApp)
 /// 2. Firebase (authentication and database)
 /// 3. Notifications (sets up channels and timezone)
@@ -71,19 +72,26 @@ void main() async {
   }
 
   // Initialise Firebase with proper error handling
+  // Note: We always try to initialize Firebase. The duplicate-app error
+  // is expected after hot restart since the native SDK retains state.
+  // This is safe to catch and ignore - Firebase will still work correctly.
   try {
-    // Check if Firebase is already initialised
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      print('Firebase initialised successfully');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    if (kDebugMode) print('Firebase initialised successfully');
+  } on FirebaseException catch (e) {
+    // Handle the duplicate-app error that occurs after hot restart
+    // This is expected behavior and Firebase will still function correctly
+    if (e.code == 'duplicate-app') {
+      if (kDebugMode) print('Firebase already initialised (hot restart detected)');
     } else {
-      print('Firebase already initialised, using existing instance');
+      // Log other Firebase errors but don't crash
+      if (kDebugMode) print('Firebase Initialization error: $e');
     }
   } catch (e) {
-    // If initialisation fails, log the error but don't crash
-    print('Firebase Initialization error: $e');
+    // If initialisation fails for other reasons, log the error but don't crash
+    if (kDebugMode) print('Firebase Initialization error: $e');
     // In production, show an error screen here
   }
 
@@ -98,6 +106,12 @@ void main() async {
     print('Notification service Initialization error: $e');
     // App can still run without notifications, so we continue
   }
+
+  // Initialise timeago locales for bilingual support
+  // Set up Traditional Chinese locale for time formatting
+  timeago.setLocaleMessages('zh', timeago.ZhMessages());
+  if (kDebugMode) print('Timeago locales initialised (zh, en)');
+
   // Start the app, passing notification service instance
   runApp(PourRiceApp(notificationService: notificationService));
 }
@@ -215,7 +229,9 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // ImageService - independent (no auth required for image operations)
-        ChangeNotifierProvider(create: (_) => ImageService()),
+        ChangeNotifierProvider(
+          create: (_) => ImageService(),
+        ),
 
         // ChatService - needs AuthService for tokens (real-time chat)
         ChangeNotifierProxyProvider<AuthService, ChatService>(

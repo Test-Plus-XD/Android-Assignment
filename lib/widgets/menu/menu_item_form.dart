@@ -120,11 +120,11 @@ class _MenuItemFormState extends State<MenuItemForm> {
 
       // Upload image if one was selected
       if (_selectedImage != null) {
-        imageUrl = await imageService.uploadImage(
+        imageUrl = (await imageService.uploadImage(
           imageFile: _selectedImage!,
           folder: 'Menu/${widget.restaurantId}',
           compress: true,
-        );
+        )) as String?;
 
         if (imageUrl == null) {
           throw Exception(isTC ? '圖片上傳失敗' : 'Image upload failed');

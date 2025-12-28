@@ -14,10 +14,12 @@ import 'chat_room_page.dart';
 /// Lists all chat rooms for the current user
 class ChatPage extends StatefulWidget {
   final bool isTraditionalChinese;
+  final Function(int)? onNavigate;
 
   const ChatPage({
     super.key,
     this.isTraditionalChinese = false,
+    this.onNavigate,
   });
 
   @override
@@ -42,6 +44,9 @@ class _ChatPageState extends State<ChatPage> {
     // Use ensureConnected for lazy initialisation
     // This connects to Socket.IO and loads rooms only when needed
     await chatService.ensureConnected();
+
+    // Always fetch fresh rooms when entering the chat page
+    await chatService.getChatRooms();
   }
 
   void _navigateToChat(String roomId) {
@@ -134,15 +139,111 @@ class _ChatPageState extends State<ChatPage> {
                 _buildUsageInfoCard(theme, userType),
               ],
             )
-          : ChatRoomList(
-              rooms: chatService.rooms,
-              currentUserId: authService.currentUser?.uid ?? '',
-              isTraditionalChinese: widget.isTraditionalChinese,
-              onRoomTap: (room) => _navigateToChat(room.roomId),
-              onRefresh: _loadRooms,
-              isLoading: chatService.isLoading,
-            ),
+          : _buildChatListWithUsageInfo(chatService, authService, userType),
     );
+  }
+
+  /// Builds chat list with usage info positioned after rooms with spacing
+  Widget _buildChatListWithUsageInfo(ChatService chatService, AuthService authService, String userType) {
+    final theme = Theme.of(context);
+    
+    return RefreshIndicator(
+      onRefresh: _loadRooms,
+      child: CustomScrollView(
+        slivers: [
+          // Loading indicator if needed
+          if (chatService.isLoading)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+          
+          // Chat rooms list
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final room = chatService.rooms[index];
+                return _buildChatRoomTile(room, authService.currentUser?.uid ?? '');
+              },
+              childCount: chatService.rooms.length,
+            ),
+          ),
+          
+          // Spacing equivalent to ~2 chat room heights
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 160), // Approximate height of 2 chat room tiles
+          ),
+          
+          // Usage info card
+          SliverToBoxAdapter(
+            child: _buildUsageInfoCard(theme, userType),
+          ),
+          
+          // Bottom padding for comfortable scrolling
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 100),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds individual chat room tile (extracted from ChatRoomList logic)
+  Widget _buildChatRoomTile(dynamic room, String currentUserId) {
+    final theme = Theme.of(context);
+    
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: theme.colorScheme.primaryContainer,
+        child: Icon(
+          Icons.chat,
+          color: theme.colorScheme.onPrimaryContainer,
+        ),
+      ),
+      title: Text(
+        room.name ?? 'Chat Room',
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        room.lastMessage ?? 'No messages yet',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: room.lastMessageTime != null
+          ? Text(
+              _formatTime(room.lastMessageTime),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            )
+          : null,
+      onTap: () => _navigateToChat(room.roomId),
+    );
+  }
+
+  /// Formats timestamp for display
+  String _formatTime(DateTime? time) {
+    if (time == null) return '';
+    
+    final now = DateTime.now();
+    final difference = now.difference(time);
+    
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${difference.inDays}d ago';
+    }
   }
 
   /// Builds empty state with no conversations message
@@ -182,13 +283,15 @@ class _ChatPageState extends State<ChatPage> {
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: () {
-                  // Navigate based on user type
-                  if (isRestaurant) {
-                    // Restaurant owners go to store dashboard
-                    Navigator.of(context).pushNamed('/store');
-                  } else {
-                    // Diners go to search page
-                    Navigator.of(context).pushNamed('/search');
+                  // Navigate based on user type using the callback
+                  if (widget.onNavigate != null) {
+                    if (isRestaurant) {
+                      // Restaurant owners go to store dashboard (index 4)
+                      widget.onNavigate!(4);
+                    } else {
+                      // Diners go to search page (index 1)
+                      widget.onNavigate!(1);
+                    }
                   }
                 },
                 icon: Icon(isRestaurant ? Icons.store : Icons.search),
@@ -212,12 +315,12 @@ class _ChatPageState extends State<ChatPage> {
   String _getEmptyStateMessage(bool isRestaurant) {
     if (widget.isTraditionalChinese) {
       return isRestaurant
-          ? '您還沒有任何顧客對話。請確保您的餐廳資料已設定完成，顧客就可以通過餐廳頁面與您聯繫。'
-          : '您還沒有任何對話。瀏覽餐廳並使用聊天按鈕開始與餐廳老闆溝通。';
+          ? '你而家仲未有任何顧客對話。記得確保你嘅餐廳資料設定好晒，顧客先可以喺餐廳頁面搵到你聯絡。'
+          : '你而家仲未有任何對話。不如去瀏覽餐廳，用聊天按鈕開始同老闆傾偈啦。';
     } else {
       return isRestaurant
-          ? 'You don\'t have any customer conversations yet. Make sure your restaurant profile is set up so customers can reach you through your restaurant page.'
-          : 'You don\'t have any conversations yet. Browse restaurants and use the chat button to start communicating with restaurant owners.';
+          ? 'You don’t have any customer conversations yet. Ensure your restaurant profile is fully set up so customers can contact you through your restaurant page.'
+          : 'You don’t have any conversations yet. Browse restaurants and use the chat button to start communicating with restaurant owners.';
     }
   }
 
@@ -317,12 +420,12 @@ class _ChatPageState extends State<ChatPage> {
   String _getUsageFlowText(bool isDiner) {
     if (widget.isTraditionalChinese) {
       return isDiner
-          ? '您可以在每個餐廳頁面與餐廳老闆聊天。尋找浮動聊天按鈕，與餐廳直接溝通，詢問菜單、預訂或任何問題。'
-          : '您將在您的餐廳頁面收到來自顧客的查詢。當顧客有問題或想要預訂時，他們可以使用聊天功能與您聯繫。請及時回覆以提供最佳服務！';
+          ? '你喺每個餐廳頁面都可以同老闆傾偈。搵個浮動嘅聊天按鈕，直接同餐廳傾，問菜單、訂位或者任何問題都得。'
+          : '你嘅餐廳頁面會收到顧客嘅查詢。顧客有問題或者想訂位，就會用聊天功能搵你。記得快啲回覆，先至畀到最好嘅服務啦！';
     } else {
       return isDiner
-          ? 'You can chat with restaurant owners on each restaurant page. Look for the floating chat button to communicate directly with restaurants about menus, reservations, or any questions you may have.'
-          : 'You will receive customer queries on your restaurant page. When customers have questions or want to make reservations, they can reach you through the chat feature. Please respond promptly to provide the best service!';
+          ? 'You can chat with restaurant owners on each restaurant page. Look for the floating chat button to communicate directly with the restaurant about menus, reservations, or any questions you may have.'
+          : 'You will receive customer enquiries on your restaurant page. When customers have questions or wish to make a reservation, they can contact you via the chat feature. Please reply promptly to provide the best service!';
     }
   }
 }

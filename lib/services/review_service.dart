@@ -64,18 +64,22 @@ class ReviewService extends ChangeNotifier {
       final queryParams = <String, String>{};
       if (restaurantId != null) queryParams['restaurantId'] = restaurantId;
       if (userId != null) queryParams['userId'] = userId;
-      final uri = Uri.parse(AppConfig.getEndpoint('Reviews')).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+      final uri = Uri.parse(AppConfig.getEndpoint('API/Reviews')).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+      if (kDebugMode) print('ReviewService: Fetching reviews from $uri');
       final response = await http.get(uri, headers: _getHeaders());
+      if (kDebugMode) print('ReviewService: Response status ${response.statusCode}');
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body);
         final List<dynamic> reviewsData = jsonData['data'] ?? [];
         _reviews = reviewsData.map((json) => Review.fromJson(json as Map<String, dynamic>)).toList();
+        if (kDebugMode) print('ReviewService: Loaded ${_reviews.length} reviews');
         _setLoading(false);
         return _reviews;
       } else {
-        throw Exception('Failed to load reviews');
+        throw Exception('Failed to load reviews: ${response.statusCode}');
       }
     } catch (e) {
+      if (kDebugMode) print('ReviewService: Error loading reviews: $e');
       _setError(e.toString());
       _setLoading(false);
       return [];
@@ -84,7 +88,7 @@ class ReviewService extends ChangeNotifier {
 
   Future<Review?> getReview(String reviewId) async {
     try {
-      final response = await http.get(Uri.parse(AppConfig.getEndpoint('Reviews/$reviewId')), headers: _getHeaders());
+      final response = await http.get(Uri.parse(AppConfig.getEndpoint('API/Reviews/$reviewId')), headers: _getHeaders());
       if (response.statusCode == 200) return Review.fromJson(json.decode(response.body));
     } catch (e) {
       if (kDebugMode) print('ReviewService: Error - $e');
@@ -96,7 +100,7 @@ class ReviewService extends ChangeNotifier {
     _setLoading(true);
     _setError(null);
     try {
-      final response = await http.post(Uri.parse(AppConfig.getEndpoint('Reviews')), headers: await _getAuthHeaders(), body: json.encode(request.toJson()));
+      final response = await http.post(Uri.parse(AppConfig.getEndpoint('API/Reviews')), headers: await _getAuthHeaders(), body: json.encode(request.toJson()));
       if (response.statusCode == 201) {
         final jsonData = json.decode(response.body);
         final reviewId = jsonData['id'] as String;
@@ -116,7 +120,7 @@ class ReviewService extends ChangeNotifier {
     _setLoading(true);
     _setError(null);
     try {
-      final response = await http.put(Uri.parse(AppConfig.getEndpoint('Reviews/$reviewId')), headers: await _getAuthHeaders(), body: json.encode(request.toJson()));
+      final response = await http.put(Uri.parse(AppConfig.getEndpoint('API/Reviews/$reviewId')), headers: await _getAuthHeaders(), body: json.encode(request.toJson()));
       if (response.statusCode == 204 || response.statusCode == 200) {
         final index = _reviews.indexWhere((r) => r.id == reviewId);
         if (index != -1) {
@@ -139,7 +143,7 @@ class ReviewService extends ChangeNotifier {
     _setLoading(true);
     _setError(null);
     try {
-      final response = await http.delete(Uri.parse(AppConfig.getEndpoint('Reviews/$reviewId')), headers: await _getAuthHeaders());
+      final response = await http.delete(Uri.parse(AppConfig.getEndpoint('API/Reviews/$reviewId')), headers: await _getAuthHeaders());
       if (response.statusCode == 204 || response.statusCode == 200) {
         _reviews.removeWhere((r) => r.id == reviewId);
         _setLoading(false);
@@ -156,14 +160,18 @@ class ReviewService extends ChangeNotifier {
 
   Future<ReviewStats?> getReviewStats(String restaurantId) async {
     try {
-      final response = await http.get(Uri.parse(AppConfig.getEndpoint('Reviews/Restaurant/$restaurantId/stats')), headers: _getHeaders());
+      final uri = Uri.parse(AppConfig.getEndpoint('API/Reviews/Restaurant/$restaurantId/stats'));
+      if (kDebugMode) print('ReviewService: Fetching review stats from $uri');
+      final response = await http.get(uri, headers: _getHeaders());
+      if (kDebugMode) print('ReviewService: Stats response status ${response.statusCode}');
       if (response.statusCode == 200) {
         _currentStats = ReviewStats.fromJson(json.decode(response.body));
+        if (kDebugMode) print('ReviewService: Loaded stats - avg: ${_currentStats!.averageRating}, total: ${_currentStats!.totalReviews}');
         notifyListeners();
         return _currentStats;
       }
     } catch (e) {
-      if (kDebugMode) print('ReviewService: Error - $e');
+      if (kDebugMode) print('ReviewService: Error loading stats - $e');
     }
     return null;
   }

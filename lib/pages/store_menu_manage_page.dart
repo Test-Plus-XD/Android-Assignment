@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import '../services/menu_service.dart';
 import '../services/auth_service.dart';
+import '../services/image_service.dart';
 import '../models.dart';
 import '../config.dart';
 import '../widgets/menu/menu_item_dialog.dart';
@@ -43,7 +45,8 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
 
   void _loadMenuItems() {
     setState(() {
-      _menuItemsFuture = context.read<MenuService>().getMenuItems(widget.restaurantId);
+      // Always fetch fresh menu items (forceRefresh: true)
+      _menuItemsFuture = context.read<MenuService>().getMenuItems(widget.restaurantId, forceRefresh: true);
     });
   }
 
@@ -52,25 +55,74 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
   }
 
   Future<void> _bulkImportMenu() async {
+    // Show dialog to choose file source
+    final source = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.isTraditionalChinese ? '選擇文件來源' : 'Select File Source'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.image),
+              title: Text(widget.isTraditionalChinese ? '從相冊選擇圖片' : 'Select Image from Gallery'),
+              onTap: () => Navigator.of(context).pop('image'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: Text(widget.isTraditionalChinese ? '拍攝照片' : 'Take Photo'),
+              onTap: () => Navigator.of(context).pop('camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.file_present),
+              title: Text(widget.isTraditionalChinese ? '選擇文件(PDF/JSON/文本)' : 'Select File (PDF/JSON/Text)'),
+              onTap: () => Navigator.of(context).pop('file'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
     try {
-      // Pick a file (PDF, image, or text)
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'txt', 'json'],
-      );
+      List<int>? fileBytes;
+      String? fileName;
 
-      if (result == null || result.files.isEmpty) return;
-
-      final file = result.files.first;
-      if (file.bytes == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.isTraditionalChinese ? '無法讀取文件' : 'Could not read file'),
-            backgroundColor: Colors.red,
-          ),
+      if (source == 'image' || source == 'camera') {
+        // Use ImagePicker for images
+        final imageService = context.read<ImageService>();
+        final imageFile = await imageService.pickImage(
+          source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
         );
-        return;
+
+        if (imageFile == null) return;
+
+        fileBytes = await imageFile.readAsBytes();
+        fileName = imageFile.path.split('/').last;
+      } else {
+        // Use FilePicker for documents
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'txt', 'json'],
+        );
+
+        if (result == null || result.files.isEmpty) return;
+
+        final file = result.files.first;
+        if (file.bytes == null) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(widget.isTraditionalChinese ? '無法讀取文件' : 'Could not read file'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        fileBytes = file.bytes;
+        fileName = file.name;
       }
 
       setState(() => _isImporting = true);
@@ -116,8 +168,8 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
 
       request.files.add(http.MultipartFile.fromBytes(
         'file',
-        file.bytes!,
-        filename: file.name,
+        fileBytes!,
+        filename: fileName!,
       ));
 
       final streamedResponse = await request.send();
@@ -206,15 +258,17 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
 
       for (final item in menuItems) {
         try {
-          final payload = {
-            'Name_EN': item['Name_EN'],
-            'Name_TC': item['Name_TC'],
-            'Description_EN': item['Description_EN'],
-            'Description_TC': item['Description_TC'],
-            'price': item['price'],
-          };
+          final request = CreateMenuItemRequest(
+            nameEn: item['Name_EN'] ?? item['nameEn'],
+            nameTc: item['Name_TC'] ?? item['nameTc'],
+            descriptionEn: item['Description_EN'] ?? item['descriptionEn'],
+            descriptionTc: item['Description_TC'] ?? item['descriptionTc'],
+            price: item['price'] != null ? (item['price'] as num).toDouble() : null,
+            category: item['category'],
+            image: item['image'],
+          );
 
-          await menuService.createMenuItem(widget.restaurantId, payload);
+          await menuService.createMenuItem(widget.restaurantId, request);
           successCount++;
         } catch (e) {
           failCount++;
@@ -426,11 +480,11 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
                   margin: const EdgeInsets.only(bottom: 12.0),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(12.0),
-                    leading: item.imageUrl != null
+                    leading: item.image != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
-                              item.imageUrl!,
+                              item.image!,
                               width: 60,
                               height: 60,
                               fit: BoxFit.cover,

@@ -22,6 +22,12 @@ class UserService with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  /// Returns true if user needs to select their account type
+  /// This happens for newly registered users who haven't set their type yet
+  bool get needsAccountTypeSelection =>
+      _currentProfile != null &&
+      (_currentProfile!.type == null || _currentProfile!.type!.isEmpty);
+
   /// Update the AuthService dependency without recreating the service instance
   void updateAuth(AuthService authService) {
     if (_authService != authService) {
@@ -47,13 +53,21 @@ class UserService with ChangeNotifier {
 
         final profile = await getUserProfile(uid);
         if (profile == null && _authService.currentUser != null) {
+          // Wait a short delay to ensure Firebase has propagated displayName
+          // This handles the race condition where authStateChanges fires before displayName is set
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          // Re-fetch the current user to get updated displayName
+          final currentUser = _authService.currentUser;
+          if (currentUser == null) return;
+
           final newProfile = User(
             uid: uid,
-            email: _authService.currentUser!.email,
-            displayName: _authService.currentUser!.displayName,
-            photoURL: _authService.currentUser!.photoURL,
-            emailVerified: _authService.currentUser!.emailVerified,
-            phoneNumber: _authService.currentUser!.phoneNumber,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+            emailVerified: currentUser.emailVerified,
+            phoneNumber: currentUser.phoneNumber,
             createdAt: DateTime.now(),
           );
           await createUserProfile(newProfile);

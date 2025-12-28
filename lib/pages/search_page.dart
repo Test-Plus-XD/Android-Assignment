@@ -5,7 +5,7 @@ import '../services/restaurant_service.dart';
 import '../models.dart';
 import '../constants/districts.dart';
 import '../constants/keywords.dart';
-import '../widgets/search/restaurant_card.dart';
+import '../widgets/search/restaurant_search_card.dart';
 import '../widgets/search/search_filter_section.dart';
 
 /// Search Page with Infinite Scroll Pagination (Version 5)
@@ -552,7 +552,7 @@ class _SearchPageState extends State<SearchPage> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   builderDelegate: PagedChildBuilderDelegate<Restaurant>(
                     itemBuilder: (context, restaurant, index) {
-                      return RestaurantCard(
+                      return RestaurantSearchCard(
                         restaurant: restaurant,
                         isTraditionalChinese: widget.isTraditionalChinese,
                       );
