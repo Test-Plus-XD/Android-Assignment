@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/store_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
+import '../common/loading_indicator.dart';
 
 /// Claim Restaurant Button
 ///
@@ -173,7 +174,7 @@ class _ClaimRestaurantButtonState extends State<ClaimRestaurantButton> {
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: LoadingIndicator.extraSmall(),
                       )
                     : const Icon(Icons.verified),
                 label: Text(

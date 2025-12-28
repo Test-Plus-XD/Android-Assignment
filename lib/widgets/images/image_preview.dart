@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../common/loading_indicator.dart';
 
 /// Widget for previewing images (local file or network URL)
 /// Supports both File objects and URL strings
@@ -94,9 +95,7 @@ class ImagePreview extends StatelessWidget {
       width: width,
       height: height,
       color: Colors.grey[200],
-      child: const Center(
-        child: CircularProgressIndicator(),
-      ),
+      child: const CenteredLoadingIndicator(),
     );
   }
 

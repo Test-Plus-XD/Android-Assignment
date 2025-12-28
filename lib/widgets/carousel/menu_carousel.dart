@@ -8,6 +8,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 
 class MenuCarousel extends StatefulWidget {
   final List<MenuItem> menuItems;
@@ -116,9 +117,7 @@ class _MenuCarouselState extends State<MenuCarousel> {
               fit: BoxFit.cover,
               placeholder: (context, url) => Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const CenteredLoadingIndicator(),
               ),
               errorWidget: (context, url, error) => Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,

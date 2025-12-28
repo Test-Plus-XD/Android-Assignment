@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../common/loading_indicator.dart';
 
 class OfferItem {
   final String imageUrl;
@@ -131,9 +132,7 @@ class _OfferCarouselState extends State<OfferCarousel> {
                   placeholder: (context, url) => Container(
                     color: offer.backgroundColor ??
                         Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: const CenteredLoadingIndicator(),
                   ),
                   errorWidget: (context, url, error) => Container(
                     color: offer.backgroundColor ??

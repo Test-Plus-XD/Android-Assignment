@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models.dart';
 import '../reviews/star_rating.dart';
+import '../common/loading_indicator.dart';
 
 /// Reviews Carousel Section Widget
 ///
@@ -23,7 +24,7 @@ class ReviewsCarousel extends StatelessWidget {
       future: reviewsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(height: 150, child: Center(child: CircularProgressIndicator()));
+          return const SizedBox(height: 150, child: CenteredLoadingIndicator());
         }
         if (snapshot.hasError) {
           // Log error but don't show to user

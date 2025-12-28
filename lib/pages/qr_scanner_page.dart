@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../services/restaurant_service.dart';
 import '../models.dart';
+import '../widgets/common/loading_indicator.dart';
 import 'restaurant_menu_page.dart';
 
 /// QR Scanner Page
@@ -239,7 +240,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(color: Colors.white),
+                    const LoadingIndicator(color: Colors.white),
                     const SizedBox(height: 16),
                     Text(
                       widget.isTraditionalChinese

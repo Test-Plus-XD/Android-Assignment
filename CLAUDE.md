@@ -895,6 +895,28 @@ flutter build apk
   - Removed "My Bookings" title from bookings page AppBar
   - Removed "Store Dashboard" title from store page AppBar
 
+#### Phase 5 (2025-12-28) - Loading Indicator Standardization
+- **Created reusable loading indicator widget** (`lib/widgets/common/loading_indicator.dart`):
+  - `LoadingIndicator()` - Default size (60x60) using Eclipse.gif
+  - `LoadingIndicator.small()` - Small size (24x24) for compact spaces
+  - `LoadingIndicator.large()` - Large size (80x80) for full-screen loading
+  - `LoadingIndicator.extraSmall()` - Extra small (16x16) for buttons
+  - `CenteredLoadingIndicator()` - Convenience wrapper with Center widget
+  - Optional color overlay support for theming
+- **Replaced CircularProgressIndicator throughout app**:
+  - **Search components**: `restaurant_card.dart`, `restaurant_search_card.dart`
+  - **Navigation**: `app_root.dart` - main app loading states
+  - **Carousels**: `restaurant_carousel.dart`, `hero_carousel.dart`, `offer_carousel.dart`, `menu_carousel.dart`
+  - **Restaurant widgets**: `menu_preview_section.dart`, `reviews_carousel.dart`, `claim_restaurant_button.dart`
+  - **Pages**: `store_page.dart`, `qr_scanner_page.dart`
+  - **Images**: `image_preview.dart` - cached network image placeholders
+  - **Chat**: `chat_room_list.dart` - chat loading states
+- **Benefits**:
+  - Consistent loading animation across entire app using Eclipse.gif
+  - Better user experience with branded loading indicator
+  - Centralized loading widget for easy maintenance and updates
+  - Proper sizing variants for different UI contexts
+
 ---
 
 **Last Updated**: 2025-12-28

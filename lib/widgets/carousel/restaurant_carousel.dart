@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 
 class RestaurantCarousel extends StatelessWidget {
   final List<Restaurant> restaurants;
@@ -93,9 +94,7 @@ class RestaurantCarousel extends StatelessWidget {
               fit: BoxFit.cover,
               placeholder: (context, url) => Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const CenteredLoadingIndicator(),
               ),
               errorWidget: (context, url, error) => Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 
 /// Chat Room List Widget
 ///
@@ -31,7 +32,7 @@ class ChatRoomList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const CenteredLoadingIndicator();
     }
 
     if (rooms.isEmpty) {

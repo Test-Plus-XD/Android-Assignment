@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/menu_service.dart';
 import '../models.dart';
 import '../widgets/qr/menu_qr_generator.dart';
+import '../widgets/common/loading_indicator.dart';
 import 'store_info_edit_page.dart';
 import 'store_menu_manage_page.dart';
 import 'store_bookings_page.dart';
@@ -71,7 +72,7 @@ class _StoreDashboardPageState extends State<StorePage> {
 
     if (storeService.isLoading) {
       return Scaffold(
-        body: const Center(child: CircularProgressIndicator()),
+        body: const CenteredLoadingIndicator.large(),
       );
     }
 

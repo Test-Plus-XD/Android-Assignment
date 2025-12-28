@@ -114,9 +114,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       if (authService.uid != null) {
         await _ensureUserProfileViaApi(authService, userService);
 
-        /// Step 3: Navigate to account page
-        /// The main app will detect auth state change and show MainShell,
-        /// but we explicitly navigate to account tab
+        /// Step 3: Navigate back
+        /// The main app (MainShell) will detect auth state change
         if (mounted) {
           Navigator.of(context).pop();
         }
@@ -142,16 +141,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
 
     if (success && mounted) {
-      /// Show verification email message
-      _showSuccessDialog(
-        widget.isTraditionalChinese
-            ? '註冊成功！請檢查您的電子郵件以驗證您的帳戶。'
-            : 'Registration successful! Please check your email to verify your account.',
-      );
-
       /// Step 2: Create user profile via Vercel API
       if (authService.currentUser != null) {
         await _createUserProfileViaApi(authService, userService);
+
+        /// Step 3: Close login page and let MainShell handle account type selection
+        /// The main app (MainShell) will detect that user needs account type and show selector
+        /// After selector completes, user will be on account page
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
       }
     } else if (mounted) {
       _showErrorSnackBar(authService.errorMessage ?? 'Registration failed');
@@ -166,7 +165,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       /// Ensure user profile exists via Vercel API
       await _ensureUserProfileViaApi(authService, userService);
 
-      /// Navigate to account page
+      /// Navigate back
       if (mounted) {
         Navigator.of(context).pop();
       }

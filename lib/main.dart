@@ -20,8 +20,6 @@ import 'widgets/navigation/app_root.dart';
 import 'firebase_options.dart';
 import 'config.dart';
 
-/// Architecture:
-///
 /// This Flutter app follows a layered architecture:
 ///
 /// 1. Services Layer (Business Logic):

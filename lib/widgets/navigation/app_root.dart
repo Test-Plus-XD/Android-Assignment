@@ -5,6 +5,7 @@ import '../../config/theme.dart';
 import '../../services/auth_service.dart';
 import '../../pages/login_page.dart';
 import 'main_shell.dart';
+import '../common/loading_indicator.dart';
 
 /// App Root Widget
 ///
@@ -47,7 +48,7 @@ class _AppRootState extends State<AppRoot> {
     if (!appState.isLoaded) {
       return const MaterialApp(
         home: Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+          body: CenteredLoadingIndicator.large(),
         ),
       );
     }
@@ -74,7 +75,7 @@ class _AppRootState extends State<AppRoot> {
           // Show loading while checking authentication state
           if (authService.isLoading) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: CenteredLoadingIndicator.large(),
             );
           }
 

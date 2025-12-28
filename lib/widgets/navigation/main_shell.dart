@@ -370,8 +370,16 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
                       Navigator.of(context).pop();
                       setState(() {
                         _showingAccountTypeSelector = false;
+                        _currentIndex = 3; // Redirect to Account page (index 3)
                         // Reset page cache to rebuild with new user type
                         _cachedPages = null;
+                      });
+                      
+                      // Jump to the account page after the pop and state update
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (_pageController.hasClients) {
+                          _pageController.jumpToPage(3);
+                        }
                       });
                     },
                   ),

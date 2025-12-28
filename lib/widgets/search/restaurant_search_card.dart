@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models.dart';
 import '../../pages/restaurant_detail_page.dart';
+import '../common/loading_indicator.dart';
 
 /// Restaurant Search Card Widget
 ///
@@ -99,9 +100,7 @@ class RestaurantSearchCard extends StatelessWidget {
       fit: BoxFit.cover,
       placeholder: (context, url) => Container(
         color: Colors.grey.shade300,
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: const CenteredLoadingIndicator(),
       ),
       errorWidget: (context, url, error) => Container(
         color: Colors.grey.shade300,

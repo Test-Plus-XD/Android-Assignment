@@ -50,7 +50,7 @@ class _AccountTypeSelectorDialogState extends State<AccountTypeSelectorDialog> {
 
                 // Title
                 Text(
-                  isTC ? '歡迎加入 PourRice!' : 'Welcome to PourRice!',
+                  isTC ? '歡迎加入倒米!' : 'Welcome to PourRice!',
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
