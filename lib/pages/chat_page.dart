@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 import '../services/user_service.dart';
-import '../widgets/chat/chat_room_list.dart';
 import 'chat_room_page.dart';
 
 // Note: ChatService uses lazy initialisation via ensureConnected()
@@ -203,7 +202,7 @@ class _ChatPageState extends State<ChatPage> {
         ),
       ),
       title: Text(
-        room.name ?? 'Chat Room',
+        room.roomName ?? 'Chat Room',
         style: theme.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
         ),
@@ -216,9 +215,9 @@ class _ChatPageState extends State<ChatPage> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: room.lastMessageTime != null
+      trailing: room.lastMessageAt != null
           ? Text(
-              _formatTime(room.lastMessageTime),
+              _formatTime(room.lastMessageAt),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

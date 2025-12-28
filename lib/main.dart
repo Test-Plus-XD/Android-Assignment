@@ -115,10 +115,10 @@ void main() async {
 }
 
 /// Root App Widget
-///
+//
 /// This widget sets up the Provider architecture and initializes services.
 /// Think of it as the "root module" in Angular.
-///
+//
 /// Provider Dependency Graph:
 /// - AppState: Global UI preferences (independent)
 /// - NotificationService: Pre-initialised (independent)

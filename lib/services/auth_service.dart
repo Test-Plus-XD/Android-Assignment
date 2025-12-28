@@ -14,69 +14,58 @@ import 'package:flutter/foundation.dart';
 /// whenever the authentication state changes.
 class AuthService with ChangeNotifier {
   // --- Private Instances ---
-
-  /// The Firebase Auth instance used for backend communication with Firebase.
+  // The Firebase Auth instance used for backend communication with Firebase.
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-
-  /// The Google Sign-In instance.
-  /// Note: From version 7.0.0 onwards, this is a singleton accessed via [GoogleSignIn.instance].
-  /// It requires an explicit [initialize] call before any sign-in attempts.
+  // The Google Sign-In instance.
+  // Note: From version 7.0.0 onwards, this is a singleton accessed via [GoogleSignIn.instance].
+  // It requires an explicit [initialize] call before any sign-in attempts.
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   // --- State Variables ---
-
-  /// The currently authenticated [User] from Firebase.
-  /// This is null if the user is signed out or if the app is still determining auth state.
+  // The currently authenticated [User] from Firebase.
+  // This is null if the user is signed out or if the app is still determining auth state.
   User? _currentUser;
-
-  /// A boolean flag used to show/hide loading spinners in the UI.
+  // A boolean flag used to show/hide loading spinners in the UI.
   bool _isLoading = false;
-
-  /// Holds the last error message encountered. This can be used to display
-  /// SnackBars or Alert dialogs to the user.
+  // Holds the last error message encountered. This can be used to display
+  // SnackBars or Alert dialogs to the user.
   String? _errorMessage;
 
   // --- Getters ---
-  
-  /// Returns the current [User] object.
+  // Returns the current [User] object.
   User? get currentUser => _currentUser;
-  
-  /// Returns [true] if a session exists, [false] otherwise.
+  // Returns [true] if a session exists, [false] otherwise.
   bool get isLoggedIn => _currentUser != null;
-  
-  /// Returns the current loading status.
+  // Returns the current loading status.
   bool get isLoading => _isLoading;
-  
-  /// Returns the descriptive error message if an operation failed.
+  // Returns the descriptive error message if an operation failed.
   String? get errorMessage => _errorMessage;
-  
-  /// Returns the unique ID (UID) of the user, used as a key in databases like Firestore.
+  // Returns the unique ID (UID) of the user, used as a key in databases like Firestore.
   String? get uid => _currentUser?.uid;
-
-  /// Returns the Firebase ID Token for the current user.
-  /// This token is often required for making authorized calls to custom backend APIs.
-  /// Used by: booking_service, user_service, review_service.
+  // Returns the Firebase ID Token for the current user.
+  // This token is often required for making authorized calls to custom backend APIs.
+  // Used by: booking_service, user_service, review_service.
   Future<String?> get idToken async => await _currentUser?.getIdToken();
 
-  /// Returns the Firebase ID Token for the current user, optionally forcing a refresh.
-  /// A force refresh is useful if the user's permissions or custom claims have changed.
-  /// Used by: chat_service, docupipe_service, menu_service, store_service.
+  // Returns the Firebase ID Token for the current user, optionally forcing a refresh.
+  // A force refresh is useful if the user's permissions or custom claims have changed.
+  // Used by: chat_service, docupipe_service, menu_service, store_service.
   Future<String?> getIdToken({bool forceRefresh = false}) async {
     return await _currentUser?.getIdToken(forceRefresh);
   }
 
-  /// Constructor: Bootstraps the service.
-  /// 1. Connects to Firebase's auth state listener.
-  /// 2. Initialises Google Sign-In settings.
+  // Constructor: Bootstraps the service.
+  // 1. Connects to Firebase's auth state listener.
+  // 2. Initialises Google Sign-In settings.
   AuthService() {
     _initialiseAuthStateListener();
     _initializeGoogleSignIn();
   }
 
-  /// Initialises Google Sign-In with the required configuration.
-  /// 
-  /// In version 7.x, the [serverClientId] must be provided here to allow
-  /// Firebase to exchange the resulting authorization for a Firebase Credential.
+  // Initialises Google Sign-In with the required configuration.
+  // 
+  // In version 7.x, the [serverClientId] must be provided here to allow
+  // Firebase to exchange the resulting authorization for a Firebase Credential.
   Future<void> _initializeGoogleSignIn() async {
     try {
       await _googleSignIn.initialize(
@@ -88,11 +77,11 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Establishes a permanent stream listener for Firebase Auth.
-  ///
-  /// Every time a user signs in, logs out, or their token expires, Firebase
-  /// broadcasts an event. We catch it here to update [_currentUser] and
-  /// trigger UI updates via [notifyListeners].
+  // Establishes a permanent stream listener for Firebase Auth.
+  //
+  // Every time a user signs in, logs out, or their token expires, Firebase
+  // broadcasts an event. We catch it here to update [_currentUser] and
+  // trigger UI updates via [notifyListeners].
   void _initialiseAuthStateListener() {
     _firebaseAuth.authStateChanges().listen((User? user) {
       _currentUser = user;
@@ -109,17 +98,17 @@ class AuthService with ChangeNotifier {
     });
   }
 
-  /// Signs in the user using the Google OAuth 2.0 flow.
-  /// 
-  /// THE FULL FLOW (v7.x):
-  /// 1. [Sign Out]: Clear any existing Google session to ensure account picker appears.
-  /// 2. [Authenticate]: Launch the native Google Account Picker via [_googleSignIn.authenticate()].
-  /// 3. [ID Token]: Extract the 'idToken' from the resulting [googleUser.authentication].
-  /// 4. [Access Token]: Request an OAuth 'accessToken' via [googleUser.authorizationClient.authorizeScopes].
-  /// 5. [Credential]: Combine tokens into an [OAuthCredential] for Firebase.
-  /// 6. [Firebase Sign In]: Hand over the credential to Firebase Auth to complete the bridge.
-  /// 
-  /// Returns [true] if the user successfully signed in.
+  // Signs in the user using the Google OAuth 2.0 flow.
+  // 
+  // THE FULL FLOW (v7.x):
+  // 1. [Sign Out]: Clear any existing Google session to ensure account picker appears.
+  // 2. [Authenticate]: Launch the native Google Account Picker via [_googleSignIn.authenticate()].
+  // 3. [ID Token]: Extract the 'idToken' from the resulting [googleUser.authentication].
+  // 4. [Access Token]: Request an OAuth 'accessToken' via [googleUser.authorizationClient.authorizeScopes].
+  // 5. [Credential]: Combine tokens into an [OAuthCredential] for Firebase.
+  // 6. [Firebase Sign In]: Hand over the credential to Firebase Auth to complete the bridge.
+  // 
+  // Returns [true] if the user successfully signed in.
   Future<bool> signInWithGoogle() async {
     try {
       _setLoading(true);
@@ -175,11 +164,11 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Creates a new user account using Email and Password.
-  /// 
-  /// - Sends a verification email automatically.
-  /// - Updates the [displayName] if provided.
-  /// - Triggers a [reload] to ensure the local user object has the updated name.
+  // Creates a new user account using Email and Password.
+  // 
+  // - Sends a verification email automatically.
+  // - Updates the [displayName] if provided.
+  // - Triggers a [reload] to ensure the local user object has the updated name.
   Future<bool> registerWithEmail({
     required String email, 
     required String password, 
@@ -214,7 +203,7 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Standard Email/Password Login.
+  // Standard Email/Password Login.
   Future<bool> loginWithEmail({required String email, required String password}) async {
     try {
       _setLoading(true);
@@ -232,9 +221,9 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Fully terminates the session.
-  /// 
-  /// Clears both the Google Sign-In instance cache and the Firebase Auth session.
+  // Fully terminates the session.
+  // 
+  // Clears both the Google Sign-In instance cache and the Firebase Auth session.
   Future<void> logout() async {
     try {
       _setLoading(true);
@@ -252,9 +241,9 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Triggers Firebase's built-in password reset flow.
-  /// 
-  /// User will receive an email from Firebase with a link to reset their password.
+  // Triggers Firebase's built-in password reset flow.
+  // 
+  // User will receive an email from Firebase with a link to reset their password.
   Future<bool> sendPasswordResetEmail(String email) async {
     try {
       _setLoading(true);
@@ -272,7 +261,7 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Updates the metadata (Name/Photo) for the currently logged-in user.
+  // Updates the metadata (Name/Photo) for the currently logged-in user.
   Future<bool> updateProfile({String? displayName, String? photoURL}) async {
     if (_currentUser == null) return false;
     try {
@@ -296,20 +285,20 @@ class AuthService with ChangeNotifier {
 
   // --- Helper Methods ---
 
-  /// Internal handler to translate Firebase error codes into readable messages.
+  // Internal handler to translate Firebase error codes into readable messages.
   void _handleAuthError(FirebaseAuthException error) {
     _errorMessage = error.message ?? 'An unexpected authentication error occurred.';
     _setLoading(false);
     notifyListeners();
   }
 
-  /// Centralised method to update the loading state.
+  // Centralised method to update the loading state.
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
   }
 
-  /// Manual error clearing for use when navigating away from login/signup screens.
+  // Manual error clearing for use when navigating away from login/signup screens.
   void clearError() {
     _errorMessage = null;
     notifyListeners();

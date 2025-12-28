@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models.dart' show User;
@@ -145,11 +146,19 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       if (authService.currentUser != null) {
         await _createUserProfileViaApi(authService, userService);
 
+        if (kDebugMode) {
+          print('[LoginPage] Profile created, current profile: ${userService.currentProfile?.toJson()}');
+          print('[LoginPage] needsAccountTypeSelection: ${userService.needsAccountTypeSelection}');
+        }
+
         /// Step 3: Close login page and let MainShell handle account type selection
         /// The main app (MainShell) will detect that user needs account type and show selector
         /// After selector completes, user will be on account page
         if (mounted) {
           Navigator.of(context).pop();
+          if (kDebugMode) {
+            print('[LoginPage] Login page closed');
+          }
         }
       }
     } else if (mounted) {

@@ -30,6 +30,9 @@ class ChatRoom {
     this.recentMessages,
   });
 
+  // Backward compatibility getter - alias for roomName
+  String? get name => roomName;
+
   // Factory constructor for parsing JSON from the API
   // Handles nullable fields gracefully to prevent type cast errors
   factory ChatRoom.fromJson(Map<String, dynamic> json) {

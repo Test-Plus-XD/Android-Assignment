@@ -199,12 +199,22 @@ class MenuService extends ChangeNotifier {
         body: json.encode(request.toJson()),
       );
 
-      if (response.statusCode == 200) {
+      // API returns 200 or 204 on successful update
+      if (response.statusCode == 200 || response.statusCode == 204) {
         // Refresh the cache for this restaurant
         await getMenuItems(restaurantId, forceRefresh: true);
       } else {
-        final errorData = json.decode(response.body);
-        throw Exception(errorData['error'] ?? 'Failed to update menu item');
+        // Only try to parse error response if body is not empty
+        String errorMessage = 'Failed to update menu item';
+        if (response.body.isNotEmpty) {
+          try {
+            final errorData = json.decode(response.body);
+            errorMessage = errorData['error'] ?? errorMessage;
+          } catch (e) {
+            // If parsing fails, use default error message
+          }
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       _errorStates[restaurantId] = e.toString();

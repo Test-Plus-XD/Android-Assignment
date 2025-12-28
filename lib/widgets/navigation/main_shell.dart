@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
@@ -75,6 +76,12 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   // Track if we're showing the account type selector for new users
   bool _showingAccountTypeSelector = false;
+
+  // Track if we need to navigate to account page after account type selection
+  bool _shouldNavigateToAccountPage = false;
+
+  // Track if we just closed any modal pages before showing account type selector
+  bool _hasClosedModals = false;
 
   @override
   void initState() {
@@ -357,36 +364,77 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
             userService.needsAccountTypeSelection &&
             !_showingAccountTypeSelector &&
             !userService.isLoading) {
+          if (kDebugMode) {
+            print('[MainShell] Detected user needs account type selection');
+            print('[MainShell] Current profile: ${userService.currentProfile?.toJson()}');
+          }
+
           // Use post frame callback to avoid setState during build
+          // Add a delay to ensure any modal pages (like login) have fully closed
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && !_showingAccountTypeSelector) {
-              setState(() => _showingAccountTypeSelector = true);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  fullscreenDialog: true,
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (mounted && !_showingAccountTypeSelector && userService.needsAccountTypeSelection) {
+                setState(() => _showingAccountTypeSelector = true);
+
+                if (kDebugMode) {
+                  print('[MainShell] Showing account type selector dialog');
+                }
+
+                // Show account type selector dialog
+                showDialog<void>(
+                  context: context,
+                  barrierDismissible: false,
                   builder: (context) => AccountTypeSelectorDialog(
                     isTraditionalChinese: widget.isTraditionalChinese,
                     onComplete: () {
+                      if (kDebugMode) {
+                        print('[MainShell] Account type selection completed');
+                      }
+
+                      // Close the dialog
                       Navigator.of(context).pop();
+
+                      // Reset state and navigate to account page
                       setState(() {
                         _showingAccountTypeSelector = false;
-                        _currentIndex = 3; // Redirect to Account page (index 3)
+                        _shouldNavigateToAccountPage = true;
+                        _hasClosedModals = false;
                         // Reset page cache to rebuild with new user type
                         _cachedPages = null;
                       });
-                      
-                      // Jump to the account page after the pop and state update
+
+                      // Navigate to account page after state updates
                       WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (_pageController.hasClients) {
-                          _pageController.jumpToPage(3);
+                        if (mounted && _shouldNavigateToAccountPage) {
+                          setState(() {
+                            _currentIndex = 3; // Account page for logged in users
+                            _shouldNavigateToAccountPage = false;
+                          });
+
+                          if (_pageController.hasClients) {
+                            _pageController.jumpToPage(3);
+                          }
                         }
                       });
                     },
                   ),
-                ),
-              );
-            }
+                );
+              }
+            });
           });
+        }
+
+        // Reset account type selector flag when user logs out or type changes
+        if (_lastLoginState != null && _lastLoginState != isLoggedIn && !isLoggedIn) {
+          // User logged out, reset flags
+          _showingAccountTypeSelector = false;
+          _shouldNavigateToAccountPage = false;
+          _hasClosedModals = false;
+        }
+
+        // Also reset the flag if the user now has an account type (selection completed)
+        if (_lastUserType != userType && userType != null && userType.isNotEmpty) {
+          _showingAccountTypeSelector = false;
         }
 
         // Only rebuild pages if login state, user type, or language changed
@@ -403,7 +451,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           if (!_initialIndexSet || _lastLoginState != isLoggedIn) {
             _currentIndex = isLoggedIn ? 2 : 1; // Home page for both, different indices
             _initialIndexSet = true;
-            
+
             // Jump to Home page without animation on initial load
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (_pageController.hasClients) {
@@ -411,7 +459,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
               }
             });
           }
-          
+
           // Reset index if pages changed and current index is out of bounds
           else if (_currentIndex >= _cachedPages!.length) {
             _currentIndex = isLoggedIn ? 2 : 1;
