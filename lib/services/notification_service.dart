@@ -211,8 +211,62 @@ class NotificationService with ChangeNotifier {
       notifyListeners();
       return _notificationsEnabled;
     }
-
     return false;
+  }
+
+  /// Immediately show a notification right now (useful for foreground FCM messages)
+  ///
+  /// This schedules a notification to display immediately using the 'general' channel.
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      if (!_isInitialised) {
+        throw Exception(
+            'NotificationService not initialised. Call initialise() first.');
+      }
+
+      // Use the general channel for immediate, in-app messages
+      const androidDetails = AndroidNotificationDetails(
+        'general', // Must match channel ID we created
+        'General Notifications', // Channel name
+        channelDescription: 'General app notifications and updates',
+        importance: Importance.high,
+        priority: Priority.high,
+        ticker: 'Immediate Notification',
+      );
+
+      const notificationDetails = NotificationDetails(
+        android: androidDetails,
+      );
+
+      // Schedule the notification for the current time plus 1 second
+      // This ensures it shows immediately upon receiving the foreground message.
+      final scheduledDate = tz.TZDateTime.now(tz.local).add(
+          const Duration(seconds: 1));
+
+      await _notificationsPlugin.zonedSchedule(
+        id, // Unique ID for this notification
+        title, // Notification title
+        body, // Notification body
+        scheduledDate, // When to show it (approx. 1 second from now)
+        notificationDetails, // How to show it
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+
+      if (kDebugMode) {
+        print(
+            'NotificationService: Immediately showed notification ID $id at $scheduledDate');
+      }
+    } catch (e) {
+      _errorMessage = 'Failed to show immediate notification: $e';
+      notifyListeners();
+
+      if (kDebugMode) print('NotificationService: Error showing immediate notification - $e');
+      rethrow;
+    }
   }
 
   /// Schedule a booking reminder notification

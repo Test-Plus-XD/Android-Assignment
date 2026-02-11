@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'config/app_state.dart';
@@ -52,6 +53,25 @@ import 'config.dart';
 /// - Automatically handles widget rebuilding
 /// - Similar mental model to Angular's dependency injection
 
+// Background message handler for FCM
+// This must be a top-level function (not a class method)
+// It must be annotated with @pragma('vm:entry-point')
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // If you're going to use other Firebase services in the background, such as Firestore,
+  // make sure you call `initializeApp` before using other Firebase services.
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  if (kDebugMode) {
+    print("Handling a background message: ${message.messageId}");
+    print('Message data: ${message.data}');
+    print('Message notification: ${message.notification?.title}');
+    print('Message notification: ${message.notification?.body}');
+  }
+}
+
 /// Main Entry Point
 ///
 /// Initialisation order matters:
@@ -93,17 +113,52 @@ void main() async {
     // In production, show an error screen here
   }
 
-  // Initialise NotificationService with error handling
-  // This sets up notification channels and timezone data
-  // We do it here once, before the app starts, so notifications work immediately
+  // Set the background messaging handler early on, right after Firebase init
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Get FCM token and handle foreground messages
   final notificationService = NotificationService();
   try {
+    // Request permission for notifications (iOS only, but harmless on Android)
+    await FirebaseMessaging.instance.requestPermission();
+
+    // Get FCM token and print it for testing
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    if (kDebugMode) {
+      print('FCM Token: $fcmToken');
+    }
+
+    // Set up foreground message handler
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (kDebugMode) {
+        print('Got a message whilst in the foreground!');
+        print('Message data: ${message.data}');
+        if (message.notification != null) {
+          print('Message also contained a notification: ${message.notification}');
+        }
+      }
+
+      // Check if the message contains a notification payload
+      final notification = message.notification;
+      if (notification != null) {
+        // Use the new method to display it immediately
+        notificationService.showNotification(
+          id: notification.hashCode, // Use a unique ID (hash code is usually fine for quick testing)
+          title: notification.title ?? 'Foreground FCM Received',
+          body: notification.body ?? 'Check the app logs for details.',
+        );
+      }
+    });
+
+    // Initialise NotificationService with error handling
+    // This sets up notification channels and timezone data
     await notificationService.initialise();
     print('Notification service initialised successfully');
   } catch (e) {
-    print('Notification service Initialization error: $e');
+    print('FCM/Notification setup error: $e');
     // App can still run without notifications, so we continue
   }
+
 
   // Initialise timeago locales for bilingual support
   // Set up Traditional Chinese locale for time formatting

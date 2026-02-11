@@ -6,7 +6,11 @@
       "Bash(flutter analyze:*)",
       "Bash(flutter build:*)",
       "Bash(wc:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(unzip:*)",
+      "Bash(where:*)"
     ],
     "deny": [],
     "ask": []
