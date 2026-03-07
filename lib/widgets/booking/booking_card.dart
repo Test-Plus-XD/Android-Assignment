@@ -5,7 +5,9 @@ import '../../models.dart';
 /// Booking Card Widget
 ///
 /// Displays a single booking with status, restaurant info, date/time, and actions.
-/// Used in booking history list.
+/// Used in the diner's booking history list.
+///
+/// Status values: pending / accepted / declined / completed / cancelled
 class BookingCard extends StatelessWidget {
   final Booking booking;
   final bool isTraditionalChinese;
@@ -25,14 +27,16 @@ class BookingCard extends StatelessWidget {
   Color _getStatusColor(BuildContext context, String status) {
     final theme = Theme.of(context);
     switch (status.toLowerCase()) {
-      case 'confirmed':
+      case 'accepted':
         return theme.colorScheme.primary;
       case 'pending':
         return Colors.orange;
       case 'completed':
         return Colors.green;
-      case 'cancelled':
+      case 'declined':
         return Colors.red;
+      case 'cancelled':
+        return Colors.red.shade300;
       default:
         return theme.colorScheme.onSurfaceVariant;
     }
@@ -44,8 +48,10 @@ class BookingCard extends StatelessWidget {
     switch (status.toLowerCase()) {
       case 'pending':
         return '待確認';
-      case 'confirmed':
-        return '已確認';
+      case 'accepted':
+        return '已接受';
+      case 'declined':
+        return '已拒絕';
       case 'completed':
         return '已完成';
       case 'cancelled':
@@ -55,29 +61,13 @@ class BookingCard extends StatelessWidget {
     }
   }
 
-  String _getPaymentStatusLabel(String paymentStatus) {
-    if (!isTraditionalChinese) return paymentStatus.toUpperCase();
-
-    switch (paymentStatus.toLowerCase()) {
-      case 'unpaid':
-        return '未付款';
-      case 'paid':
-        return '已付款';
-      case 'refunded':
-        return '已退款';
-      default:
-        return paymentStatus;
-    }
-  }
-
   bool _isPastBooking() {
     return booking.dateTime.isBefore(DateTime.now());
   }
 
+  // Only pending bookings that haven't passed can be cancelled by the diner
   bool _canCancel() {
-    return (booking.status.toLowerCase() == 'pending' ||
-            booking.status.toLowerCase() == 'confirmed') &&
-           !_isPastBooking();
+    return booking.status.toLowerCase() == 'pending' && !_isPastBooking();
   }
 
   @override
@@ -98,7 +88,7 @@ class BookingCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Status and Payment Row
+              // Status Row
               Row(
                 children: [
                   // Status Badge
@@ -118,37 +108,6 @@ class BookingCard extends StatelessWidget {
                         color: _getStatusColor(context, booking.status),
                         fontWeight: FontWeight.bold,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Payment Status Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          booking.paymentStatus.toLowerCase() == 'paid'
-                              ? Icons.check_circle
-                              : Icons.payment,
-                          size: 14,
-                          color: booking.paymentStatus.toLowerCase() == 'paid'
-                              ? Colors.green
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _getPaymentStatusLabel(booking.paymentStatus),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                   const Spacer(),
@@ -246,6 +205,53 @@ class BookingCard extends StatelessWidget {
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Decline Message — shown when restaurant owner declines with a reason
+              if (booking.status.toLowerCase() == 'declined' &&
+                  booking.declineMessage != null &&
+                  booking.declineMessage!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.red.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isTraditionalChinese ? '拒絕原因：' : 'Decline reason:',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: Colors.red.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              booking.declineMessage!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.red.shade700,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

@@ -27,3 +27,4 @@ export 'models/gemini.dart';
 export 'models/docupipe.dart';
 export 'models/search.dart';
 export 'models/image.dart';
+export 'models/advertisement.dart';

@@ -768,11 +768,11 @@ _socket!.emit('my-event', {
 
 **Bookings Management** (`store_bookings_page.dart`):
 - View all restaurant bookings
-- Filter by status: all, pending, confirmed, completed, cancelled
+- Filter by status: all, pending, accepted, completed, declined, cancelled
 - Statistics cards showing today's bookings, pending count, and total bookings
-- Action buttons for pending bookings: Confirm or Reject
-- Mark confirmed bookings as completed
-- Display booking details: customer name, date/time, party size, special requests
+- Action buttons for pending bookings: Accept or Decline (with optional decline reason)
+- Mark accepted bookings as completed
+- Display booking details: diner name/email/phone, date/time, party size, special requests, decline reason
 - Pull-to-refresh support
 
 ### Using QR Code Features
@@ -834,19 +834,19 @@ flutter build apk
 
 ## Project Statistics
 
-- **Total Dart Files**: 100
-- **Lines of Code**: 21,031 (non-empty, non-comment lines, excluding generated files)
+- **Total Dart Files**: 102
+- **Lines of Code**: ~21,800 (estimated, excluding generated files)
   - Main files: 227 lines
   - Config: 145 lines
   - Constants: 409 lines
-  - Models: 1,270 lines
-  - Services: 3,300 lines
-  - Pages: 7,000 lines (refactored for maintainability)
-  - Widgets: 7,950 lines (50 components across 12 subdirectories)
-- **Pages**: 16 UI screens
-- **Services**: 14 business logic services
+  - Models: ~1,400 lines
+  - Services: ~3,600 lines
+  - Pages: ~7,600 lines
+  - Widgets: ~7,950 lines (50 components across 12 subdirectories)
+- **Pages**: 17 UI screens
+- **Services**: 15 business logic services
 - **Widgets**: 50 reusable components (across 12 subdirectories)
-- **Models**: 10 domain models
+- **Models**: 12 domain models
 - **Constants**: 4 static data files
 - **Languages**: English + Traditional Chinese (full bilingual)
 - **Platforms**: Android (primary), Web/iOS (configured)
@@ -917,8 +917,53 @@ flutter build apk
   - Centralized loading widget for easy maintenance and updates
   - Proper sizing variants for different UI contexts
 
+#### Phase 6 (2026-03-07) - Advertisements + Booking Overhaul
+
+**Booking API Overhaul** (sync with backend changes):
+- **Booking model updated** (`booking.dart`):
+  - Status `confirmed` replaced by `accepted` throughout the app
+  - New `declined` status with `declineMessage` field for restaurant decline reasons
+  - Removed `paymentStatus`/`paymentIntentId`/`paymentAmount` fields (payment handled externally)
+  - Enriched `diner` object (`BookingDiner`: `displayName`, `email`, `phoneNumber`) replaces `userName`
+- **BookingService updated** (`booking_service.dart`):
+  - `confirmBooking()` renamed to `acceptBooking()`
+  - `rejectBooking()` renamed to `declineBooking()` with optional `message` parameter
+- **BookingCard widget updated** (`booking_card.dart`):
+  - Removed payment status badge
+  - Added decline reason display (red-tinted container)
+  - Updated status colours: `accepted` → primary blue, `declined` → red, `cancelled` → red.shade300
+  - Cancel button only shown for `pending` status (not `accepted`)
+- **StoreBookingsPage updated** (`store_bookings_page.dart`):
+  - Filter chips: `accepted`/`declined` replace `confirmed`
+  - Accept/Decline action buttons for pending bookings; decline shows text field for optional reason
+  - "Mark Complete" only for `accepted` bookings
+  - Shows diner `displayName`, `email`, `phoneNumber` from enriched `diner` object
+  - Shows `declineMessage` when booking is declined
+
+**Advertisements Feature** (new):
+- **Advertisement model** (`models/advertisement.dart`): bilingual fields (`Title_EN`/`Title_TC`, `Content_EN`/`Content_TC`, `Image_EN`/`Image_TC`), `status`, `restaurantId`
+- **AdvertisementService** (`services/advertisement_service.dart`):
+  - Full CRUD: `getAdvertisements()`, `createAdvertisement()`, `updateAdvertisement()`, `deleteAdvertisement()`, `toggleAdvertisementStatus()`
+  - Stripe checkout: `createAdCheckoutSession()` opens Chrome Custom Tab; `checkPendingSession()` / `clearPendingSession()` for 2-hour session persistence via SharedPreferences
+- **StoreAdFormPage** (`pages/store_ad_form_page.dart`):
+  - Create/edit advertisement form with bilingual title+content fields and EN/TC image pickers
+  - Language fallback: copies from filled language if the other is empty before submit
+  - Firebase Storage image upload via `ImageService`
+- **StorePage updated** (`pages/store_page.dart`):
+  - Two-tab layout: Dashboard (existing content) + Advertisements (new tab with `Icons.campaign`)
+  - Advertisements tab: lists ads with toggle/delete; FAB launches Stripe checkout; on return detects pending session and opens `StoreAdFormPage`
+  - Booking stat fixed: fetches real booking count from `BookingService.getRestaurantBookings()` instead of hardcoded `'0'`
+- **HomePage updated** (`pages/home_page.dart`):
+  - "Featured Offers" section added between nearby and featured restaurants
+  - Fetches active ads via `AdvertisementService.getAdvertisements()`
+  - Maps `Advertisement` → `OfferItem` with language-aware fields
+  - Tapping an offer navigates to the restaurant detail page
+  - Section hidden when no active ads are available
+- **models.dart**: Added `export 'models/advertisement.dart'`
+- **main.dart**: Registered `AdvertisementService` as `ChangeNotifierProxyProvider<AuthService, AdvertisementService>`
+
 ---
 
-**Last Updated**: 2025-12-28
+**Last Updated**: 2026-03-07
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

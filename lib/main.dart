@@ -17,6 +17,7 @@ import 'services/image_service.dart';
 import 'services/chat_service.dart';
 import 'services/gemini_service.dart';
 import 'services/store_service.dart';
+import 'services/advertisement_service.dart';
 import 'widgets/navigation/app_root.dart';
 import 'firebase_options.dart';
 import 'config.dart';
@@ -307,6 +308,15 @@ class PourRiceApp extends StatelessWidget {
           ),
           update: (context, authService, previous) =>
               previous ?? StoreService(authService),
+        ),
+
+        // AdvertisementService - ad CRUD and Stripe checkout (needs AuthService)
+        ChangeNotifierProxyProvider<AuthService, AdvertisementService>(
+          create: (context) => AdvertisementService(
+            context.read<AuthService>(),
+          ),
+          update: (context, authService, previous) =>
+              previous ?? AdvertisementService(authService),
         ),
       ],
       child: const AppRoot(),

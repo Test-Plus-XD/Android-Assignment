@@ -7,10 +7,11 @@ import '../models.dart';
 /// Store Bookings Management Page
 ///
 /// Allows restaurant owners to manage bookings:
-/// - View all bookings
-/// - Filter by status (pending, confirmed, completed, cancelled)
-/// - Confirm or reject pending bookings
-/// - Mark confirmed bookings as completed
+/// - View all bookings with enriched diner contact info
+/// - Filter by status (all, pending, accepted, declined, completed, cancelled)
+/// - Accept pending bookings
+/// - Decline pending bookings with an optional message
+/// - Mark accepted bookings as completed
 class StoreBookingsPage extends StatefulWidget {
   final String restaurantId;
   final bool isTraditionalChinese;
@@ -27,16 +28,14 @@ class StoreBookingsPage extends StatefulWidget {
 
 class _StoreBookingsPageState extends State<StoreBookingsPage> {
   Future<List<Booking>>? _bookingsFuture;
-  String _selectedStatus = 'all'; // all, pending, confirmed, completed, cancelled
+  String _selectedStatus = 'all';
 
   @override
   void initState() {
     super.initState();
-    // Load bookings after build is complete to avoid setState during build error
+    // Defer loading to avoid setState during build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _loadBookings();
-      }
+      if (mounted) _loadBookings();
     });
   }
 
@@ -49,137 +48,172 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
     });
   }
 
-  Future<void> _refreshBookings() async {
-    _loadBookings();
-  }
+  Future<void> _refreshBookings() async => _loadBookings();
 
   List<Booking> _filterBookings(List<Booking> bookings) {
     if (_selectedStatus == 'all') return bookings;
     return bookings.where((b) => b.status == _selectedStatus).toList();
   }
 
-  Future<void> _updateBookingStatus(Booking booking, String newStatus) async {
-    try {
-      final bookingService = context.read<BookingService>();
-      await bookingService.updateBooking(booking.id, status: newStatus);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.isTraditionalChinese ? '預約已更新' : 'Booking updated'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      _loadBookings();
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.isTraditionalChinese ? '更新失敗：$e' : 'Update failed: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _confirmBooking(Booking booking) async {
-    final confirm = await showDialog<bool>(
+  /// Accept a pending booking — sets status to 'accepted'
+  Future<void> _acceptBooking(Booking booking) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(widget.isTraditionalChinese ? '確認預約' : 'Confirm Booking'),
+      builder: (ctx) => AlertDialog(
+        title: Text(widget.isTraditionalChinese ? '接受預約' : 'Accept Booking'),
         content: Text(
-          widget.isTraditionalChinese ? '確認此預約？' : 'Confirm this booking?',
+          widget.isTraditionalChinese ? '確認接受此預約？' : 'Accept this booking?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(widget.isTraditionalChinese ? '確認' : 'Confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(widget.isTraditionalChinese ? '接受' : 'Accept'),
           ),
         ],
       ),
     );
 
-    if (confirm == true) {
-      await _updateBookingStatus(booking, 'confirmed');
+    if (confirmed == true) {
+      await _performUpdate(() async {
+        await context.read<BookingService>().acceptBooking(booking.id);
+      });
     }
   }
 
-  Future<void> _rejectBooking(Booking booking) async {
-    final confirm = await showDialog<bool>(
+  /// Decline a pending booking — shows a dialog with an optional message field
+  Future<void> _declineBooking(Booking booking) async {
+    final messageController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(widget.isTraditionalChinese ? '拒絕預約' : 'Reject Booking'),
-        content: Text(
-          widget.isTraditionalChinese ? '確定要拒絕此預約？' : 'Are you sure you want to reject this booking?',
+      builder: (ctx) => AlertDialog(
+        title: Text(widget.isTraditionalChinese ? '拒絕預約' : 'Decline Booking'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.isTraditionalChinese
+                  ? '確定要拒絕此預約？可提供拒絕原因（選填）。'
+                  : 'Decline this booking? You may provide a reason (optional).',
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: messageController,
+              maxLines: 3,
+              maxLength: 200,
+              decoration: InputDecoration(
+                labelText: widget.isTraditionalChinese ? '拒絕原因（選填）' : 'Reason (optional)',
+                border: const OutlineInputBorder(),
+                hintText: widget.isTraditionalChinese
+                    ? '例如：已客滿'
+                    : 'e.g. Fully booked for that time slot',
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(widget.isTraditionalChinese ? '拒絕' : 'Reject'),
+            child: Text(widget.isTraditionalChinese ? '拒絕' : 'Decline'),
           ),
         ],
       ),
     );
 
-    if (confirm == true) {
-      await _updateBookingStatus(booking, 'cancelled');
+    if (confirmed == true) {
+      final message = messageController.text.trim().isEmpty
+          ? null
+          : messageController.text.trim();
+      await _performUpdate(() async {
+        await context
+            .read<BookingService>()
+            .declineBooking(booking.id, message: message);
+      });
     }
+
+    messageController.dispose();
   }
 
+  /// Mark an accepted booking as completed
   Future<void> _markCompleted(Booking booking) async {
-    final confirm = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Text(widget.isTraditionalChinese ? '完成預約' : 'Complete Booking'),
         content: Text(
-          widget.isTraditionalChinese ? '將此預約標記為完成？' : 'Mark this booking as completed?',
+          widget.isTraditionalChinese
+              ? '將此預約標記為完成？'
+              : 'Mark this booking as completed?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(widget.isTraditionalChinese ? '完成' : 'Complete'),
           ),
         ],
       ),
     );
 
-    if (confirm == true) {
-      await _updateBookingStatus(booking, 'completed');
+    if (confirmed == true) {
+      await _performUpdate(() async {
+        await context.read<BookingService>().completeBooking(booking.id);
+      });
     }
   }
 
-  int _getTodayBookingsCount(List<Booking> bookings) {
-    final today = DateTime.now();
-    final startOfDay = DateTime(today.year, today.month, today.day);
-    final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59);
+  /// Shared update handler — runs the action, shows feedback, then reloads
+  Future<void> _performUpdate(Future<void> Function() action) async {
+    try {
+      await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.isTraditionalChinese ? '預約已更新' : 'Booking updated'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadBookings();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese ? '更新失敗：$e' : 'Update failed: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
+  int _getTodayCount(List<Booking> bookings) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
     return bookings.where((b) {
-      final bookingDate = b.dateTime;
-      return bookingDate.isAfter(startOfDay) &&
-          bookingDate.isBefore(endOfDay) &&
-          b.status != 'cancelled';
+      return b.dateTime.isAfter(start) &&
+          b.dateTime.isBefore(end) &&
+          b.status != 'cancelled' &&
+          b.status != 'declined';
     }).length;
   }
 
-  int _getPendingCount(List<Booking> bookings) {
-    return bookings.where((b) => b.status == 'pending').length;
-  }
+  int _getPendingCount(List<Booking> bookings) =>
+      bookings.where((b) => b.status == 'pending').length;
 
   @override
   Widget build(BuildContext context) {
@@ -206,17 +240,15 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
                   const SizedBox(height: 16),
                   Text(
                     widget.isTraditionalChinese ? '載入失敗' : 'Failed to load',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '${snapshot.error}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  Text('${snapshot.error}',
+                      style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: _refreshBookings,
@@ -230,7 +262,7 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
 
           final allBookings = snapshot.data ?? [];
           final filteredBookings = _filterBookings(allBookings);
-          final todayCount = _getTodayBookingsCount(allBookings);
+          final todayCount = _getTodayCount(allBookings);
           final pendingCount = _getPendingCount(allBookings);
 
           return RefreshIndicator(
@@ -275,7 +307,7 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
                   ),
                 ),
 
-                // Filter Chips
+                // Filter Chips — includes accepted and declined
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: SingleChildScrollView(
@@ -293,13 +325,18 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
                         ),
                         const SizedBox(width: 8),
                         _buildFilterChip(
-                          label: widget.isTraditionalChinese ? '已確認' : 'Confirmed',
-                          value: 'confirmed',
+                          label: widget.isTraditionalChinese ? '已接受' : 'Accepted',
+                          value: 'accepted',
                         ),
                         const SizedBox(width: 8),
                         _buildFilterChip(
                           label: widget.isTraditionalChinese ? '已完成' : 'Completed',
                           value: 'completed',
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          label: widget.isTraditionalChinese ? '已拒絕' : 'Declined',
+                          value: 'declined',
                         ),
                         const SizedBox(width: 8),
                         _buildFilterChip(
@@ -320,7 +357,8 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.event_busy, size: 64, color: Colors.grey),
+                              const Icon(Icons.event_busy,
+                                  size: 64, color: Colors.grey),
                               const SizedBox(height: 16),
                               Text(
                                 widget.isTraditionalChinese ? '沒有預約' : 'No bookings',
@@ -334,11 +372,11 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
                           itemCount: filteredBookings.length,
                           itemBuilder: (context, index) {
                             final booking = filteredBookings[index];
-                            return _BookingCard(
+                            return _StoreBookingCard(
                               booking: booking,
                               isTraditionalChinese: widget.isTraditionalChinese,
-                              onConfirm: () => _confirmBooking(booking),
-                              onReject: () => _rejectBooking(booking),
+                              onAccept: () => _acceptBooking(booking),
+                              onDecline: () => _declineBooking(booking),
                               onComplete: () => _markCompleted(booking),
                             );
                           },
@@ -375,11 +413,9 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
                   ),
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
+            Text(label,
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -387,33 +423,30 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
   }
 
   Widget _buildFilterChip({required String label, required String value}) {
-    final isSelected = _selectedStatus == value;
-
     return FilterChip(
       label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-        setState(() {
-          _selectedStatus = value;
-        });
-      },
+      selected: _selectedStatus == value,
+      onSelected: (_) => setState(() => _selectedStatus = value),
     );
   }
 }
 
-/// Booking Card Widget
-class _BookingCard extends StatelessWidget {
+/// Individual booking card for the restaurant owner view
+///
+/// Shows enriched diner contact info (name, email, phone) when available,
+/// decline reason when present, and contextual action buttons per status.
+class _StoreBookingCard extends StatelessWidget {
   final Booking booking;
   final bool isTraditionalChinese;
-  final VoidCallback onConfirm;
-  final VoidCallback onReject;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
   final VoidCallback onComplete;
 
-  const _BookingCard({
+  const _StoreBookingCard({
     required this.booking,
     required this.isTraditionalChinese,
-    required this.onConfirm,
-    required this.onReject,
+    required this.onAccept,
+    required this.onDecline,
     required this.onComplete,
   });
 
@@ -421,12 +454,14 @@ class _BookingCard extends StatelessWidget {
     switch (booking.status) {
       case 'pending':
         return Colors.orange;
-      case 'confirmed':
+      case 'accepted':
         return Colors.blue;
       case 'completed':
         return Colors.green;
-      case 'cancelled':
+      case 'declined':
         return Colors.red;
+      case 'cancelled':
+        return Colors.red.shade300;
       default:
         return Colors.grey;
     }
@@ -436,10 +471,12 @@ class _BookingCard extends StatelessWidget {
     switch (booking.status) {
       case 'pending':
         return isTraditionalChinese ? '待處理' : 'Pending';
-      case 'confirmed':
-        return isTraditionalChinese ? '已確認' : 'Confirmed';
+      case 'accepted':
+        return isTraditionalChinese ? '已接受' : 'Accepted';
       case 'completed':
         return isTraditionalChinese ? '已完成' : 'Completed';
+      case 'declined':
+        return isTraditionalChinese ? '已拒絕' : 'Declined';
       case 'cancelled':
         return isTraditionalChinese ? '已取消' : 'Cancelled';
       default:
@@ -449,7 +486,12 @@ class _BookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+
+    // Diner display name: prefer enriched diner object, fall back to 'Unknown'
+    final dinerName = booking.diner?.displayName ??
+        (isTraditionalChinese ? '未知用戶' : 'Unknown User');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -458,13 +500,13 @@ class _BookingCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Row
+            // Header Row: diner name + status badge
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
-                    booking.userName ?? (isTraditionalChinese ? '未知用戶' : 'Unknown User'),
+                    dinerName,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -472,7 +514,8 @@ class _BookingCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: _getStatusColor().withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -490,59 +533,127 @@ class _BookingCard extends StatelessWidget {
               ],
             ),
 
+            // Diner contact info (email + phone) when provided by API
+            if (booking.diner?.email != null || booking.diner?.phoneNumber != null) ...[
+              const SizedBox(height: 8),
+              if (booking.diner?.email != null)
+                Row(
+                  children: [
+                    Icon(Icons.email_outlined, size: 14, color: Colors.grey),
+                    const SizedBox(width: 6),
+                    Text(
+                      booking.diner!.email!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              if (booking.diner?.phoneNumber != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
+                      const SizedBox(width: 6),
+                      Text(
+                        booking.diner!.phoneNumber!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+
             const SizedBox(height: 12),
 
-            // Booking Details
+            // Date / time
             Row(
               children: [
-                Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                 const SizedBox(width: 8),
                 Text(
                   dateFormat.format(booking.dateTime),
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: theme.textTheme.bodyMedium,
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
+            // Party size
             Row(
               children: [
-                Icon(Icons.people, size: 16, color: Colors.grey),
+                const Icon(Icons.people, size: 16, color: Colors.grey),
                 const SizedBox(width: 8),
                 Text(
                   '${booking.partySize} ${isTraditionalChinese ? "人" : "guests"}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: theme.textTheme.bodyMedium,
                 ),
               ],
             ),
 
-            if (booking.specialRequests != null && booking.specialRequests!.isNotEmpty) ...[
+            // Special requests
+            if (booking.specialRequests != null &&
+                booking.specialRequests!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.note, size: 16, color: Colors.grey),
+                  const Icon(Icons.note, size: 16, color: Colors.grey),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       booking.specialRequests!,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: theme.textTheme.bodyMedium,
                     ),
                   ),
                 ],
               ),
             ],
 
-            // Action Buttons
+            // Decline message — displayed when owner previously declined with a reason
+            if (booking.status == 'declined' &&
+                booking.declineMessage != null &&
+                booking.declineMessage!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 14, color: Colors.red.shade700),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${isTraditionalChinese ? "拒絕原因：" : "Reason: "}${booking.declineMessage}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Action buttons — context-sensitive per status
             if (booking.status == 'pending') ...[
               const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: onReject,
+                      onPressed: onDecline,
                       icon: const Icon(Icons.close, size: 18),
-                      label: Text(isTraditionalChinese ? '拒絕' : 'Reject'),
+                      label: Text(isTraditionalChinese ? '拒絕' : 'Decline'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                       ),
@@ -551,21 +662,24 @@ class _BookingCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: onConfirm,
+                      onPressed: onAccept,
                       icon: const Icon(Icons.check, size: 18),
-                      label: Text(isTraditionalChinese ? '確認' : 'Confirm'),
+                      label: Text(isTraditionalChinese ? '接受' : 'Accept'),
                     ),
                   ),
                 ],
               ),
-            ] else if (booking.status == 'confirmed') ...[
+            ] else if (booking.status == 'accepted') ...[
+              // Only accepted bookings can be marked as completed
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: onComplete,
                   icon: const Icon(Icons.done_all, size: 18),
-                  label: Text(isTraditionalChinese ? '標記為完成' : 'Mark as Completed'),
+                  label: Text(
+                    isTraditionalChinese ? '標記為完成' : 'Mark as Completed',
+                  ),
                 ),
               ),
             ],

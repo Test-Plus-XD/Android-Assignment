@@ -5,7 +5,9 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../services/restaurant_service.dart';
 import '../services/location_service.dart';
 import '../services/auth_service.dart';
+import '../services/advertisement_service.dart';
 import '../models.dart';
+import '../widgets/carousel/offer_carousel.dart';
 import 'restaurant_detail_page.dart';
 
 /// Home Page with Direct Vercel API Integration
@@ -59,6 +61,9 @@ class _FrontPageState extends State<FrontPage> {
   /// Used as source for both featured and nearby calculations
   List<Restaurant> _allRestaurants = [];
 
+  /// Future for active advertisements (Featured Offers section)
+  Future<List<Advertisement>>? _offersFuture;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +71,8 @@ class _FrontPageState extends State<FrontPage> {
     /// This prevents setState during build and ensures services are ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initialLoad();
+      _offersFuture = context.read<AdvertisementService>().getAdvertisements();
+      if (mounted) setState(() {});
     });
   }
 
@@ -285,6 +292,7 @@ class _FrontPageState extends State<FrontPage> {
       _allRestaurants = [];
       _cachedFeatured = [];
       _cachedNearby = [];
+      _offersFuture = context.read<AdvertisementService>().getAdvertisements();
     });
 
     await _loadAllRestaurantsFromApi();
@@ -509,6 +517,75 @@ class _FrontPageState extends State<FrontPage> {
                 ),
               ),
             const SizedBox(height: 24),
+
+            /// Featured Offers Section (active advertisements)
+            if (_offersFuture != null)
+              FutureBuilder<List<Advertisement>>(
+                future: _offersFuture,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final ads = snapshot.data!;
+                  final offers = ads.map((ad) {
+                    final imageUrl = widget.isTraditionalChinese
+                        ? (ad.imageTc ?? ad.imageEn ?? '')
+                        : (ad.imageEn ?? ad.imageTc ?? '');
+                    final title = widget.isTraditionalChinese
+                        ? (ad.titleTc ?? ad.titleEn ?? '')
+                        : (ad.titleEn ?? ad.titleTc ?? '');
+                    final subtitle = widget.isTraditionalChinese
+                        ? (ad.contentTc ?? ad.contentEn)
+                        : (ad.contentEn ?? ad.contentTc);
+                    return OfferItem(
+                      imageUrl: imageUrl,
+                      title: title,
+                      subtitle: subtitle,
+                      onTap: ad.restaurantId.isNotEmpty
+                          ? () async {
+                              final restaurantService =
+                                  context.read<RestaurantService>();
+                              try {
+                                final restaurant = await restaurantService
+                                    .getRestaurantById(ad.restaurantId);
+                                if (!context.mounted || restaurant == null) return;
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RestaurantDetailPage(
+                                      restaurant: restaurant,
+                                      isTraditionalChinese:
+                                          widget.isTraditionalChinese,
+                                    ),
+                                  ),
+                                );
+                              } catch (_) {
+                                // Restaurant not found — silently ignore
+                              }
+                            }
+                          : null,
+                    );
+                  }).toList();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          widget.isTraditionalChinese ? '精選優惠' : 'Featured Offers',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      OfferCarousel(offers: offers),
+                      const SizedBox(height: 24),
+                    ],
+                  );
+                },
+              ),
 
             /// Featured Restaurants Section
             Padding(
