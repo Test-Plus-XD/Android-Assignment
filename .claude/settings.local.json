@@ -11,7 +11,8 @@
       "Bash(pip install:*)",
       "Bash(unzip:*)",
       "Bash(where:*)",
-      "Bash(flutter pub get)"
+      "Bash(flutter pub get)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []

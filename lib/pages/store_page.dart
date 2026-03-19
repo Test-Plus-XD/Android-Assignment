@@ -90,6 +90,7 @@ class _StorePageState extends State<StorePage>
         builder: (_) => StoreAdFormPage(
           restaurantId: restaurantId,
           isTraditionalChinese: widget.isTraditionalChinese,
+          restaurant: context.read<StoreService>().ownedRestaurant,
         ),
       ),
     );

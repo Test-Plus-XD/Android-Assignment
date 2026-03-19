@@ -166,16 +166,16 @@ class GeminiService extends ChangeNotifier {
   /// Generate restaurant description
   ///
   /// Parameters:
+  /// - [restaurantId]: Restaurant document ID — menu is fetched server-side (required)
   /// - [name]: Restaurant name (required)
-  /// - [cuisine]: Type of cuisine
   /// - [district]: District/location
   /// - [keywords]: List of keywords (e.g., "Organic", "Vegan")
   /// - [language]: Language for description (default "EN")
   ///
   /// Returns the generated description or null on error
   Future<String?> generateRestaurantDescription({
+    required String restaurantId,
     required String name,
-    String? cuisine,
     String? district,
     List<String>? keywords,
     String? language,
@@ -186,8 +186,8 @@ class GeminiService extends ChangeNotifier {
 
     try {
       final request = GeminiRestaurantDescriptionRequest(
+        restaurantId: restaurantId,
         name: name,
-        cuisine: cuisine,
         district: district,
         keywords: keywords,
         language: language ?? 'EN',

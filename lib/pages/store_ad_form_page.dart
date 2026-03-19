@@ -28,11 +28,14 @@ class StoreAdFormPage extends StatefulWidget {
   final bool isTraditionalChinese;
   // If provided, the form is in edit mode
   final Advertisement? advertisement;
+  // If provided, enables AI content generation
+  final Restaurant? restaurant;
 
   const StoreAdFormPage({
     required this.restaurantId,
     required this.isTraditionalChinese,
     this.advertisement,
+    this.restaurant,
     super.key,
   });
 
@@ -58,6 +61,10 @@ class _StoreAdFormPageState extends State<StoreAdFormPage> {
   File? _imageFileTc;
 
   bool _isSubmitting = false;
+  bool _isGenerating = false;
+
+  // AI generation message controller
+  late final TextEditingController _messageCtrl;
 
   bool get _isEditing => widget.advertisement != null;
 
@@ -71,6 +78,7 @@ class _StoreAdFormPageState extends State<StoreAdFormPage> {
     _contentTcCtrl = TextEditingController(text: ad?.contentTc ?? '');
     _imageUrlEn = ad?.imageEn;
     _imageUrlTc = ad?.imageTc;
+    _messageCtrl = TextEditingController();
   }
 
   @override
@@ -79,6 +87,7 @@ class _StoreAdFormPageState extends State<StoreAdFormPage> {
     _titleTcCtrl.dispose();
     _contentEnCtrl.dispose();
     _contentTcCtrl.dispose();
+    _messageCtrl.dispose();
     super.dispose();
   }
 
@@ -122,6 +131,82 @@ class _StoreAdFormPageState extends State<StoreAdFormPage> {
     }
 
     return true;
+  }
+
+  /// Generate bilingual ad content using Gemini AI
+  Future<void> _generateWithAI() async {
+    final restaurant = widget.restaurant;
+    if (restaurant == null) return;
+
+    // If fields have content, confirm overwrite
+    final hasContent = _titleEnCtrl.text.trim().isNotEmpty ||
+        _titleTcCtrl.text.trim().isNotEmpty ||
+        _contentEnCtrl.text.trim().isNotEmpty ||
+        _contentTcCtrl.text.trim().isNotEmpty;
+
+    if (hasContent) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(_isTC ? '覆蓋現有內容？' : 'Overwrite existing content?'),
+          content: Text(
+            _isTC
+                ? 'AI 生成的內容將會取代目前已填寫的文字。'
+                : 'AI-generated content will replace the text you have entered.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(_isTC ? '取消' : 'Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(_isTC ? '繼續' : 'Continue'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _isGenerating = true);
+
+    try {
+      final name = restaurant.nameEn ?? restaurant.nameTc ?? '';
+      final district = restaurant.districtEn ?? restaurant.districtTc ?? '';
+      final keywords = restaurant.keywordEn;
+      final message = _messageCtrl.text.trim().isNotEmpty
+          ? _messageCtrl.text.trim()
+          : null;
+
+      final adService = context.read<AdvertisementService>();
+      final result = await adService.generateAdCopy(
+        restaurantId: widget.restaurantId,
+        name: name,
+        district: district,
+        keywords: keywords,
+        message: message,
+      );
+
+      if (!mounted) return;
+
+      if (result != null) {
+        setState(() {
+          _titleEnCtrl.text = result.titleEn;
+          _titleTcCtrl.text = result.titleTc;
+          _contentEnCtrl.text = result.contentEn;
+          _contentTcCtrl.text = result.contentTc;
+        });
+      } else {
+        _showError(_isTC ? 'AI 內容生成失敗，請稍後再試' : 'Failed to generate content. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('${_isTC ? "生成失敗：" : "Generation failed: "}$e');
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
   }
 
   /// Validate, apply language fallback, upload images, then save
@@ -233,6 +318,76 @@ class _StoreAdFormPageState extends State<StoreAdFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── AI Generation Section ───────────────────────────────────
+              if (!_isEditing && widget.restaurant != null) ...[
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.auto_awesome,
+                                size: 20,
+                                color: theme.colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              _isTC ? 'AI 內容生成' : 'AI Content Generation',
+                              style: theme.textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _messageCtrl,
+                          maxLength: 500,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: _isTC ? '自訂指示（選填）' : 'Custom instructions (optional)',
+                            hintText: _isTC
+                                ? '例如：重點推廣週末早午餐優惠'
+                                : 'e.g. Focus on our weekend brunch special',
+                            border: const OutlineInputBorder(),
+                            alignLabelWithHint: true,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: (_isGenerating || _isSubmitting)
+                                ? null
+                                : _generateWithAI,
+                            icon: _isGenerating
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.auto_awesome, size: 18),
+                            label: Text(
+                              _isGenerating
+                                  ? (_isTC ? '生成中...' : 'Generating...')
+                                  : (_isTC ? 'AI 生成內容' : 'Generate with AI'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
               // ── English Section ──────────────────────────────────────────
               Text(
                 _isTC ? '英文內容' : 'English Content',

@@ -150,17 +150,18 @@ class GeminiChatResponse {
 
 /// Request model for restaurant description generation
 ///
-/// Generate marketing copy for a restaurant
+/// Generate marketing copy for a restaurant.
+/// Menu items are fetched server-side from Firestore using [restaurantId].
 class GeminiRestaurantDescriptionRequest {
+  final String restaurantId;
   final String name;
-  final String? cuisine;
   final String? district;
   final List<String>? keywords;
   final String? language;
 
   GeminiRestaurantDescriptionRequest({
+    required this.restaurantId,
     required this.name,
-    this.cuisine,
     this.district,
     this.keywords,
     this.language,
@@ -168,9 +169,9 @@ class GeminiRestaurantDescriptionRequest {
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> json = {
+      'restaurantId': restaurantId,
       'name': name,
     };
-    if (cuisine != null) json['cuisine'] = cuisine;
     if (district != null) json['district'] = district;
     if (keywords != null) json['keywords'] = keywords;
     if (language != null) json['language'] = language;
@@ -195,6 +196,63 @@ class GeminiRestaurantDescriptionResponse {
     return GeminiRestaurantDescriptionResponse(
       description: json['description'] ?? '',
       restaurant: json['restaurant'],
+    );
+  }
+}
+
+/// Request model for restaurant advertisement content generation
+///
+/// Generates bilingual ad copy (titles + content) for a restaurant.
+/// Menu items are fetched server-side from Firestore using [restaurantId].
+class GeminiAdCopyRequest {
+  final String restaurantId;
+  final String name;
+  final String district;
+  final List<String>? keywords;
+  final String? message;
+
+  GeminiAdCopyRequest({
+    required this.restaurantId,
+    required this.name,
+    required this.district,
+    this.keywords,
+    this.message,
+  });
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = {
+      'restaurantId': restaurantId,
+      'name': name,
+      'district': district,
+    };
+    if (keywords != null) json['keywords'] = keywords;
+    if (message != null && message!.isNotEmpty) json['message'] = message;
+    return json;
+  }
+}
+
+/// Response model for restaurant advertisement content generation
+///
+/// Contains bilingual titles and content ready to pre-fill the ad form
+class GeminiAdCopyResponse {
+  final String titleEn;
+  final String titleTc;
+  final String contentEn;
+  final String contentTc;
+
+  GeminiAdCopyResponse({
+    required this.titleEn,
+    required this.titleTc,
+    required this.contentEn,
+    required this.contentTc,
+  });
+
+  factory GeminiAdCopyResponse.fromJson(Map<String, dynamic> json) {
+    return GeminiAdCopyResponse(
+      titleEn: json['Title_EN'] ?? '',
+      titleTc: json['Title_TC'] ?? '',
+      contentEn: json['Content_EN'] ?? '',
+      contentTc: json['Content_TC'] ?? '',
     );
   }
 }

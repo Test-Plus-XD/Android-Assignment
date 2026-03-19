@@ -255,6 +255,54 @@ class AdvertisementService with ChangeNotifier {
   }
 
   // ───────────────────────────────────────────────────────
+  // AI Content Generation
+  // ───────────────────────────────────────────────────────
+
+  /// Generate bilingual advertisement copy using Gemini AI.
+  /// Calls POST /API/Gemini/restaurant-advertisement.
+  /// Returns a [GeminiAdCopyResponse] with Title_EN/TC and Content_EN/TC,
+  /// or null on error. Does not modify shared loading/advertisement state.
+  Future<GeminiAdCopyResponse?> generateAdCopy({
+    required String restaurantId,
+    required String name,
+    required String district,
+    List<String>? keywords,
+    String? message,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final request = GeminiAdCopyRequest(
+        restaurantId: restaurantId,
+        name: name,
+        district: district,
+        keywords: keywords,
+        message: message,
+      );
+
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiBaseUrl}/API/Gemini/restaurant-advertisement'),
+        headers: headers,
+        body: jsonEncode(request.toJson()),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return GeminiAdCopyResponse.fromJson(data);
+      } else {
+        if (kDebugMode) {
+          print('AdvertisementService: Ad copy generation failed - ${response.statusCode} ${response.body}');
+        }
+        return null;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('AdvertisementService: Error generating ad copy - $e');
+      }
+      return null;
+    }
+  }
+
+  // ───────────────────────────────────────────────────────
   // Stripe Checkout Flow
   // ───────────────────────────────────────────────────────
 

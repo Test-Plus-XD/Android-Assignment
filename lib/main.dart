@@ -160,7 +160,6 @@ void main() async {
     // App can still run without notifications, so we continue
   }
 
-
   // Initialise timeago locales for bilingual support
   // Set up Traditional Chinese locale for time formatting
   timeago.setLocaleMessages('zh', timeago.ZhMessages());

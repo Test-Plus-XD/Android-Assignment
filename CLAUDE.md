@@ -962,8 +962,27 @@ flutter build apk
 - **models.dart**: Added `export 'models/advertisement.dart'`
 - **main.dart**: Registered `AdvertisementService` as `ChangeNotifierProxyProvider<AuthService, AdvertisementService>`
 
+#### Phase 7 (2026-03-19) - AI-Powered Advertisement Content Generation
+
+- **Gemini models updated** (`models/gemini.dart`):
+  - Added `GeminiAdCopyRequest` model: `name`, `cuisine`, `district`, `keywords`, `message` (optional owner instructions, max 500 chars)
+  - Added `GeminiAdCopyResponse` model: `titleEn`, `titleTc`, `contentEn`, `contentTc` (parsed from `Title_EN`/`Title_TC`/`Content_EN`/`Content_TC` API keys)
+- **AdvertisementService updated** (`services/advertisement_service.dart`):
+  - Added `generateAdCopy()` method calling `POST /API/Gemini/restaurant-advertisement`
+  - Uses authenticated headers; returns `GeminiAdCopyResponse?` (null on error)
+  - Does not modify shared loading/advertisement state (form manages its own loading)
+- **StoreAdFormPage updated** (`pages/store_ad_form_page.dart`):
+  - Added optional `Restaurant? restaurant` constructor parameter for AI generation context
+  - New "AI Content Generation" card at top of form (create mode only, when restaurant is available)
+  - Includes optional "Custom instructions" text field (owner can guide the AI, e.g. "Focus on weekend brunch")
+  - "Generate with AI" button calls `AdvertisementService.generateAdCopy()` and pre-fills all 4 text fields
+  - Overwrite confirmation dialog if fields already have content
+  - Uses first English keyword as `cuisine` parameter, falls back to `'Vegetarian'`
+- **StorePage updated** (`pages/store_page.dart`):
+  - Passes `Restaurant` object to `StoreAdFormPage` when navigating after Stripe checkout
+
 ---
 
-**Last Updated**: 2026-03-07
+**Last Updated**: 2026-03-19
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant
