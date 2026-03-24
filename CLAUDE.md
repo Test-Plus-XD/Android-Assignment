@@ -830,6 +830,32 @@ flutter build apk
 - Check `authToken` is valid Firebase ID token
 - Verify event names use hyphens, not underscores
 
+**Gradle "Unable to establish loopback connection" on Windows**:
+
+Root cause: The Windows username `Test-Plus` resolves to the 8.3 short path `TEST-P~1` in `%TEMP%`. JDK 21+ uses Unix domain sockets for Gradle daemon IPC; the connect call fails when the socket file path contains 8.3 short names.
+
+Fix applied in `android/gradle.properties`:
+```
+org.gradle.jvmargs=... -Djdk.net.unixdomain.tmpdir=C:/tmp
+```
+
+Also required at build time — set these as **Windows system environment variables** (System Properties → Environment Variables) for permanent effect:
+```
+JAVA_HOME=C:\Program Files\Android\Android Studio\jbr
+JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=C:/tmp
+```
+
+Or export them in your shell session before building:
+```bash
+export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
+export JAVA_TOOL_OPTIONS="-Djdk.net.unixdomain.tmpdir=C:/tmp"
+flutter build apk --debug
+```
+
+**Kotlin metadata version mismatch**:
+
+Occurs when a Flutter/Firebase plugin is compiled with a newer Kotlin than the project's `org.jetbrains.kotlin.android` plugin version. Fix: bump the Kotlin version in `android/settings.gradle.kts` to match the version required by the dependency tree (visible via `./gradlew app:dependencies`).
+
 ---
 
 ## Project Statistics
@@ -1048,6 +1074,31 @@ flutter build apk
 
 ---
 
-**Last Updated**: 2026-03-24
+#### Phase 9 (2026-03-25) - Android Build Environment Fixes & Dependency Upgrades
+
+**Root causes diagnosed and fixed**:
+- **`SharedPreferencesPlugin` not found**: Stale Gradle cache after `shared_preferences_android` was upgraded to 2.4.21. Fixed by `flutter clean && flutter pub get`.
+- **Gradle `Unable to establish loopback connection`**: Windows username `Test-Plus` maps to 8.3 short path `TEST-P~1` in `%TEMP%`. JDK 21+ Unix domain socket `connect()` fails on 8.3 paths. Fixed by setting `-Djdk.net.unixdomain.tmpdir=C:/tmp` in `android/gradle.properties` and as `JAVA_TOOL_OPTIONS`.
+- **Kotlin metadata version mismatch**: `shared_preferences_android:2.4.21` (and other plugins) were compiled with Kotlin 2.3.x; the project used Kotlin 2.1.0 plugin. Fixed by upgrading Kotlin plugin to match.
+
+**Dependency version ceiling — Flutter 3.43 + AGP 9.x incompatibility**:
+
+Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3.43. The Flutter Gradle plugin (`FlutterPluginUtils.getAndroidExtension`) throws a `NullPointerException` because it still uses the deprecated `BaseExtension` API that was removed in AGP 9.0. AGP 9.x support will require a Flutter SDK update. The maximum safe versions are:
+
+| Component | Version |
+|-----------|---------|
+| Gradle    | 8.14.4 (latest 8.x) |
+| AGP       | 8.13.2 (latest 8.x) |
+| Kotlin    | 2.3.10 (pinned by dependency requirements) |
+
+**Files changed**:
+- `android/gradle.properties`: Added `-Djdk.net.unixdomain.tmpdir=C:/tmp` to `org.gradle.jvmargs`
+- `android/gradle/gradle-daemon-jvm.properties`: Removed hard-coded `toolchainVendor=jetbrains` / `toolchainVersion=21` constraints (relies on `JAVA_HOME` instead)
+- `android/settings.gradle.kts`: Kotlin `2.1.0` → `2.3.10`; AGP `8.9.1` → `8.13.2`
+- `android/gradle/wrapper/gradle-wrapper.properties`: Gradle `8.12` → `8.14.4`
+
+---
+
+**Last Updated**: 2026-03-25
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant
