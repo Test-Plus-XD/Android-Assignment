@@ -45,7 +45,18 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
   @override
   void initState() {
     super.initState();
-    _addWelcomeMessage();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Restore previous conversation from service if it exists
+      final geminiService = context.read<GeminiService>();
+      if (geminiService.displayMessages.isNotEmpty) {
+        setState(() {
+          _messages.addAll(geminiService.displayMessages);
+        });
+        _scrollToBottom();
+      } else {
+        _addWelcomeMessage();
+      }
+    });
     _loadMenuItems(); // Load menu items if restaurant ID is provided
   }
 
@@ -76,13 +87,16 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
   }
 
   void _addWelcomeMessage() {
+    final msg = {
+      'role': 'model',
+      'content': _buildWelcomeMessage(),
+      'timestamp': DateTime.now(),
+    };
     setState(() {
-      _messages.add({
-        'role': 'model',
-        'content': _buildWelcomeMessage(),
-        'timestamp': DateTime.now(),
-      });
+      _messages.add(msg);
     });
+    // Persist to service so the welcome message survives page dispose
+    context.read<GeminiService>().addDisplayMessage(msg);
   }
 
   /// Build welcome message based on context
@@ -132,14 +146,16 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
 
     final geminiService = context.read<GeminiService>();
 
-    // Add user message to UI
+    // Add user message to UI and persist to service
+    final userMsg = {
+      'role': 'user',
+      'content': message,
+      'timestamp': DateTime.now(),
+    };
     setState(() {
-      _messages.add({
-        'role': 'user',
-        'content': message,
-        'timestamp': DateTime.now(),
-      });
+      _messages.add(userMsg);
     });
+    geminiService.addDisplayMessage(userMsg);
 
     _messageController.clear();
     _scrollToBottom();
@@ -160,18 +176,19 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
       response = await geminiService.chat(message);
     }
 
-    // Add AI response to UI
+    // Add AI response to UI and persist to service
     if (response != null) {
       // Clean the response to remove context markers and process markdown
       final cleanedResponse = AIResponseProcessor.cleanResponse(response);
-      
+      final aiMsg = {
+        'role': 'model',
+        'content': cleanedResponse,
+        'timestamp': DateTime.now(),
+      };
       setState(() {
-        _messages.add({
-          'role': 'model',
-          'content': cleanedResponse,
-          'timestamp': DateTime.now(),
-        });
+        _messages.add(aiMsg);
       });
+      geminiService.addDisplayMessage(aiMsg);
       _scrollToBottom();
     } else if (geminiService.errorMessage != null) {
       // Show error

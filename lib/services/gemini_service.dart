@@ -21,11 +21,17 @@ class GeminiService extends ChangeNotifier {
   String? _errorMessage;
   List<GeminiChatHistory> _conversationHistory = [];
 
+  // Display messages persisted in service so conversation survives page dispose
+  // Each entry is a map compatible with the _messages list in gemini_page.dart
+  final List<Map<String, dynamic>> _displayMessages = [];
+
   // Getters
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   List<GeminiChatHistory> get conversationHistory =>
       List.unmodifiable(_conversationHistory);
+  List<Map<String, dynamic>> get displayMessages =>
+      List.unmodifiable(_displayMessages);
 
   /// Default Gemini model
   static const String defaultModel = 'gemini-2.5-flash-lite-preview-09-2025';
@@ -399,9 +405,22 @@ class GeminiService extends ChangeNotifier {
     );
   }
 
+  /// Add a display message to persist across page navigations
+  void addDisplayMessage(Map<String, dynamic> message) {
+    _displayMessages.add(message);
+    notifyListeners();
+  }
+
+  /// Clear all display messages (e.g. user starts a new conversation)
+  void clearDisplayMessages() {
+    _displayMessages.clear();
+    notifyListeners();
+  }
+
   /// Clear conversation history
   void clearHistory() {
     _conversationHistory = [];
+    _displayMessages.clear();
     notifyListeners();
   }
 

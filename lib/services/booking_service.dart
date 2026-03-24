@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import '../config.dart';
 import '../models.dart';
+import '../utils/cache_entry.dart';
 
 /// Booking Service
 ///
@@ -30,6 +31,8 @@ class BookingService with ChangeNotifier {
   AuthService _authService;
   // Current user's bookings
   List<Booking> _userBookings = [];
+  // TTL timestamp for user bookings cache (1h)
+  DateTime? _userBookingsCachedAt;
   // Loading state
   bool _isLoading = false;
   // Error message
@@ -113,6 +116,8 @@ class BookingService with ChangeNotifier {
         final bookingId = data['id'] as String;
         final booking = await getBookingById(bookingId);
         if (booking != null) _userBookings.insert(0, booking);
+        // Invalidate TTL so next full fetch reflects server state
+        _userBookingsCachedAt = null;
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -132,10 +137,18 @@ class BookingService with ChangeNotifier {
     }
   }
 
-  /// Get all bookings for current user.
+  /// Get all bookings for current user (1h cache).
   /// Uses GET /API/Bookings — the API auto-filters by the authenticated
   /// user's Firebase token. Returns enriched data with restaurant info.
-  Future<List<Booking>> getUserBookings() async {
+  Future<List<Booking>> getUserBookings({bool forceRefresh = false}) async {
+    // Return cached data if still valid
+    if (!forceRefresh &&
+        _userBookings.isNotEmpty &&
+        _userBookingsCachedAt != null &&
+        DateTime.now().difference(_userBookingsCachedAt!) < CacheTTL.short) {
+      return _userBookings;
+    }
+
     try {
       _setLoading(true);
 
@@ -159,6 +172,7 @@ class BookingService with ChangeNotifier {
         // Sort by date descending (most recent first)
         bookings.sort((a, b) => b.dateTime.compareTo(a.dateTime));
         _userBookings = bookings;
+        _userBookingsCachedAt = DateTime.now();
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -279,6 +293,8 @@ class BookingService with ChangeNotifier {
           final updated = await getBookingById(bookingId);
           if (updated != null) _userBookings[index] = updated;
         }
+        // Invalidate TTL so next full list fetch reflects server state
+        _userBookingsCachedAt = null;
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -335,6 +351,7 @@ class BookingService with ChangeNotifier {
 
       if (response.statusCode == 204 || response.statusCode == 200) {
         _userBookings.removeWhere((b) => b.id == bookingId);
+        _userBookingsCachedAt = null;
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -357,6 +374,7 @@ class BookingService with ChangeNotifier {
   /// Clear all cached booking data (called on logout)
   void clearCache() {
     _userBookings = [];
+    _userBookingsCachedAt = null;
     _errorMessage = null;
     notifyListeners();
   }

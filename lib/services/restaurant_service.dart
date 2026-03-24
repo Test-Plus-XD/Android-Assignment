@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models.dart';
+import '../utils/cache_entry.dart';
 
 /// Search metadata containing result count
 class SearchMetadata {
@@ -34,6 +35,11 @@ class RestaurantService with ChangeNotifier {
   int _totalPages = 0;
   bool _isLoading = false;
   String? _errorMessage;
+
+  // Per-restaurant detail cache (24h TTL — restaurant details rarely change)
+  final Map<String, CacheEntry<Restaurant>> _restaurantCache = {};
+  // All-restaurants list cache (24h TTL — used by home page)
+  CacheEntry<List<Restaurant>>? _allRestaurantsCache;
 
   List<Restaurant> get searchResults => _searchResults;
   int get totalHits => _totalHits;
@@ -102,7 +108,12 @@ class RestaurantService with ChangeNotifier {
         final hits = (data['hits'] as List)
             .map((hit) => Restaurant.fromJson(hit))
             .toList();
-            
+
+        // Cross-seed per-restaurant cache so detail page visits are instant
+        for (final r in hits) {
+          if (r.id != null) _restaurantCache[r.id!] = CacheEntry(r);
+        }
+
         _searchResults = isInitialSearch ? List<Restaurant>.from(hits) : [..._searchResults, ...hits];
         _totalHits = data['nbHits'] as int;
         _currentPage = data['page'] as int;
@@ -154,15 +165,23 @@ class RestaurantService with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Get single restaurant by ID
-  Future<Restaurant?> getRestaurantById(String id) async {
+  /// Get single restaurant by ID (24h cache)
+  Future<Restaurant?> getRestaurantById(String id, {bool forceRefresh = false}) async {
+    // Return cached entry if still valid
+    final cached = _restaurantCache[id];
+    if (!forceRefresh && cached != null && !cached.isExpired(CacheTTL.long)) {
+      return cached.data;
+    }
+
     try {
       final url = Uri.parse('$_apiEndpoint/${Uri.encodeComponent(id)}');
       final response = await http.get(url, headers: _getHeaders());
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        return Restaurant.fromJson(json);
+        final restaurant = Restaurant.fromJson(json);
+        _restaurantCache[id] = CacheEntry(restaurant);
+        return restaurant;
       } else if (response.statusCode == 404) {
         if (kDebugMode) print('Restaurant not found: $id');
         return null;
@@ -175,8 +194,15 @@ class RestaurantService with ChangeNotifier {
     }
   }
 
-  /// Get all restaurants
-  Future<List<Restaurant>> getAllRestaurants() async {
+  /// Get all restaurants (24h cache; also cross-seeds per-restaurant cache)
+  Future<List<Restaurant>> getAllRestaurants({bool forceRefresh = false}) async {
+    // Return cached list if still valid
+    if (!forceRefresh &&
+        _allRestaurantsCache != null &&
+        !_allRestaurantsCache!.isExpired(CacheTTL.long)) {
+      return _allRestaurantsCache!.data;
+    }
+
     try {
       final url = Uri.parse(_apiEndpoint);
       final response = await http.get(url, headers: _getHeaders());
@@ -184,7 +210,17 @@ class RestaurantService with ChangeNotifier {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final data = json['data'] as List<dynamic>;
-        return data.map((item) => Restaurant.fromJson(item as Map<String, dynamic>)).toList();
+        final restaurants = data
+            .map((item) => Restaurant.fromJson(item as Map<String, dynamic>))
+            .toList();
+
+        // Cache the full list and cross-seed individual entries
+        _allRestaurantsCache = CacheEntry(restaurants);
+        for (final r in restaurants) {
+          if (r.id != null) _restaurantCache[r.id!] = CacheEntry(r);
+        }
+
+        return restaurants;
       } else {
         throw Exception('Failed to load restaurants: ${response.statusCode}');
       }
@@ -192,6 +228,12 @@ class RestaurantService with ChangeNotifier {
       if (kDebugMode) print('Error fetching restaurants: $error');
       rethrow;
     }
+  }
+
+  /// Clears all cached restaurant data (called on app reset or after bulk mutations)
+  void clearCache() {
+    _restaurantCache.clear();
+    _allRestaurantsCache = null;
   }
 
   /// Create restaurant (requires authentication)
@@ -229,6 +271,9 @@ class RestaurantService with ChangeNotifier {
       if (response.statusCode != 204) {
         throw Exception('Failed to update restaurant: ${response.statusCode}');
       }
+      // Invalidate caches so next read fetches fresh data
+      _restaurantCache.remove(id);
+      _allRestaurantsCache = null;
     } catch (error) {
       if (kDebugMode) print('Error updating restaurant: $error');
       rethrow;
@@ -244,6 +289,9 @@ class RestaurantService with ChangeNotifier {
       if (response.statusCode != 204) {
         throw Exception('Failed to delete restaurant: ${response.statusCode}');
       }
+      // Invalidate caches
+      _restaurantCache.remove(id);
+      _allRestaurantsCache = null;
     } catch (error) {
       if (kDebugMode) print('Error deleting restaurant: $error');
       rethrow;
@@ -268,6 +316,11 @@ class RestaurantService with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final searchResponse = SearchResponse.fromJson(jsonDecode(response.body));
+
+        // Cross-seed per-restaurant cache so detail page visits are instant
+        for (final r in searchResponse.hits) {
+          if (r.id != null) _restaurantCache[r.id!] = CacheEntry(r);
+        }
 
         // Update internal state
         _searchResults = request.page == 0

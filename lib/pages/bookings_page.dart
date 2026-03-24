@@ -51,7 +51,7 @@ class _BookingsPageState extends State<BookingsPage> with SingleTickerProviderSt
   }
 
   Future<void> _handleRefresh() async {
-    await context.read<BookingService>().getUserBookings();
+    await context.read<BookingService>().getUserBookings(forceRefresh: true);
   }
 
   void _handleCancelBooking(Booking booking) {

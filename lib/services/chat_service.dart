@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config.dart';
 import '../models.dart';
+import '../utils/cache_entry.dart';
 import 'auth_service.dart';
 
 // Chat Service
@@ -16,6 +17,8 @@ class ChatService extends ChangeNotifier {
   IO.Socket? _socket;
   // State variables for managing chat data and connection status
   List<ChatRoom> _rooms = [];
+  // TTL timestamp for rooms list cache (1h)
+  DateTime? _roomsCachedAt;
   Map<String, List<ChatMessage>> _messagesCache = {};
   bool _isConnected = false;
   bool _isLoading = false;
@@ -51,6 +54,7 @@ class ChatService extends ChangeNotifier {
         // User logged out, clean up connection and cached data
         disconnect();
         _rooms.clear();
+        _roomsCachedAt = null;
         _messagesCache.clear();
         notifyListeners();
       }
@@ -317,10 +321,18 @@ class ChatService extends ChangeNotifier {
   /// - Participant user profiles (display names, photos)
   /// - Recent message history (last 50 messages per room)
   /// This single request reduces API calls and improves performance
-  Future<void> getChatRooms() async {
+  Future<void> getChatRooms({bool forceRefresh = false}) async {
     if (!_authService.isLoggedIn) {
       _error = 'Not authenticated';
       notifyListeners();
+      return;
+    }
+
+    // Return cached rooms if still valid (1h TTL)
+    if (!forceRefresh &&
+        _rooms.isNotEmpty &&
+        _roomsCachedAt != null &&
+        DateTime.now().difference(_roomsCachedAt!) < CacheTTL.short) {
       return;
     }
 
@@ -382,6 +394,7 @@ class ChatService extends ChangeNotifier {
           }
         }
 
+        _roomsCachedAt = DateTime.now();
         if (kDebugMode) print('ChatService: Loaded ${_rooms.length} rooms with cached messages');
       } else {
         if (kDebugMode) print('ChatService: API error ${response.statusCode}: ${response.body}');

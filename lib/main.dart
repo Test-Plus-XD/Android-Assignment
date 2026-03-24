@@ -233,12 +233,18 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // UserService - needs AuthService for tokens
+        // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, UserService>(
           create: (context) => UserService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? UserService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);
+              return previous;
+            }
+            return UserService(authService);
+          },
         ),
 
         // RestaurantService - independent
@@ -247,21 +253,33 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // BookingService - needs AuthService for tokens
+        // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, BookingService>(
           create: (context) => BookingService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? BookingService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);
+              return previous;
+            }
+            return BookingService(authService);
+          },
         ),
 
         // ReviewService - needs AuthService for tokens
+        // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, ReviewService>(
           create: (context) => ReviewService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? ReviewService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);
+              return previous;
+            }
+            return ReviewService(authService);
+          },
         ),
 
         // MenuService - needs AuthService for tokens
@@ -287,12 +305,18 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // ChatService - needs AuthService for tokens (real-time chat)
+        // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, ChatService>(
           create: (context) => ChatService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? ChatService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);
+              return previous;
+            }
+            return ChatService(authService);
+          },
         ),
 
         // GeminiService - AI assistant (no auth required)
@@ -301,21 +325,33 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // StoreService - restaurant owner management (needs AuthService)
+        // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, StoreService>(
           create: (context) => StoreService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? StoreService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);
+              return previous;
+            }
+            return StoreService(authService);
+          },
         ),
 
         // AdvertisementService - ad CRUD and Stripe checkout (needs AuthService)
+        // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, AdvertisementService>(
           create: (context) => AdvertisementService(
             context.read<AuthService>(),
           ),
-          update: (context, authService, previous) =>
-              previous ?? AdvertisementService(authService),
+          update: (context, authService, previous) {
+            if (previous != null) {
+              previous.updateAuth(authService);
+              return previous;
+            }
+            return AdvertisementService(authService);
+          },
         ),
       ],
       child: const AppRoot(),

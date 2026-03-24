@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 import '../config.dart';
 import '../models.dart';
+import '../utils/cache_entry.dart';
 
 /// Advertisement Service
 ///
@@ -34,6 +35,8 @@ class AdvertisementService with ChangeNotifier {
   AuthService _authService;
   // Cached list of advertisements
   List<Advertisement> _advertisements = [];
+  // TTL timestamp for the default home-page ads cache (1h)
+  DateTime? _adsCachedAt;
   // Loading state
   bool _isLoading = false;
   // Error message
@@ -69,13 +72,25 @@ class AdvertisementService with ChangeNotifier {
     };
   }
 
-  /// Get all advertisements, optionally filtered by restaurant ID.
+  /// Get all advertisements, optionally filtered by restaurant ID (1h cache).
   /// Uses GET /API/Advertisements?restaurantId=X
   /// Set includeInactive to true to include inactive ads (for store owner view).
+  /// Only the default call (no restaurantId, not includeInactive) is cached —
+  /// owner-specific calls always fetch fresh.
   Future<List<Advertisement>> getAdvertisements({
     String? restaurantId,
     bool includeInactive = false,
+    bool forceRefresh = false,
   }) async {
+    // Use cache only for the default home-page call
+    final isDefaultCall = restaurantId == null && !includeInactive;
+    if (isDefaultCall && !forceRefresh &&
+        _advertisements.isNotEmpty &&
+        _adsCachedAt != null &&
+        DateTime.now().difference(_adsCachedAt!) < CacheTTL.short) {
+      return _advertisements;
+    }
+
     try {
       _setLoading(true);
 
@@ -95,6 +110,7 @@ class AdvertisementService with ChangeNotifier {
             .toList();
 
         _advertisements = ads;
+        if (isDefaultCall) _adsCachedAt = DateTime.now();
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -154,6 +170,7 @@ class AdvertisementService with ChangeNotifier {
         // Fetch the full advertisement to get all fields
         final ad = await getAdvertisement(adId);
         if (ad != null) _advertisements.insert(0, ad);
+        _adsCachedAt = null; // Invalidate so home page re-fetches
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -193,6 +210,7 @@ class AdvertisementService with ChangeNotifier {
           final updated = await getAdvertisement(id);
           if (updated != null) _advertisements[index] = updated;
         }
+        _adsCachedAt = null; // Invalidate so home page re-fetches
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -227,6 +245,7 @@ class AdvertisementService with ChangeNotifier {
 
       if (response.statusCode == 200 || response.statusCode == 204) {
         _advertisements.removeWhere((a) => a.id == id);
+        _adsCachedAt = null; // Invalidate so home page re-fetches
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -399,6 +418,7 @@ class AdvertisementService with ChangeNotifier {
   /// Clear all cached advertisement data
   void clearCache() {
     _advertisements = [];
+    _adsCachedAt = null;
     _errorMessage = null;
     notifyListeners();
   }
