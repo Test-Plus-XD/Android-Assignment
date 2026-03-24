@@ -35,7 +35,7 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  Future<void> _loadRooms() async {
+  Future<void> _loadRooms({bool forceRefresh = false}) async {
     if (!mounted) return;
 
     final chatService = context.read<ChatService>();
@@ -44,8 +44,8 @@ class _ChatPageState extends State<ChatPage> {
     // This connects to Socket.IO and loads rooms only when needed
     await chatService.ensureConnected();
 
-    // Always fetch fresh rooms when entering the chat page
-    await chatService.getChatRooms();
+    // Fetch rooms; uses cached data if still valid unless forceRefresh is true
+    await chatService.getChatRooms(forceRefresh: forceRefresh);
   }
 
   void _navigateToChat(String roomId) {
@@ -147,7 +147,7 @@ class _ChatPageState extends State<ChatPage> {
     final theme = Theme.of(context);
     
     return RefreshIndicator(
-      onRefresh: _loadRooms,
+      onRefresh: () => _loadRooms(forceRefresh: true),
       child: CustomScrollView(
         slivers: [
           // Loading indicator if needed

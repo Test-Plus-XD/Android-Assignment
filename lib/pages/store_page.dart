@@ -66,9 +66,9 @@ class _StorePageState extends State<StorePage>
     _previousTab = newTab;
   }
 
-  Future<void> _loadOwnedRestaurant() async {
+  Future<void> _loadOwnedRestaurant({bool forceRefresh = false}) async {
     if (!mounted) return;
-    await context.read<StoreService>().getOwnedRestaurant();
+    await context.read<StoreService>().getOwnedRestaurant(forceRefresh: forceRefresh);
   }
 
   // ── Stripe / Advertisement helpers ────────────────────────────────────────
@@ -231,7 +231,7 @@ class _StorePageState extends State<StorePage>
                   restaurant: restaurant,
                   restaurantName: name,
                   isTraditionalChinese: widget.isTraditionalChinese,
-                  onRefresh: _loadOwnedRestaurant,
+                  onRefresh: () => _loadOwnedRestaurant(forceRefresh: true),
                 ),
 
                 // Tab 1 — Advertisements

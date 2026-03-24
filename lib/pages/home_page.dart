@@ -103,8 +103,8 @@ class _FrontPageState extends State<FrontPage> {
   /// This method calls the getAllRestaurants() endpoint which returns
   /// the complete restaurant dataset without pagination or search filters.
   /// The results are cached in _allRestaurants for subsequent processing.
-  Future<void> _loadAllRestaurantsFromApi() async {
-    if (_allRestaurants.isNotEmpty && !_loadingFeatured) return;
+  Future<void> _loadAllRestaurantsFromApi({bool forceRefresh = false}) async {
+    if (!forceRefresh && _allRestaurants.isNotEmpty && !_loadingFeatured) return;
 
     if (!mounted) return;
     setState(() => _loadingFeatured = true);
@@ -114,7 +114,7 @@ class _FrontPageState extends State<FrontPage> {
 
       /// Fetch all restaurants from Vercel API endpoint
       /// This returns the complete dataset without search or filters
-      final restaurants = await restaurantService.getAllRestaurants();
+      final restaurants = await restaurantService.getAllRestaurants(forceRefresh: forceRefresh);
 
       if (mounted) {
         setState(() {
@@ -292,10 +292,11 @@ class _FrontPageState extends State<FrontPage> {
       _allRestaurants = [];
       _cachedFeatured = [];
       _cachedNearby = [];
-      _offersFuture = context.read<AdvertisementService>().getAdvertisements();
+      // Force-bypass the ads cache on pull-to-refresh
+      _offersFuture = context.read<AdvertisementService>().getAdvertisements(forceRefresh: true);
     });
 
-    await _loadAllRestaurantsFromApi();
+    await _loadAllRestaurantsFromApi(forceRefresh: true);
     _extractFeaturedRestaurants();
     await _calculateNearbyRestaurants();
   }

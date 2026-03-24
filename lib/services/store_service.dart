@@ -3,12 +3,15 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models.dart';
+import '../utils/cache_entry.dart';
 import 'auth_service.dart';
 
 /// Store Service - Restaurant Owner Management
 class StoreService extends ChangeNotifier {
   AuthService _authService;
   Restaurant? _ownedRestaurant;
+  // TTL timestamp for owned restaurant cache (24h — rarely changes externally)
+  DateTime? _ownedRestaurantCachedAt;
   bool _isLoading = false;
   String? _error;
 
@@ -47,6 +50,7 @@ class StoreService extends ChangeNotifier {
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
         _ownedRestaurant = Restaurant.fromJson(json.decode(response.body));
+        _ownedRestaurantCachedAt = DateTime.now();
         _isLoading = false;
         notifyListeners();
         return true;
@@ -63,7 +67,15 @@ class StoreService extends ChangeNotifier {
     }
   }
 
-  Future<Restaurant?> getOwnedRestaurant() async {
+  Future<Restaurant?> getOwnedRestaurant({bool forceRefresh = false}) async {
+    // Return cached data if still valid (24h TTL)
+    if (!forceRefresh &&
+        _ownedRestaurant != null &&
+        _ownedRestaurantCachedAt != null &&
+        DateTime.now().difference(_ownedRestaurantCachedAt!) < CacheTTL.long) {
+      return _ownedRestaurant;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -86,6 +98,7 @@ class StoreService extends ChangeNotifier {
           );
           if (res.statusCode == 200) {
             _ownedRestaurant = Restaurant.fromJson(json.decode(res.body));
+            _ownedRestaurantCachedAt = DateTime.now();
             _isLoading = false;
             notifyListeners();
             return _ownedRestaurant;
@@ -121,6 +134,7 @@ class StoreService extends ChangeNotifier {
       );
       if (response.statusCode == 200) {
         _ownedRestaurant = Restaurant.fromJson(json.decode(response.body));
+        _ownedRestaurantCachedAt = DateTime.now();
         _isLoading = false;
         notifyListeners();
         return true;
@@ -197,6 +211,7 @@ class StoreService extends ChangeNotifier {
 
   void clearOwnedRestaurant() {
     _ownedRestaurant = null;
+    _ownedRestaurantCachedAt = null;
     _error = null;
     notifyListeners();
   }

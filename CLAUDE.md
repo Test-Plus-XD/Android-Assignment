@@ -981,8 +981,73 @@ flutter build apk
 - **StorePage updated** (`pages/store_page.dart`):
   - Passes `Restaurant` object to `StoreAdFormPage` when navigating after Stripe checkout
 
+#### Phase 8 (2026-03-24) - TTL-Based Caching Across Services
+
+**New utility**: `lib/utils/cache_entry.dart`
+- Generic `CacheEntry<T>` class wrapping data with a `cachedAt` timestamp
+- `isExpired(Duration ttl)` helper — no external packages, just `DateTime` arithmetic
+- `CacheTTL.short` = 1 hour (bookings, reviews, chat rooms, advertisements)
+- `CacheTTL.long` = 24 hours (restaurant details, store owner restaurant)
+
+**main.dart** — all 6 `ChangeNotifierProxyProvider` registrations now use the `updateAuth` pattern (previously `previous ?? new Service(auth)`), preserving service instances (and their caches) across auth state changes. Affected services: UserService, BookingService, ReviewService, ChatService, StoreService, AdvertisementService.
+
+**RestaurantService** (`services/restaurant_service.dart`):
+- Added `Map<String, CacheEntry<Restaurant>> _restaurantCache` (24h TTL per restaurant ID)
+- Added `CacheEntry<List<Restaurant>>? _allRestaurantsCache` (24h TTL for home page list)
+- `getRestaurantById(id, {forceRefresh})` — returns cached entry if valid
+- `getAllRestaurants({forceRefresh})` — returns cached list if valid; also cross-seeds `_restaurantCache`
+- `searchRestaurants` and `advancedSearch` both cross-seed `_restaurantCache` from hits
+- `updateRestaurant` / `deleteRestaurant` invalidate relevant cache entries
+- `clearCache()` method added
+
+**BookingService** (`services/booking_service.dart`):
+- Added `DateTime? _userBookingsCachedAt` for 1h TTL check
+- `getUserBookings({forceRefresh})` — returns cached list if valid
+- Cache timestamp invalidated after `createBooking`, `updateBooking`, `deleteBooking`
+- `clearCache()` also clears timestamp
+
+**ReviewService** (`services/review_service.dart`):
+- Converted flat `_reviews` list to `Map<String, CacheEntry<List<Review>>> _reviewsCache` (keyed `r:<restaurantId>` or `u:<userId>`)
+- Converted flat `_currentStats` to `Map<String, CacheEntry<ReviewStats>> _statsCache`
+- Both caches use 1h TTL; `getReviews` and `getReviewStats` accept `{forceRefresh}`
+- Mutations invalidate relevant cache keys; `clearCache()` / `clearReviews()` (alias) available
+
+**StoreService** (`services/store_service.dart`):
+- Added `DateTime? _ownedRestaurantCachedAt` for 24h TTL check
+- `getOwnedRestaurant({forceRefresh})` — returns cached restaurant if valid
+- Timestamp reset after `claimRestaurant` and `updateRestaurant` success
+- `clearOwnedRestaurant()` also clears timestamp
+
+**AdvertisementService** (`services/advertisement_service.dart`):
+- Added `DateTime? _adsCachedAt` for 1h TTL check (default home-page call only)
+- `getAdvertisements({..., forceRefresh})` — caches only when `restaurantId == null && !includeInactive`
+- Timestamp invalidated after `createAdvertisement`, `updateAdvertisement`, `deleteAdvertisement`
+- `clearCache()` also clears timestamp
+
+**ChatService** (`services/chat_service.dart`):
+- Added `DateTime? _roomsCachedAt` for 1h TTL check
+- `getChatRooms({forceRefresh})` — returns early if rooms cached and not expired
+- Timestamp cleared on logout; Socket.IO `new-message` events still update `_rooms` in-place
+- `ensureConnected()` only calls `getChatRooms()` when `_rooms.isEmpty` (unchanged)
+
+**GeminiService** (`services/gemini_service.dart`):
+- Added `List<Map<String, dynamic>> _displayMessages` — persists the UI-facing message list so conversation survives `gemini_page.dart` dispose
+- `addDisplayMessage(msg)`, `clearDisplayMessages()` — new public methods
+- `clearHistory()` now also clears display messages
+
+**GeminiPage** (`pages/gemini_page.dart`):
+- `initState` now restores `_messages` from `GeminiService.displayMessages` if non-empty (via `addPostFrameCallback`)
+- Welcome message only added when `displayMessages` is empty
+- Every user and AI message is persisted to service via `addDisplayMessage`
+
+**Widget pull-to-refresh** — all `onRefresh` callbacks now pass `forceRefresh: true`:
+- `home_page.dart` → `getAllRestaurants(forceRefresh: true)` + `getAdvertisements(forceRefresh: true)`
+- `bookings_page.dart` → `getUserBookings(forceRefresh: true)`
+- `chat_page.dart` → `getChatRooms(forceRefresh: true)`
+- `store_page.dart` → `getOwnedRestaurant(forceRefresh: true)`
+
 ---
 
-**Last Updated**: 2026-03-19
+**Last Updated**: 2026-03-24
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant
