@@ -23,6 +23,7 @@ import '../widgets/restaurant/opening_hours_list.dart';
 import '../widgets/restaurant/claim_restaurant_button.dart';
 import '../widgets/restaurant/directions_bottom_sheet.dart';
 import '../widgets/booking/booking_dialog.dart';
+import '../widgets/skeletons/restaurant_detail_skeleton.dart';
 import '../pages/chat_room_page.dart';
 import '../pages/restaurant_reviews_page.dart';
 import '../pages/restaurant_menu_page.dart';
@@ -674,10 +675,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     future: _reviewStatsFuture,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
+                        return const ReviewStatsSkeleton();
                       }
                       if (snapshot.hasError) {
                         if (kDebugMode) print('Error loading review stats: ${snapshot.error}');

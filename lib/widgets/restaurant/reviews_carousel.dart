@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../models.dart';
 import '../reviews/star_rating.dart';
 import '../common/loading_indicator.dart';
+import '../skeletons/restaurant_detail_skeleton.dart';
 
 /// Reviews Carousel Section Widget
 ///
@@ -24,7 +25,7 @@ class ReviewsCarousel extends StatelessWidget {
       future: reviewsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(height: 150, child: CenteredLoadingIndicator());
+          return const ReviewsCarouselSkeleton();
         }
         if (snapshot.hasError) {
           // Log error but don't show to user

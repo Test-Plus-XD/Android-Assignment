@@ -8,6 +8,7 @@ import '../services/advertisement_service.dart';
 import '../models.dart';
 import '../widgets/qr/menu_qr_generator.dart';
 import '../widgets/common/loading_indicator.dart';
+import '../widgets/skeletons/restaurant_detail_skeleton.dart';
 import 'store_info_edit_page.dart';
 import 'store_menu_manage_page.dart';
 import 'store_bookings_page.dart';
@@ -579,44 +580,46 @@ class _StatisticsSectionState extends State<_StatisticsSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Menu item count
-        Expanded(
-          child: FutureBuilder<List<MenuItem>>(
-            future: _menuItemsFuture,
-            builder: (context, snapshot) {
-              final count = snapshot.hasData ? snapshot.data!.length : 0;
-              return _buildStatCard(
+    return FutureBuilder<List<dynamic>>(
+      // Wait for both futures to complete before rendering real cards.
+      future: Future.wait([
+        _menuItemsFuture ?? Future.value(<MenuItem>[]),
+        _bookingsFuture ?? Future.value(<Booking>[]),
+      ]),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const StoreStatsSkeleton();
+        }
+        final menuItems = snapshot.hasData
+            ? (snapshot.data![0] as List<MenuItem>)
+            : <MenuItem>[];
+        final bookings = snapshot.hasData
+            ? (snapshot.data![1] as List<Booking>)
+            : <Booking>[];
+        return Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
                 context: context,
                 icon: Icons.restaurant_menu,
                 label: widget.isTraditionalChinese ? '菜單項目' : 'Menu Items',
-                value: count.toString(),
+                value: menuItems.length.toString(),
                 color: Colors.orange,
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
-        // Today's booking count (from real API data)
-        Expanded(
-          child: FutureBuilder<List<Booking>>(
-            future: _bookingsFuture,
-            builder: (context, snapshot) {
-              final count = snapshot.hasData
-                  ? _getTodayBookingCount(snapshot.data!)
-                  : 0;
-              return _buildStatCard(
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildStatCard(
                 context: context,
                 icon: Icons.calendar_today,
                 label: widget.isTraditionalChinese ? '今日預訂' : 'Today\'s Bookings',
-                value: count.toString(),
+                value: _getTodayBookingCount(bookings).toString(),
                 color: Colors.blue,
-              );
-            },
-          ),
-        ),
-      ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

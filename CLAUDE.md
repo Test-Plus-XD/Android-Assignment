@@ -1164,6 +1164,34 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 ---
 
+#### Phase 12 (2026-03-28) - Skeleton Loading Placeholder Animations
+
+**Package added**: `shimmer: ^3.0.0` (uncommented in `pubspec.yaml`)
+
+**New skeleton widgets** (`lib/widgets/skeletons/`):
+- **`skeleton_box.dart`**: Base primitives — `SkeletonBox` (single shimmer rectangle), `SkeletonShimmer` (Shimmer.fromColors wrapper, theme-aware dark/light), `SkeletonWithLoader` (shimmer + Eclipse.gif overlay on top)
+- **`restaurant_card_skeleton.dart`**: `RestaurantSearchCardSkeleton` (220 px card matching search results), `RestaurantCarouselCardSkeleton` (85 % viewport carousel card), `RestaurantSearchListSkeleton` (6-item list), `RestaurantCarouselSkeleton` (2-card row)
+- **`nearby_restaurant_skeleton.dart`**: `NearbyRestaurantCardSkeleton` (160 × 200 px horizontal-scroll card), `NearbyRestaurantsSkeleton` (5-card row)
+- **`booking_card_skeleton.dart`**: `BookingCardSkeleton` (mirrors BookingCard: status badge, name, date/time/guests rows, action buttons), `BookingListSkeleton`
+- **`chat_room_item_skeleton.dart`**: `ChatRoomItemSkeleton` (avatar + 2 text lines + timestamp), `ChatRoomListSkeleton`
+- **`restaurant_detail_skeleton.dart`**: `MenuPreviewSkeleton` (4-item carousel), `ReviewStatsSkeleton` (score + 5 star boxes), `ReviewsCarouselSkeleton` (3 review cards), `StoreStatsSkeleton` (2 stat cards)
+
+**Design pattern**: Every skeleton widget uses `SkeletonWithLoader` so the branded Eclipse.gif animation plays **on top of** the shimmer layout. Light/dark mode colours are automatically adjusted.
+
+**Pages updated**:
+- `pages/home_page.dart` → nearby loading: `NearbyRestaurantsSkeleton`; featured loading: `RestaurantCarouselSkeleton`
+- `pages/search_page.dart` → `firstPageProgressIndicatorBuilder`: `RestaurantSearchListSkeleton(count: 6)`
+- `pages/bookings_page.dart` → initial load: `BookingListSkeleton(count: 3)`
+- `pages/chat_page.dart` → initial load: `ChatRoomListSkeleton(count: 5)`; refresh overlay: `ChatRoomListSkeleton(count: 3)`
+
+**Widget files updated**:
+- `widgets/restaurant/menu_preview_section.dart` → waiting: `MenuPreviewSkeleton`
+- `widgets/restaurant/reviews_carousel.dart` → waiting: `ReviewsCarouselSkeleton`
+- `pages/restaurant_detail_page.dart` → review stats waiting: `ReviewStatsSkeleton`
+- `pages/store_page.dart` → statistics section waiting: `StoreStatsSkeleton` (uses `Future.wait` to combine both stat futures)
+
+---
+
 **Last Updated**: 2026-03-28
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

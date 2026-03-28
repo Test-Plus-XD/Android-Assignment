@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models.dart';
 import '../common/loading_indicator.dart';
+import '../skeletons/restaurant_detail_skeleton.dart';
 
 /// Menu Preview Section Widget
 ///
@@ -24,7 +25,7 @@ class MenuPreviewSection extends StatelessWidget {
       future: menuItemsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(height: 120, child: CenteredLoadingIndicator());
+          return const MenuPreviewSkeleton();
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Padding(
