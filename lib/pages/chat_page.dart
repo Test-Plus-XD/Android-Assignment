@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 import '../services/user_service.dart';
+import '../widgets/skeletons/chat_room_item_skeleton.dart';
 import 'chat_room_page.dart';
 
 // Note: ChatService uses lazy initialisation via ensureConnected()
@@ -125,20 +126,22 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     return Scaffold(
-      body: chatService.rooms.isEmpty && !chatService.isLoading
-          ? Column(
-              children: [
-                // Empty state - not expanded, just takes needed space
-                _buildEmptyState(theme, userType),
-                
-                // Small spacing instead of Spacer
-                const SizedBox(height: 24),
-                
-                // Usage flow info card
-                _buildUsageInfoCard(theme, userType),
-              ],
-            )
-          : _buildChatListWithUsageInfo(chatService, authService, userType),
+      body: chatService.rooms.isEmpty && chatService.isLoading
+          ? const SingleChildScrollView(child: ChatRoomListSkeleton(count: 5))
+          : chatService.rooms.isEmpty && !chatService.isLoading
+              ? Column(
+                  children: [
+                    // Empty state - not expanded, just takes needed space
+                    _buildEmptyState(theme, userType),
+
+                    // Small spacing instead of Spacer
+                    const SizedBox(height: 24),
+
+                    // Usage flow info card
+                    _buildUsageInfoCard(theme, userType),
+                  ],
+                )
+              : _buildChatListWithUsageInfo(chatService, authService, userType),
     );
   }
 
@@ -150,12 +153,12 @@ class _ChatPageState extends State<ChatPage> {
       onRefresh: () => _loadRooms(forceRefresh: true),
       child: CustomScrollView(
         slivers: [
-          // Loading indicator if needed
+          // Skeleton overlay while refreshing (rooms already visible)
           if (chatService.isLoading)
             const SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Center(child: CircularProgressIndicator()),
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: ChatRoomListSkeleton(count: 3),
               ),
             ),
           

@@ -4,6 +4,7 @@ import '../services/booking_service.dart';
 import '../services/auth_service.dart';
 import '../models.dart';
 import '../widgets/booking/booking_list.dart';
+import '../widgets/skeletons/booking_card_skeleton.dart';
 import 'restaurant_detail_page.dart';
 import 'login_page.dart';
 
@@ -209,7 +210,7 @@ class _BookingsPageState extends State<BookingsPage> with SingleTickerProviderSt
           ),
           Expanded(
             child: bookingService.isLoading && bookingService.userBookings.isEmpty
-                ? const Center(child: CircularProgressIndicator())
+                ? const SingleChildScrollView(child: BookingListSkeleton(count: 3))
                 : TabBarView(
                     controller: _tabController,
                     children: [

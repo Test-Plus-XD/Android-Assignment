@@ -8,6 +8,8 @@ import '../services/auth_service.dart';
 import '../services/advertisement_service.dart';
 import '../models.dart';
 import '../widgets/carousel/offer_carousel.dart';
+import '../widgets/skeletons/nearby_restaurant_skeleton.dart';
+import '../widgets/skeletons/restaurant_card_skeleton.dart';
 import 'restaurant_detail_page.dart';
 
 /// Home Page with Direct Vercel API Integration
@@ -400,10 +402,7 @@ class _FrontPageState extends State<FrontPage> {
 
             /// Nearby restaurants loading, empty, or list state
             if (_loadingNearby)
-              const Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const NearbyRestaurantsSkeleton()
             else if (_cachedNearby.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -602,10 +601,7 @@ class _FrontPageState extends State<FrontPage> {
 
             /// Featured restaurants loading or carousel
             if (_loadingFeatured && _cachedFeatured.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const RestaurantCarouselSkeleton()
             else if (_cachedFeatured.isNotEmpty)
               Column(
                 children: [

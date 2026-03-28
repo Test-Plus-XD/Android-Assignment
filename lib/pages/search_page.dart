@@ -8,6 +8,7 @@ import '../constants/keywords.dart';
 import '../widgets/search/restaurant_search_card.dart';
 import '../widgets/search/search_filter_section.dart';
 import '../widgets/search/search_map_view.dart';
+import '../widgets/skeletons/restaurant_card_skeleton.dart';
 
 /// Search Page with Infinite Scroll Pagination (Version 5)
 //
@@ -584,17 +585,9 @@ class _SearchPageState extends State<SearchPage> {
                           );
                         },
 
-                        // Replace CircularProgressIndicator with Eclipse.gif
-                        firstPageProgressIndicatorBuilder: (_) => SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.5,
-                          child: Center(
-                            child: Image.asset(
-                              'assets/images/Eclipse.gif',
-                              width: 80,
-                              height: 80,
-                            ),
-                          ),
-                        ),
+                        // Skeleton cards with Eclipse.gif overlay on first load
+                        firstPageProgressIndicatorBuilder: (_) =>
+                            const RestaurantSearchListSkeleton(count: 6),
 
                         newPageProgressIndicatorBuilder: (_) => Container(
                           padding: const EdgeInsets.all(24),
