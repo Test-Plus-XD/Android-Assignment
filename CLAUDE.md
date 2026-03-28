@@ -1142,6 +1142,28 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 ---
 
+#### Phase 11 (2026-03-28) - UX Polish: Directions Sheet, Search Map & Navigation Fixes
+
+**Directions Bottom Sheet** (`widgets/restaurant/directions_bottom_sheet.dart`):
+- Expanded sheet height from 70% → 95% of screen
+- Map now uses `Expanded` to fill available vertical space instead of fixed 200px
+- Added custom zoom +/− buttons overlaid at bottom-right of map (`_MapOverlayButton`)
+- Added centre-on-user button at top-right of map; requests `Geolocator` permission if needed, shows snackbar fallback
+- Map wrapped in `Localizations.override` with `zh_TW`/`en_US` locale when TC mode is active (best-effort; Google Maps tile language follows device locale)
+- Removed `const Spacer()` between route summary and button; layout now driven by `Expanded` map
+
+**Search Map View** (`widgets/search/search_map_view.dart`):
+- Callout card repositioned from `bottom: 16` → `bottom: 96` to avoid being hidden by the `stylish_bottom_bar` nav bar
+- Added `padding: EdgeInsets.only(bottom: 96, right: 4)` to `GoogleMap` to push built-in zoom controls and my-location button above the nav bar
+
+**Main Shell** (`widgets/navigation/main_shell.dart`):
+- Added `physics: NeverScrollableScrollPhysics()` to the root `PageView` — prevents horizontal map drags from accidentally switching app-level pages/tabs
+
+**Store Page** (`pages/store_page.dart`):
+- Fixed "setState() called during build" crash on navigation: `_StatisticsSection.initState()` now defers `getMenuItems` and `getRestaurantBookings` calls to `WidgetsBinding.instance.addPostFrameCallback` instead of calling them directly in `initState`
+
+---
+
 **Last Updated**: 2026-03-28
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

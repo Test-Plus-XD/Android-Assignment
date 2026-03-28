@@ -554,10 +554,15 @@ class _StatisticsSectionState extends State<_StatisticsSection> {
   @override
   void initState() {
     super.initState();
-    _menuItemsFuture =
-        context.read<MenuService>().getMenuItems(widget.restaurantId);
-    _bookingsFuture =
-        context.read<BookingService>().getRestaurantBookings(widget.restaurantId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _menuItemsFuture =
+            context.read<MenuService>().getMenuItems(widget.restaurantId);
+        _bookingsFuture =
+            context.read<BookingService>().getRestaurantBookings(widget.restaurantId);
+      });
+    });
   }
 
   int _getTodayBookingCount(List<Booking> bookings) {
