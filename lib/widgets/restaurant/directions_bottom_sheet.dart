@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models.dart';
@@ -64,11 +65,69 @@ class DirectionsBottomSheet extends StatefulWidget {
 class _DirectionsBottomSheetState extends State<DirectionsBottomSheet> {
   _TransportMode _selectedMode = _TransportMode.transit;
   GoogleMapController? _mapController;
+  double _currentZoom = 13;
 
   @override
   void dispose() {
     _mapController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _zoomIn() async {
+    _currentZoom = (_currentZoom + 1).clamp(2, 21);
+    await _mapController?.animateCamera(CameraUpdate.zoomIn());
+  }
+
+  Future<void> _zoomOut() async {
+    _currentZoom = (_currentZoom - 1).clamp(2, 21);
+    await _mapController?.animateCamera(CameraUpdate.zoomOut());
+  }
+
+  /// Centre the map on the user's current location, requesting permission if needed.
+  Future<void> _centreOnUser() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (!mounted) return;
+    if (permission == LocationPermission.deniedForever ||
+        permission == LocationPermission.denied) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese
+                ? '請在設定中啟用位置服務'
+                : 'Please enable location services in Settings',
+          ),
+        ),
+      );
+      return;
+    }
+    final locationService = context.read<LocationService>();
+    final pos = locationService.currentPosition;
+    if (pos != null) {
+      await _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 15),
+      );
+    } else {
+      // Try to get fresh position
+      try {
+        final fresh = await Geolocator.getCurrentPosition();
+        if (!mounted) return;
+        await _mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(LatLng(fresh.latitude, fresh.longitude), 15),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese ? '無法獲取當前位置' : 'Could not get current location',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   /// Format travel time from minutes
@@ -155,8 +214,12 @@ class _DirectionsBottomSheetState extends State<DirectionsBottomSheet> {
           )
         : LatLng(restaurantLat, restaurantLng);
 
+    final mapLocale = widget.isTraditionalChinese
+        ? const Locale('zh', 'TW')
+        : const Locale('en', 'US');
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.70,
+      height: MediaQuery.of(context).size.height * 0.95,
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -195,57 +258,101 @@ class _DirectionsBottomSheetState extends State<DirectionsBottomSheet> {
             ),
           ),
 
-          // Map section
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: initialTarget,
-                  zoom: userPos != null ? 13 : 15,
+          // Map section — expands to fill remaining space
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
-                markers: {
-                  Marker(
-                    markerId: const MarkerId('restaurant'),
-                    position: LatLng(restaurantLat, restaurantLng),
-                    infoWindow: InfoWindow(title: restaurantName),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-                  ),
-                },
-                polylines: polylines,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                compassEnabled: true,
-                zoomControlsEnabled: false,
-                mapToolbarEnabled: false,
-                onMapCreated: (controller) {
-                  _mapController = controller;
-                  if (userPos != null) {
-                    // Fit both points
-                    Future.delayed(const Duration(milliseconds: 300), () {
-                      if (!mounted) return;
-                      final bounds = LatLngBounds(
-                        southwest: LatLng(
-                          userPos.latitude < restaurantLat ? userPos.latitude : restaurantLat,
-                          userPos.longitude < restaurantLng ? userPos.longitude : restaurantLng,
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  children: [
+                    // Google Map wrapped in Localizations.override for TC/EN language
+                    Positioned.fill(
+                      child: Localizations.override(
+                        context: context,
+                        locale: mapLocale,
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: initialTarget,
+                            zoom: userPos != null ? 13 : 15,
+                          ),
+                          markers: {
+                            Marker(
+                              markerId: const MarkerId('restaurant'),
+                              position: LatLng(restaurantLat, restaurantLng),
+                              infoWindow: InfoWindow(title: restaurantName),
+                              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                            ),
+                          },
+                          polylines: polylines,
+                          myLocationEnabled: true,
+                          myLocationButtonEnabled: false,
+                          compassEnabled: true,
+                          zoomControlsEnabled: false,
+                          mapToolbarEnabled: false,
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                            if (userPos != null) {
+                              Future.delayed(const Duration(milliseconds: 300), () {
+                                if (!mounted) return;
+                                final bounds = LatLngBounds(
+                                  southwest: LatLng(
+                                    userPos.latitude < restaurantLat ? userPos.latitude : restaurantLat,
+                                    userPos.longitude < restaurantLng ? userPos.longitude : restaurantLng,
+                                  ),
+                                  northeast: LatLng(
+                                    userPos.latitude > restaurantLat ? userPos.latitude : restaurantLat,
+                                    userPos.longitude > restaurantLng ? userPos.longitude : restaurantLng,
+                                  ),
+                                );
+                                _mapController?.animateCamera(
+                                  CameraUpdate.newLatLngBounds(bounds, 60),
+                                );
+                              });
+                            }
+                          },
                         ),
-                        northeast: LatLng(
-                          userPos.latitude > restaurantLat ? userPos.latitude : restaurantLat,
-                          userPos.longitude > restaurantLng ? userPos.longitude : restaurantLng,
-                        ),
-                      );
-                      _mapController?.animateCamera(
-                        CameraUpdate.newLatLngBounds(bounds, 60),
-                      );
-                    });
-                  }
-                },
+                      ),
+                    ),
+
+                    // Top-right: centre-on-user button
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _MapOverlayButton(
+                        icon: Icons.my_location,
+                        onTap: _centreOnUser,
+                        tooltip: widget.isTraditionalChinese ? '我的位置' : 'My location',
+                      ),
+                    ),
+
+                    // Bottom-right: zoom controls
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _MapOverlayButton(
+                            icon: Icons.add,
+                            onTap: _zoomIn,
+                            tooltip: widget.isTraditionalChinese ? '放大' : 'Zoom in',
+                          ),
+                          const SizedBox(height: 4),
+                          _MapOverlayButton(
+                            icon: Icons.remove,
+                            onTap: _zoomOut,
+                            tooltip: widget.isTraditionalChinese ? '縮小' : 'Zoom out',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -358,7 +465,7 @@ class _DirectionsBottomSheetState extends State<DirectionsBottomSheet> {
               ),
             ),
 
-          const Spacer(),
+          const SizedBox(height: 16),
 
           // Open in Google Maps button
           Padding(
@@ -376,6 +483,40 @@ class _DirectionsBottomSheetState extends State<DirectionsBottomSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small square button overlay for the map (zoom +/-, centre)
+class _MapOverlayButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _MapOverlayButton({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white,
+        elevation: 2,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: Icon(icon, size: 20, color: Colors.black87),
+          ),
+        ),
       ),
     );
   }

@@ -504,6 +504,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
               children: [
                 PageView(
                   controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
                   onPageChanged: (index) {
                     setState(() => _currentIndex = index);
                     _showFab(); // Show FAB on page change

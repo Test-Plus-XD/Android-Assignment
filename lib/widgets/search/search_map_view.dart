@@ -160,14 +160,16 @@ class _SearchMapViewState extends State<SearchMapView> {
           compassEnabled: true,
           mapToolbarEnabled: false,
           zoomControlsEnabled: true,
+          // Push map UI controls (zoom buttons, my-location) above the nav bar
+          padding: const EdgeInsets.only(bottom: 96, right: 4),
         ),
 
-        // Callout card for selected pin
+        // Callout card for selected pin — positioned above the nav bar
         if (selected != null)
           Positioned(
             left: 16,
             right: 16,
-            bottom: 16,
+            bottom: 96,
             child: SearchMapCalloutCard(
               restaurant: selected,
               isTraditionalChinese: widget.isTraditionalChinese,
