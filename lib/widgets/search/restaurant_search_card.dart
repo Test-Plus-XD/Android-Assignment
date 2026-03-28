@@ -81,8 +81,11 @@ class RestaurantSearchCard extends StatelessWidget {
               // Content overlay positioned at bottom
               _buildContentOverlay(displayName, displayKeywords, displayDistrict, displayAddress),
 
-              // Top-right decorative element
-              _buildDecorativeIcon(context),
+              // Open/Closed badge (top-left)
+              _buildStatusBadge(),
+
+              // Star rating indicator (top-right)
+              _buildRatingBadge(context),
             ],
           ),
         ),
@@ -250,19 +253,42 @@ class RestaurantSearchCard extends StatelessWidget {
     );
   }
 
-  /// Build Decorative Icon
-  ///
-  /// A circular white badge with restaurant menu icon in the top-right corner.
-  /// Could be extended to show ratings or favorites in the future.
-  Widget _buildDecorativeIcon(BuildContext context) {
+  /// Open/Closed status badge (top-left)
+  Widget _buildStatusBadge() {
+    final isOpen = restaurant.isOpenNow;
+    return Positioned(
+      top: 12,
+      left: 12,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: (isOpen ? Colors.green : Colors.red).withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          isOpen
+              ? (isTraditionalChinese ? '營業中' : 'Open')
+              : (isTraditionalChinese ? '休息中' : 'Closed'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Star rating indicator (top-right)
+  Widget _buildRatingBadge(BuildContext context) {
     return Positioned(
       top: 12,
       right: 12,
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.9),
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.2),
@@ -270,10 +296,13 @@ class RestaurantSearchCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Icon(
-          Icons.restaurant_menu,
-          size: 18,
-          color: Theme.of(context).colorScheme.primary,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star_rounded, size: 16, color: Colors.amber[700]),
+            const SizedBox(width: 2),
+            Icon(Icons.restaurant_menu, size: 14, color: Theme.of(context).colorScheme.primary),
+          ],
         ),
       ),
     );

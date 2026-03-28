@@ -106,6 +106,50 @@ class RestaurantCarousel extends StatelessWidget {
               ),
             ),
 
+            // Open/Closed badge (top-left)
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (restaurant.isOpenNow ? Colors.green : Colors.red).withOpacity(0.85),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  restaurant.isOpenNow
+                      ? (isTraditionalChinese ? '營業中' : 'Open')
+                      : (isTraditionalChinese ? '休息中' : 'Closed'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+
+            // Star rating indicator (top-right)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
+                    const SizedBox(width: 2),
+                    Icon(Icons.restaurant_menu, size: 12, color: Theme.of(context).colorScheme.primary),
+                  ],
+                ),
+              ),
+            ),
+
             // Gradient Overlay
             Positioned(
               bottom: 0,

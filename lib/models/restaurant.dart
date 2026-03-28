@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import '../config.dart';
 
 /// Restaurant model with bilingual support
@@ -153,5 +154,33 @@ class Restaurant {
     return isTraditionalChinese
         ? (keywordTc ?? keywordEn ?? [])
         : (keywordEn ?? keywordTc ?? []);
+  }
+
+  /// Whether the restaurant is currently open based on opening hours
+  bool get isOpenNow {
+    if (openingHours == null || openingHours!.isEmpty) return false;
+    final now = DateTime.now();
+    final dayName = DateFormat('EEEE').format(now);
+    final todayHours = openingHours![dayName];
+    if (todayHours == null || todayHours.toString().toLowerCase() == 'closed') {
+      return false;
+    }
+    final hoursStr = todayHours.toString();
+    final timeParts = hoursStr.split(RegExp(r'\s*-\s*'));
+    if (timeParts.length != 2) return true;
+    try {
+      final openTime = _parseTime(timeParts[0].trim());
+      final closeTime = _parseTime(timeParts[1].trim());
+      final currentMinutes = now.hour * 60 + now.minute;
+      return currentMinutes >= openTime && currentMinutes <= closeTime;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  static int _parseTime(String timeStr) {
+    final parts = timeStr.split(':');
+    if (parts.length != 2) return 0;
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
   }
 }

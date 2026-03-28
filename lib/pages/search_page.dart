@@ -7,6 +7,7 @@ import '../constants/districts.dart';
 import '../constants/keywords.dart';
 import '../widgets/search/restaurant_search_card.dart';
 import '../widgets/search/search_filter_section.dart';
+import '../widgets/search/search_map_view.dart';
 
 /// Search Page with Infinite Scroll Pagination (Version 5)
 //
@@ -51,6 +52,8 @@ class _SearchPageState extends State<SearchPage> {
   String _currentQuery = '';
   /// Number of results to fetch per page
   static const int _pageSize = 12;
+  /// Whether to show map view instead of list view
+  bool _isMapView = false;
 
   @override
   void initState() {
@@ -508,6 +511,8 @@ class _SearchPageState extends State<SearchPage> {
                   selectedKeywordsEn: _selectedKeywordsEn,
                   onDistrictFilterTap: _showDistrictFilterDialog,
                   onKeywordFilterTap: _showKeywordFilterDialog,
+                  isMapView: _isMapView,
+                  onToggleMapView: () => setState(() => _isMapView = !_isMapView),
                   onDistrictRemoved: (districtEn) {
                     if (mounted) {
                       setState(() => _selectedDistrictsEn.remove(districtEn));
@@ -537,201 +542,222 @@ class _SearchPageState extends State<SearchPage> {
         const Divider(height: 0.4),
 
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async {
-              _pagingController.refresh();
-            },
-            color: Theme.of(context).colorScheme.primary,
-            child: PagingListener<int, Restaurant>(
-              controller: _pagingController,
-              builder: (context, state, fetchNextPage) {
-                return PagedListView<int, Restaurant>(
-                  state: state,
-                  fetchNextPage: fetchNextPage,
-                  scrollController: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  builderDelegate: PagedChildBuilderDelegate<Restaurant>(
-                    itemBuilder: (context, restaurant, index) {
-                      return RestaurantSearchCard(
-                        restaurant: restaurant,
-                        isTraditionalChinese: widget.isTraditionalChinese,
-                      );
-                    },
-
-                    // Replace CircularProgressIndicator with Eclipse.gif
-                    firstPageProgressIndicatorBuilder: (_) => SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.5,
-                      child: Center(
-                        child: Image.asset(
-                          'assets/images/Eclipse.gif',
-                          width: 80,
-                          height: 80,
-                        ),
-                      ),
-                    ),
-
-                    newPageProgressIndicatorBuilder: (_) => Container(
-                      padding: const EdgeInsets.all(24),
-                      alignment: Alignment.center,
-                      child: Image.asset(
-                        'assets/images/Eclipse.gif',
-                        width: 60,
-                        height: 60,
-                      ),
-                    ),
-
-                    // Empty state
-                    noItemsFoundIndicatorBuilder: (_) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.search_off,
-                                size: 48,
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              noResultsMessage,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w500),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              tryAdjustingMessage,
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 14,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 24),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _selectedDistrictsEn.clear();
-                                  _selectedKeywordsEn.clear();
-                                });
-                                _performSearch();
-                              },
-                              icon: const Icon(Icons.refresh),
-                              label: Text(
-                                widget.isTraditionalChinese
-                                    ? '重設篩選'
-                                    : 'Reset Filters',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Error state for first page
-                    firstPageErrorIndicatorBuilder: (_) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.error_outline,
-                                size: 48,
-                                color: Colors.red.shade300,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              widget.isTraditionalChinese
-                                  ? '載入錯誤'
-                                  : 'Error Loading',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w500),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              widget.isTraditionalChinese
-                                  ? '請檢查網絡連接'
-                                  : 'Please check your connection',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            FilledButton.icon(
-                              onPressed: () => _pagingController.refresh(),
-                              icon: const Icon(Icons.refresh),
-                              label: Text(
-                                widget.isTraditionalChinese ? '重試' : 'Retry',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Error state for subsequent pages
-                    newPageErrorIndicatorBuilder: (_) => Container(
-                      padding: const EdgeInsets.all(16),
-                      alignment: Alignment.center,
-                      child: Column(
-                        children: [
-                          Text(
-                            widget.isTraditionalChinese
-                                ? '載入更多時出錯'
-                                : 'Error loading more',
-                            style: TextStyle(color: Colors.red.shade400),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () => _pagingController.refresh(),
-                            child: Text(
-                              widget.isTraditionalChinese ? '重試' : 'Retry',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // No more items indicator
-                    noMoreItemsIndicatorBuilder: (_) => Container(
-                      padding: const EdgeInsets.all(24),
-                      alignment: Alignment.center,
+          child: _isMapView
+            // Map view: show all loaded restaurants on a Google Map
+            ? PagingListener<int, Restaurant>(
+                controller: _pagingController,
+                builder: (context, state, fetchNextPage) {
+                  final allRestaurants = state.pages?.expand((p) => p).toList() ?? [];
+                  if (allRestaurants.isEmpty) {
+                    return Center(
                       child: Text(
-                        widget.isTraditionalChinese
-                            ? '— 已顯示全部結果 —'
-                            : '— End of Results —',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 13,
+                        widget.isTraditionalChinese ? '搜尋餐廳以在地圖上顯示' : 'Search for restaurants to show on map',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    );
+                  }
+                  return SearchMapView(
+                    restaurants: allRestaurants,
+                    isTraditionalChinese: widget.isTraditionalChinese,
+                  );
+                },
+              )
+            // List view: paginated list of restaurant cards
+            : RefreshIndicator(
+                onRefresh: () async {
+                  _pagingController.refresh();
+                },
+                color: Theme.of(context).colorScheme.primary,
+                child: PagingListener<int, Restaurant>(
+                  controller: _pagingController,
+                  builder: (context, state, fetchNextPage) {
+                    return PagedListView<int, Restaurant>(
+                      state: state,
+                      fetchNextPage: fetchNextPage,
+                      scrollController: _scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      builderDelegate: PagedChildBuilderDelegate<Restaurant>(
+                        itemBuilder: (context, restaurant, index) {
+                          return RestaurantSearchCard(
+                            restaurant: restaurant,
+                            isTraditionalChinese: widget.isTraditionalChinese,
+                          );
+                        },
+
+                        // Replace CircularProgressIndicator with Eclipse.gif
+                        firstPageProgressIndicatorBuilder: (_) => SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.5,
+                          child: Center(
+                            child: Image.asset(
+                              'assets/images/Eclipse.gif',
+                              width: 80,
+                              height: 80,
+                            ),
+                          ),
+                        ),
+
+                        newPageProgressIndicatorBuilder: (_) => Container(
+                          padding: const EdgeInsets.all(24),
+                          alignment: Alignment.center,
+                          child: Image.asset(
+                            'assets/images/Eclipse.gif',
+                            width: 60,
+                            height: 60,
+                          ),
+                        ),
+
+                        // Empty state
+                        noItemsFoundIndicatorBuilder: (_) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.search_off,
+                                    size: 48,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  noResultsMessage,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  tryAdjustingMessage,
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 24),
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _selectedDistrictsEn.clear();
+                                      _selectedKeywordsEn.clear();
+                                    });
+                                    _performSearch();
+                                  },
+                                  icon: const Icon(Icons.refresh),
+                                  label: Text(
+                                    widget.isTraditionalChinese
+                                        ? '重設篩選'
+                                        : 'Reset Filters',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Error state for first page
+                        firstPageErrorIndicatorBuilder: (_) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.error_outline,
+                                    size: 48,
+                                    color: Colors.red.shade300,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  widget.isTraditionalChinese
+                                      ? '載入錯誤'
+                                      : 'Error Loading',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  widget.isTraditionalChinese
+                                      ? '請檢查網絡連接'
+                                      : 'Please check your connection',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                FilledButton.icon(
+                                  onPressed: () => _pagingController.refresh(),
+                                  icon: const Icon(Icons.refresh),
+                                  label: Text(
+                                    widget.isTraditionalChinese ? '重試' : 'Retry',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Error state for subsequent pages
+                        newPageErrorIndicatorBuilder: (_) => Container(
+                          padding: const EdgeInsets.all(16),
+                          alignment: Alignment.center,
+                          child: Column(
+                            children: [
+                              Text(
+                                widget.isTraditionalChinese
+                                    ? '載入更多時出錯'
+                                    : 'Error loading more',
+                                style: TextStyle(color: Colors.red.shade400),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () => _pagingController.refresh(),
+                                child: Text(
+                                  widget.isTraditionalChinese ? '重試' : 'Retry',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // No more items indicator
+                        noMoreItemsIndicatorBuilder: (_) => Container(
+                          padding: const EdgeInsets.all(24),
+                          alignment: Alignment.center,
+                          child: Text(
+                            widget.isTraditionalChinese
+                                ? '— 已顯示全部結果 —'
+                                : '— End of Results —',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+                    );
+                  },
+                ),
+              ),
         ),
       ],
     );

@@ -23,6 +23,8 @@ class SearchFilterSection extends StatelessWidget {
   final Function(String) onDistrictRemoved;
   final Function(String) onKeywordRemoved;
   final VoidCallback onClearAll;
+  final bool isMapView;
+  final VoidCallback onToggleMapView;
 
   const SearchFilterSection({
     required this.isTraditionalChinese,
@@ -33,6 +35,8 @@ class SearchFilterSection extends StatelessWidget {
     required this.onDistrictRemoved,
     required this.onKeywordRemoved,
     required this.onClearAll,
+    this.isMapView = false,
+    required this.onToggleMapView,
     super.key,
   });
 
@@ -70,6 +74,21 @@ class SearchFilterSection extends StatelessWidget {
                     count: selectedKeywordsEn.length,
                     onTap: onKeywordFilterTap,
                     isTraditionalChinese: isTraditionalChinese,
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Map/List toggle button
+                IconButton.filled(
+                  icon: Icon(isMapView ? Icons.list : Icons.map),
+                  onPressed: onToggleMapView,
+                  tooltip: isMapView
+                      ? (isTraditionalChinese ? '列表' : 'List')
+                      : (isTraditionalChinese ? '地圖' : 'Map'),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
                   ),
                 ),
               ],

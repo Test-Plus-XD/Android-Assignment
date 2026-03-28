@@ -860,7 +860,7 @@ Occurs when a Flutter/Firebase plugin is compiled with a newer Kotlin than the p
 
 ## Project Statistics
 
-- **Total Dart Files**: 102
+- **Total Dart Files**: 105
 - **Lines of Code**: ~21,800 (estimated, excluding generated files)
   - Main files: 227 lines
   - Config: 145 lines
@@ -871,7 +871,7 @@ Occurs when a Flutter/Firebase plugin is compiled with a newer Kotlin than the p
   - Widgets: ~7,950 lines (50 components across 12 subdirectories)
 - **Pages**: 17 UI screens
 - **Services**: 15 business logic services
-- **Widgets**: 50 reusable components (across 12 subdirectories)
+- **Widgets**: 53 reusable components (across 12 subdirectories)
 - **Models**: 12 domain models
 - **Constants**: 4 static data files
 - **Languages**: English + Traditional Chinese (full bilingual)
@@ -1097,8 +1097,51 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 - `android/settings.gradle.kts`: Kotlin `2.1.0` → `2.3.10`; AGP `8.9.1` → `8.13.2`
 - `android/gradle/wrapper/gradle-wrapper.properties`: Gradle `8.12` → `8.14.4`
 
+#### Phase 10 (2026-03-28) - Search Map View, Directions Sheet & Card Badges
+
+**Search Map View** (porting iOS SearchMapView to Flutter):
+- **Map/List toggle** added to `SearchFilterSection` — `IconButton.filled` switches between `PagedListView` and `SearchMapView`
+- **`search_map_view.dart`** (new): Full-screen `GoogleMap` showing all loaded search results as markers
+  - Markers colour-coded by open/closed status (`hueGreen` / `hueRed`)
+  - Auto-fit camera to bounds of all valid restaurant coordinates with 50px padding
+  - Fallback centre: Hong Kong (22.3193, 114.1694)
+  - User location dot + location button + compass enabled
+  - Tap pin → shows callout card; tap map background → deselects
+- **`search_map_callout_card.dart`** (new): Compact horizontal card with 88x88 thumbnail, restaurant name, address, open/closed badge, chevron. Tapping navigates to `RestaurantDetailPage`
+
+**Directions Bottom Sheet** (porting iOS DirectionsView to Flutter):
+- **`directions_bottom_sheet.dart`** (new): Modal bottom sheet (70% height) replacing external Google Maps launch on the Directions action button
+  - `GoogleMap` (200px) showing user location, restaurant pin, and straight-line `Polyline` (5px, primary colour)
+  - `SegmentedButton<_TransportMode>` picker: Transit / Walking / Driving (Material 3)
+  - Route summary card: estimated time (haversine distance / speed constant) + formatted distance from `LocationService`
+  - Speed constants: transit 20 km/h, walking 5 km/h, driving 30 km/h
+  - "Open in Google Maps" `FilledButton.icon` launches `google.navigation:` or web fallback URL
+  - Graceful fallback when user location unavailable (shows prompt, hides route summary)
+- **No Google Directions API cost**: uses straight-line distance + speed estimates instead of paid API
+- `restaurant_detail_page.dart`: `onDirections` callback changed from `_openInMaps` to `_showDirectionsSheet`; address tap still opens external maps directly
+
+**Restaurant Card Badges** (open/closed + star rating):
+- **`restaurant.dart`**: Added `bool get isOpenNow` computed getter (parses `openingHours` map). Static `_parseTime` helper. Removed duplicate logic from `restaurant_detail_page.dart`
+- **`restaurant_search_card.dart`**: Replaced top-right decorative icon with:
+  - Top-left: Open/Closed pill badge (green/red with white text)
+  - Top-right: Star + restaurant icon badge (white pill)
+- **`restaurant_carousel.dart`**: Added matching badges (slightly smaller) to home page carousel cards
+
+**Files created (3)**:
+- `lib/widgets/search/search_map_view.dart`
+- `lib/widgets/search/search_map_callout_card.dart`
+- `lib/widgets/restaurant/directions_bottom_sheet.dart`
+
+**Files modified (6)**:
+- `lib/models/restaurant.dart` — `isOpenNow` getter + `_parseTime`
+- `lib/widgets/search/search_filter_section.dart` — `isMapView` + `onToggleMapView` params, map toggle button
+- `lib/widgets/search/restaurant_search_card.dart` — status badge + rating badge
+- `lib/widgets/carousel/restaurant_carousel.dart` — status badge + rating badge
+- `lib/pages/search_page.dart` — `_isMapView` state, conditional map/list rendering
+- `lib/pages/restaurant_detail_page.dart` — `_showDirectionsSheet()`, removed `_isRestaurantOpen()` / `_parseTime()`
+
 ---
 
-**Last Updated**: 2026-03-25
+**Last Updated**: 2026-03-28
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

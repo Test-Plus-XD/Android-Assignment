@@ -4,7 +4,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:intl/intl.dart';
 
 import '../models.dart';
 import '../services/auth_service.dart';
@@ -22,6 +21,7 @@ import '../widgets/restaurant/restaurant_header.dart';
 import '../widgets/restaurant/action_buttons_row.dart';
 import '../widgets/restaurant/opening_hours_list.dart';
 import '../widgets/restaurant/claim_restaurant_button.dart';
+import '../widgets/restaurant/directions_bottom_sheet.dart';
 import '../widgets/booking/booking_dialog.dart';
 import '../pages/chat_room_page.dart';
 import '../pages/restaurant_reviews_page.dart';
@@ -98,37 +98,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       _reviewsFuture = reviewService.getReviews(restaurantId: widget.restaurant.id);
       _menuItemsFuture = menuService.getMenuItems(widget.restaurant.id);
     });
-  }
-
-  /// Check if restaurant is currently open
-  bool _isRestaurantOpen() {
-    if (widget.restaurant.openingHours == null || widget.restaurant.openingHours!.isEmpty) {
-      return false;
-    }
-    final now = DateTime.now();
-    final dayName = DateFormat('EEEE').format(now);
-    final todayHours = widget.restaurant.openingHours![dayName];
-    if (todayHours == null || todayHours.toString().toLowerCase() == 'closed') {
-      return false;
-    }
-    // Try to parse opening hours (format: "11:00 - 21:00" or "11:00-21:00")
-    final hoursStr = todayHours.toString();
-    final timeParts = hoursStr.split(RegExp(r'\s*-\s*'));
-    if (timeParts.length != 2) return true;
-    try {
-      final openTime = _parseTime(timeParts[0].trim());
-      final closeTime = _parseTime(timeParts[1].trim());
-      final currentMinutes = now.hour * 60 + now.minute;
-      return currentMinutes >= openTime && currentMinutes <= closeTime;
-    } catch (e) {
-      return true;
-    }
-  }
-
-  int _parseTime(String timeStr) {
-    final parts = timeStr.split(':');
-    if (parts.length != 2) return 0;
-    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
   }
 
   /// Check if contact info has any data
@@ -267,6 +236,20 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開地圖' : 'Could not open maps')),
       );
     }
+  }
+
+  /// Show in-app directions bottom sheet
+  void _showDirectionsSheet() {
+    if (widget.restaurant.latitude == null || widget.restaurant.longitude == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DirectionsBottomSheet(
+        restaurant: widget.restaurant,
+        isTraditionalChinese: widget.isTraditionalChinese,
+      ),
+    );
   }
 
   /// Start a chat with the restaurant
@@ -490,7 +473,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     onCall: () => _makePhoneCall(widget.restaurant.contacts!['Phone']),
                     onChat: _startChatWithRestaurant,
                     onAI: _openGeminiChat,
-                    onDirections: _openInMaps,
+                    onDirections: _showDirectionsSheet,
                     onWebsite: () => _openWebsite(widget.restaurant.contacts!['Website']),
                   ),
 
@@ -586,21 +569,21 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: _isRestaurantOpen()
+                          color: widget.restaurant.isOpenNow
                               ? Colors.green.withValues(alpha: 0.15)
                               : Colors.red.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: _isRestaurantOpen() ? Colors.green : Colors.red,
+                            color: widget.restaurant.isOpenNow ? Colors.green : Colors.red,
                             width: 1,
                           ),
                         ),
                         child: Text(
-                          _isRestaurantOpen()
+                          widget.restaurant.isOpenNow
                               ? (widget.isTraditionalChinese ? '營業中' : 'Open')
                               : (widget.isTraditionalChinese ? '休息中' : 'Closed'),
                           style: TextStyle(
-                            color: _isRestaurantOpen() ? Colors.green[700] : Colors.red[700],
+                            color: widget.restaurant.isOpenNow ? Colors.green[700] : Colors.red[700],
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
