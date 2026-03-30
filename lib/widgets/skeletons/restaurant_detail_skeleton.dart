@@ -262,3 +262,37 @@ class StoreStatsSkeleton extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Single stat card skeleton
+// ---------------------------------------------------------------------------
+
+/// Skeleton for a single statistics card (used when each stat loads independently).
+class StoreStatCardSkeleton extends StatelessWidget {
+  const StoreStatCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonWithLoader(
+      child: Container(
+        height: 80,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey[850]
+              : Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SkeletonBox(width: 40, height: 24, borderRadius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 80, height: 12, borderRadius: 4),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -9,6 +9,7 @@ import '../models.dart';
 import '../widgets/qr/menu_qr_generator.dart';
 import '../widgets/common/loading_indicator.dart';
 import '../widgets/skeletons/restaurant_detail_skeleton.dart';
+import '../widgets/store/add_restaurant_sheet.dart';
 import 'store_info_edit_page.dart';
 import 'store_menu_manage_page.dart';
 import 'store_bookings_page.dart';
@@ -70,6 +71,25 @@ class _StorePageState extends State<StorePage>
   Future<void> _loadOwnedRestaurant({bool forceRefresh = false}) async {
     if (!mounted) return;
     await context.read<StoreService>().getOwnedRestaurant(forceRefresh: forceRefresh);
+  }
+
+  Future<void> _showAddRestaurantSheet(BuildContext context) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddRestaurantSheet(isTraditionalChinese: widget.isTraditionalChinese),
+    );
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese ? '餐廳已成功新增！' : 'Restaurant added successfully!',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   // ── Stripe / Advertisement helpers ────────────────────────────────────────
@@ -181,10 +201,21 @@ class _StorePageState extends State<StorePage>
               const SizedBox(height: 8),
               Text(
                 widget.isTraditionalChinese
-                    ? '聯絡管理員以認領您的餐廳'
-                    : 'Contact admin to claim your restaurant',
+                    ? '搜尋並認領您的餐廳，或新增一個'
+                    : 'Claim your existing restaurant or add a new one',
                 style: Theme.of(context).textTheme.bodyMedium,
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: () => _showAddRestaurantSheet(context),
+                icon: const Icon(Icons.add_business),
+                label: Text(
+                  widget.isTraditionalChinese ? '新增餐廳' : 'Add New Restaurant',
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
               ),
             ],
           ),
@@ -580,46 +611,46 @@ class _StatisticsSectionState extends State<_StatisticsSection> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<dynamic>>(
-      // Wait for both futures to complete before rendering real cards.
-      future: Future.wait([
-        _menuItemsFuture ?? Future.value(<MenuItem>[]),
-        _bookingsFuture ?? Future.value(<Booking>[]),
-      ]),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const StoreStatsSkeleton();
-        }
-        final menuItems = snapshot.hasData
-            ? (snapshot.data![0] as List<MenuItem>)
-            : <MenuItem>[];
-        final bookings = snapshot.hasData
-            ? (snapshot.data![1] as List<Booking>)
-            : <Booking>[];
-        return Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
+    return Row(
+      children: [
+        Expanded(
+          child: FutureBuilder<List<MenuItem>>(
+            future: _menuItemsFuture ?? Future.value(<MenuItem>[]),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const StoreStatCardSkeleton();
+              }
+              final count = snapshot.data?.length ?? 0;
+              return _buildStatCard(
                 context: context,
                 icon: Icons.restaurant_menu,
                 label: widget.isTraditionalChinese ? '菜單項目' : 'Menu Items',
-                value: menuItems.length.toString(),
+                value: count.toString(),
                 color: Colors.orange,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildStatCard(
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: FutureBuilder<List<Booking>>(
+            future: _bookingsFuture ?? Future.value(<Booking>[]),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const StoreStatCardSkeleton();
+              }
+              final count = _getTodayBookingCount(snapshot.data ?? []);
+              return _buildStatCard(
                 context: context,
                 icon: Icons.calendar_today,
                 label: widget.isTraditionalChinese ? '今日預訂' : 'Today\'s Bookings',
-                value: _getTodayBookingCount(bookings).toString(),
+                value: count.toString(),
                 color: Colors.blue,
-              ),
-            ),
-          ],
-        );
-      },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

@@ -1190,8 +1190,22 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 - `pages/restaurant_detail_page.dart` → review stats waiting: `ReviewStatsSkeleton`
 - `pages/store_page.dart` → statistics section waiting: `StoreStatsSkeleton` (uses `Future.wait` to combine both stat futures)
 
+#### Phase 13 (2026-03-30) - Add New Restaurant Sheet
+
+**New file**: `lib/widgets/store/add_restaurant_sheet.dart` — `DraggableScrollableSheet` (initialChildSize: 0.85, maxChildSize: 0.95) for creating a new restaurant listing from scratch.
+
+**Form sections**: bilingual names (EN/TC, at least one required), address (EN/TC), district picker (AlertDialog + RadioListTile), seats, contacts (phone/email/website), location (via `LocationPickerDialog` — full-screen Google Maps returning lat/lng), opening hours (Switch per day + `showTimePicker()` for open/close times, stored as `"HH:MM-HH:MM"`), keywords (CheckboxListTile AlertDialog — displays in user's preferred language only, stores both `Keyword_EN[]` + `Keyword_TC[]`), payments (CheckboxListTile AlertDialog — displays in user's preferred language, stores EN string values).
+
+**API flow** (no claim call needed):
+1. `POST /API/Restaurants` — payload includes all fields + `ownerId: uid` (no auth header required)
+2. `PUT /API/Users/:uid` — `{ restaurantId: newId }` (auth required via `StoreService.createRestaurant()`)
+
+**New method**: `StoreService.createRestaurant(Map<String, dynamic> payload)` — handles both API calls, refreshes owned restaurant cache, calls `notifyListeners()`.
+
+**`store_page.dart` changes**: Added `OutlinedButton.icon` "Add New Restaurant" in the no-restaurant empty state. `_showAddRestaurantSheet()` presents the sheet and shows a SnackBar on success; `Consumer<StoreService>` auto-renders dashboard when `hasOwnedRestaurant` becomes true.
+
 ---
 
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-03-30
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

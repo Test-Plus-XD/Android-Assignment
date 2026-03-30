@@ -209,6 +209,65 @@ class StoreService extends ChangeNotifier {
     }
   }
 
+  /// Create a new restaurant with ownerId set, then link it to the user profile.
+  /// Returns true on success, false on failure. Sets _error on failure.
+  Future<bool> createRestaurant(Map<String, dynamic> payload) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final uid = _authService.uid;
+      if (uid == null) throw Exception('Not authenticated');
+      final token = await _authService.getIdToken(forceRefresh: true);
+
+      // 1. POST /API/Restaurants — no auth header needed; ownerId set in body
+      payload['ownerId'] = uid;
+      final createResp = await http.post(
+        Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants'),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-passcode': AppConfig.apiPasscode,
+        },
+        body: json.encode(payload),
+      );
+      if (createResp.statusCode != 201) {
+        _error = json.decode(createResp.body)['error'] ?? 'Failed to create restaurant';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+      final newId = json.decode(createResp.body)['id'] as String;
+
+      // 2. PUT /API/Users/:uid to link restaurantId (auth required)
+      if (token == null) throw Exception('Not authenticated');
+      final userResp = await http.put(
+        Uri.parse('${AppConfig.apiBaseUrl}/API/Users/$uid'),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-passcode': AppConfig.apiPasscode,
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'restaurantId': newId}),
+      );
+      if (userResp.statusCode != 204) {
+        _error = 'Restaurant created but failed to link to profile';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // 3. Fetch the newly created restaurant to populate _ownedRestaurant
+      _ownedRestaurantCachedAt = null;
+      await getOwnedRestaurant(forceRefresh: true);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   void clearOwnedRestaurant() {
     _ownedRestaurant = null;
     _ownedRestaurantCachedAt = null;

@@ -33,6 +33,8 @@ class BookingService with ChangeNotifier {
   List<Booking> _userBookings = [];
   // TTL timestamp for user bookings cache (1h)
   DateTime? _userBookingsCachedAt;
+  // UID of the user whose bookings are cached
+  String? _userBookingsCachedUid;
   // Loading state
   bool _isLoading = false;
   // Error message
@@ -141,10 +143,12 @@ class BookingService with ChangeNotifier {
   /// Uses GET /API/Bookings — the API auto-filters by the authenticated
   /// user's Firebase token. Returns enriched data with restaurant info.
   Future<List<Booking>> getUserBookings({bool forceRefresh = false}) async {
-    // Return cached data if still valid
+    // Return cached data if still valid and belongs to the current user
+    final currentUid = _authService.currentUser?.uid;
     if (!forceRefresh &&
         _userBookings.isNotEmpty &&
         _userBookingsCachedAt != null &&
+        _userBookingsCachedUid == currentUid &&
         DateTime.now().difference(_userBookingsCachedAt!) < CacheTTL.short) {
       return _userBookings;
     }
@@ -173,6 +177,7 @@ class BookingService with ChangeNotifier {
         bookings.sort((a, b) => b.dateTime.compareTo(a.dateTime));
         _userBookings = bookings;
         _userBookingsCachedAt = DateTime.now();
+        _userBookingsCachedUid = _authService.currentUser?.uid;
         _errorMessage = null;
         _setLoading(false);
         notifyListeners();
@@ -375,6 +380,7 @@ class BookingService with ChangeNotifier {
   void clearCache() {
     _userBookings = [];
     _userBookingsCachedAt = null;
+    _userBookingsCachedUid = null;
     _errorMessage = null;
     notifyListeners();
   }
