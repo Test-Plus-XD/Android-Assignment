@@ -232,6 +232,65 @@ class GeminiService extends ChangeNotifier {
     }
   }
 
+  /// Chat about a specific restaurant using server-side context (preferred)
+  ///
+  /// Posts to /restaurant-description (chat mode). The server fetches restaurant
+  /// info and menu from Firestore automatically — no client-side context building needed.
+  ///
+  /// Parameters:
+  /// - [restaurantId]: Firestore restaurant document ID
+  /// - [message]: User's chat message
+  Future<String?> chatAboutRestaurant(
+    String restaurantId,
+    String message,
+  ) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final request = GeminiRestaurantChatRequest(
+        restaurantId: restaurantId,
+        message: message,
+        history: _conversationHistory.isEmpty ? null : _conversationHistory,
+      );
+
+      final response = await http.post(
+        Uri.parse('${AppConfig.apiBaseUrl}/API/Gemini/restaurant-description'),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-passcode': AppConfig.apiPasscode,
+        },
+        body: json.encode(request.toJson()),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final geminiResponse = GeminiChatResponse.fromJson(data);
+
+        if (geminiResponse.history != null) {
+          _conversationHistory = geminiResponse.history!;
+        }
+
+        _isLoading = false;
+        notifyListeners();
+        return AIResponseProcessor.cleanResponse(geminiResponse.result);
+      } else {
+        _errorMessage = 'Failed to chat about restaurant: ${response.statusCode} ${response.body}';
+        if (kDebugMode) print(_errorMessage);
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+    } catch (e) {
+      _errorMessage = 'Error chatting about restaurant: $e';
+      if (kDebugMode) print(_errorMessage);
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
   /// Ask a question about a specific restaurant with menu context
   ///
   /// PRIORITY: Menu-related questions are answered first

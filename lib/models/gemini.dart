@@ -200,6 +200,36 @@ class GeminiRestaurantDescriptionResponse {
   }
 }
 
+/// Request model for restaurant chat mode on the /restaurant-description endpoint
+///
+/// Server fetches restaurant info and menu from Firestore automatically —
+/// the client only needs to supply [restaurantId] and the user [message].
+class GeminiRestaurantChatRequest {
+  final String restaurantId;
+  final String message;
+  final List<GeminiChatHistory>? history;
+  final String? model;
+
+  GeminiRestaurantChatRequest({
+    required this.restaurantId,
+    required this.message,
+    this.history,
+    this.model,
+  });
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = {
+      'restaurantId': restaurantId,
+      'message': message,
+    };
+    if (history != null && history!.isNotEmpty) {
+      json['history'] = history!.map((h) => h.toJson()).toList();
+    }
+    if (model != null) json['model'] = model;
+    return json;
+  }
+}
+
 /// Request model for restaurant advertisement content generation
 ///
 /// Generates bilingual ad copy (titles + content) for a restaurant.

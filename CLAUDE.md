@@ -1204,8 +1204,35 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 **`store_page.dart` changes**: Added `OutlinedButton.icon` "Add New Restaurant" in the no-restaurant empty state. `_showAddRestaurantSheet()` presents the sheet and shows a SnackBar on success; `Consumer<StoreService>` auto-renders dashboard when `hasOwnedRestaurant` becomes true.
 
+#### Phase 14 (2026-04-04) - Restaurant Chat Mode & AI Response Markdown Rendering
+
+**`GeminiRestaurantChatRequest` model added** (`models/gemini.dart`):
+- New model for server-side restaurant chat mode: `restaurantId`, `message`, `history`, `model`
+- Server automatically fetches restaurant info and menu from Firestore — no client-side context building needed
+- Distinct from `GeminiRestaurantDescriptionRequest` (one-shot) and `GeminiChatRequest` (general chat)
+
+**`GeminiService.chatAboutRestaurant()` added** (`services/gemini_service.dart`):
+- Posts `GeminiRestaurantChatRequest` to `POST /API/Gemini/restaurant-description` in chat mode
+- Passes `_conversationHistory` so multi-turn context is preserved across messages
+- Updates `_conversationHistory` from the response; runs `AIResponseProcessor.cleanResponse()` before returning
+
+**`GeminiChatRoomPage` updated** (`pages/gemini_page.dart`):
+- Widget class renamed from `GeminiPage` → `GeminiChatRoomPage`
+- New optional `restaurantId` constructor parameter; when present, routes `_sendMessage` to `chatAboutRestaurant()` instead of the fallback `askAboutRestaurant()` or `chat()`
+- AI responses rendered through `AIResponseProcessor`: bold/italic markdown spans use `buildRichText()`; plain text falls back to `Text()`
+
+**`AIResponseProcessor` utility** (`utils/ai_response_processor.dart`):
+- `cleanResponse(String)` — strips context markers from AI output
+- `hasMarkdownFormatting(String)` — detects `**bold**` / `*italic*` patterns
+- `buildRichText(String, ...)` — returns `RichText` with inline bold/italic spans
+
+**Files modified (3)**:
+- `lib/models/gemini.dart` — added `GeminiRestaurantChatRequest`
+- `lib/services/gemini_service.dart` — added `chatAboutRestaurant()`
+- `lib/pages/gemini_page.dart` — `restaurantId` param, markdown rendering, renamed to `GeminiChatRoomPage`
+
 ---
 
-**Last Updated**: 2026-03-30
+**Last Updated**: 2026-04-04
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

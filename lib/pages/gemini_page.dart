@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/gemini_service.dart';
-import '../services/menu_service.dart';
 import '../widgets/ai/suggestion_chips.dart';
 import '../utils/ai_response_processor.dart';
 import '../models.dart';
@@ -40,7 +39,6 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
-  List<MenuItem>? _menuItems; // Cached menu items for this restaurant
 
   @override
   void initState() {
@@ -57,7 +55,6 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
         _addWelcomeMessage();
       }
     });
-    _loadMenuItems(); // Load menu items if restaurant ID is provided
   }
 
   @override
@@ -65,25 +62,6 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  /// Load menu items for the restaurant if ID is provided
-  Future<void> _loadMenuItems() async {
-    if (widget.restaurantId != null) {
-      try {
-        final menuService = context.read<MenuService>();
-        final items = await menuService.getMenuItems(widget.restaurantId!);
-        if (mounted) {
-          setState(() {
-            _menuItems = items;
-          });
-          // Update welcome message after loading menu
-          _updateWelcomeMessage();
-        }
-      } catch (e) {
-        // Silently fail - menu context is optional
-      }
-    }
   }
 
   void _addWelcomeMessage() {
@@ -102,30 +80,13 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
   /// Build welcome message based on context
   String _buildWelcomeMessage() {
     if (widget.restaurantName != null) {
-      // Restaurant-specific welcome with menu support
-      if (_menuItems != null && _menuItems!.isNotEmpty) {
-        return widget.isTraditionalChinese
-            ? '哈囉！我在這裡幫你答關於${widget.restaurantName}嘅問題，特別係菜單方面嘅。我已經有呢間餐廳${_menuItems!.length}款菜式資料，隨時問我啦！'
-            : 'Hey! I\'m here to answer any questions about ${widget.restaurantName}, especially stuff on the menu. I\'ve got details on ${_menuItems!.length} dishes, so fire away!';
-      } else {
-        return widget.isTraditionalChinese
-            ? '哈囉！我在這裡幫你答關於${widget.restaurantName}嘅問題，有咩想知隨時問啦！'
-            : 'Hey! I\'m here to help with any questions about ${widget.restaurantName}. Just ask away!';
-      }
+      return widget.isTraditionalChinese
+          ? '哈囉！我在這裡幫你答關於${widget.restaurantName}嘅問題，包括菜單、開放時間、聯絡方法等等。有咩想知隨時問啦！'
+          : 'Hey! I\'m here to answer any questions about ${widget.restaurantName} — menu, opening hours, contact info, you name it. Just ask away!';
     } else {
-      // General welcome
       return widget.isTraditionalChinese
           ? '哈囉！我是你嘅素食餐廳助手嚟㗎。我可以幫你推介餐廳、答問題，或者畀啲食飯建議你。有咩可以幫到你呀？'
           : 'Hey! I\'m your vegetarian restaurant mate. I can recommend places, answer questions, or give you some dining tips. What can I do for you?';
-    }
-  }
-
-  /// Update welcome message when menu is loaded
-  void _updateWelcomeMessage() {
-    if (_messages.isNotEmpty && _messages.first['role'] == 'model') {
-      setState(() {
-        _messages[0]['content'] = _buildWelcomeMessage();
-      });
     }
   }
 
@@ -160,16 +121,21 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
     _messageController.clear();
     _scrollToBottom();
 
-    // Get AI response with menu context (PRIORITY: Menu questions first)
+    // Get AI response
     String? response;
-    if (widget.restaurantName != null) {
-      // Restaurant-specific query with menu context
+    if (widget.restaurantId != null) {
+      // Restaurant-specific chat: server fetches info + menu from Firestore automatically
+      response = await geminiService.chatAboutRestaurant(
+        widget.restaurantId!,
+        message,
+      );
+    } else if (widget.restaurantName != null) {
+      // Fallback: no restaurantId — use client-side context
       response = await geminiService.askAboutRestaurant(
         message,
         widget.restaurantName!,
         cuisine: widget.restaurantCuisine,
         district: widget.restaurantDistrict,
-        menuItems: _menuItems, // Pass menu items for context
       );
     } else {
       // General chat
