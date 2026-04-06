@@ -24,6 +24,8 @@ class Restaurant {
   final Map<String, dynamic>? menu;
   final Map<String, dynamic>? openingHours;
   final Map<String, dynamic>? contacts;
+  final double? rating;
+  final int? reviewCount;
 
   Restaurant({
     required this.id,
@@ -44,6 +46,8 @@ class Restaurant {
     this.seats,
     this.contacts,
     this.ownerId,
+    this.rating,
+    this.reviewCount,
   });
 
   /// Creates Restaurant from JSON (handles both Algolia and API responses)
@@ -101,6 +105,8 @@ class Restaurant {
       openingHours: toMap(json['Opening_Hours'] ?? json['openingHours']),
       seats: toInt(json['Seats'] ?? json['seats']),
       contacts: toMap(json['Contacts'] ?? json['contacts']),
+      rating: toDouble(json['rating']),
+      reviewCount: toInt(json['reviewCount']),
     );
   }
 
@@ -125,6 +131,8 @@ class Restaurant {
       'Opening_Hours': openingHours,
       'Seats': seats,
       'Contacts': contacts,
+      if (rating != null) 'rating': rating,
+      if (reviewCount != null) 'reviewCount': reviewCount,
     };
   }
 

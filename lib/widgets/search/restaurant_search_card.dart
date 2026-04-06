@@ -279,8 +279,9 @@ class RestaurantSearchCard extends StatelessWidget {
     );
   }
 
-  /// Star rating indicator (top-right)
+  /// Star rating indicator (top-right) — shows numeric rating or "New"
   Widget _buildRatingBadge(BuildContext context) {
+    final hasRating = (restaurant.rating ?? 0) > 0;
     return Positioned(
       top: 12,
       right: 12,
@@ -300,8 +301,15 @@ class RestaurantSearchCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.star_rounded, size: 16, color: Colors.amber[700]),
-            const SizedBox(width: 2),
-            Icon(Icons.restaurant_menu, size: 14, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 3),
+            Text(
+              hasRating ? restaurant.rating!.toStringAsFixed(1) : 'New',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: hasRating ? Colors.black87 : Colors.grey[600],
+              ),
+            ),
           ],
         ),
       ),

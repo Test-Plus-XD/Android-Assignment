@@ -15,7 +15,7 @@ import '../utils/cache_entry.dart';
 ///
 /// Stripe checkout flow (differs from Ionic's browser redirect approach):
 ///   1. Call createAdCheckoutSession(restaurantId) to get a Stripe hosted URL
-///   2. Open the URL in a Chrome Custom Tab via url_launcher
+///   2. Open the URL in the external browser via url_launcher (LaunchMode.externalApplication)
 ///   3. Store the sessionId + timestamp in SharedPreferences (2hr TTL)
 ///   4. When user returns to the app, check for pending session
 ///   5. If found, prompt to create the advertisement content
@@ -327,7 +327,7 @@ class AdvertisementService with ChangeNotifier {
 
   /// Create a Stripe checkout session for purchasing an advertisement.
   /// Calls POST /API/Stripe/create-ad-checkout-session with restaurantId.
-  /// Returns the Stripe hosted checkout URL and opens it in a Chrome Custom Tab.
+  /// Returns the Stripe hosted checkout URL and opens it in the external browser.
   /// Stores the session ID in SharedPreferences for retrieval when user returns.
   Future<bool> createAdCheckoutSession(String restaurantId) async {
     try {
@@ -348,7 +348,7 @@ class AdvertisementService with ChangeNotifier {
         // Store session info in SharedPreferences for when user returns
         await _storePendingSession(sessionId, restaurantId);
 
-        // Open Stripe checkout URL in Chrome Custom Tab
+        // Open Stripe checkout URL in the external browser
         final uri = Uri.parse(url);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);

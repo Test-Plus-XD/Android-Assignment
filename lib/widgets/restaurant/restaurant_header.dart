@@ -39,11 +39,11 @@ class RestaurantHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              // Ratings and stats
+              // Half-star row + numeric rating + review count + vegetarian tag
               Row(
                 children: [
-                  const Icon(Icons.star, color: Colors.amber, size: 20),
-                  const SizedBox(width: 4),
+                  ..._buildHalfStarIcons(rating),
+                  const SizedBox(width: 6),
                   Text(
                     rating > 0
                         ? rating.toStringAsFixed(1)
@@ -55,7 +55,7 @@ class RestaurantHeader extends StatelessWidget {
                   if (count > 0) ...[
                     const SizedBox(width: 4),
                     Text(
-                      '($count reviews)',
+                      '($count ${isTraditionalChinese ? '評論' : 'reviews'})',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: Colors.grey[600],
                       ),
@@ -84,5 +84,22 @@ class RestaurantHeader extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  /// Builds a row of 5 star icons rounded to nearest 0.5
+  List<Widget> _buildHalfStarIcons(double rating) {
+    if (rating <= 0) return [];
+    final rounded = (rating * 2).round() / 2;
+    final full = rounded.floor();
+    final hasHalf = rounded - full > 0;
+    final empty = 5 - full - (hasHalf ? 1 : 0);
+    return [
+      for (int i = 0; i < full; i++)
+        const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
+      if (hasHalf)
+        const Icon(Icons.star_half_rounded, color: Colors.amber, size: 18),
+      for (int i = 0; i < empty; i++)
+        const Icon(Icons.star_outline_rounded, color: Colors.amber, size: 18),
+    ];
   }
 }

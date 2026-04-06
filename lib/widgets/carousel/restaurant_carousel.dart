@@ -129,7 +129,7 @@ class RestaurantCarousel extends StatelessWidget {
               ),
             ),
 
-            // Star rating indicator (top-right)
+            // Star rating indicator (top-right) — shows numeric rating or "New"
             Positioned(
               top: 8,
               right: 8,
@@ -139,13 +139,25 @@ class RestaurantCarousel extends StatelessWidget {
                   color: Colors.white.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
-                    const SizedBox(width: 2),
-                    Icon(Icons.restaurant_menu, size: 12, color: Theme.of(context).colorScheme.primary),
-                  ],
+                child: Builder(
+                  builder: (context) {
+                    final hasRating = (restaurant.rating ?? 0) > 0;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
+                        const SizedBox(width: 3),
+                        Text(
+                          hasRating ? restaurant.rating!.toStringAsFixed(1) : 'New',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: hasRating ? Colors.black87 : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),

@@ -82,7 +82,7 @@ lib/
 │   ├── gemini.dart                        # GeminiMessage model
 │   ├── image.dart                         # Image upload model
 │   ├── menu.dart                          # MenuItem, CreateMenuItemRequest
-│   ├── restaurant.dart                    # Restaurant model
+│   ├── restaurant.dart                    # Restaurant model (includes rating: double?, reviewCount: int?)
 │   ├── review.dart                        # Review, ReviewStats models
 │   ├── search.dart                        # SearchFilters model
 │   └── user.dart                          # User model
@@ -970,7 +970,7 @@ Occurs when a Flutter/Firebase plugin is compiled with a newer Kotlin than the p
 - **Advertisement model** (`models/advertisement.dart`): bilingual fields (`Title_EN`/`Title_TC`, `Content_EN`/`Content_TC`, `Image_EN`/`Image_TC`), `status`, `restaurantId`
 - **AdvertisementService** (`services/advertisement_service.dart`):
   - Full CRUD: `getAdvertisements()`, `createAdvertisement()`, `updateAdvertisement()`, `deleteAdvertisement()`, `toggleAdvertisementStatus()`
-  - Stripe checkout: `createAdCheckoutSession()` opens Chrome Custom Tab; `checkPendingSession()` / `clearPendingSession()` for 2-hour session persistence via SharedPreferences
+  - Stripe checkout: `createAdCheckoutSession()` opens Stripe-hosted URL in the **external browser** via `url_launcher` `LaunchMode.externalApplication` (not a Chrome Custom Tab or in-app WebView); `checkPendingSession()` / `clearPendingSession()` for 2-hour session persistence via SharedPreferences
 - **StoreAdFormPage** (`pages/store_ad_form_page.dart`):
   - Create/edit advertisement form with bilingual title+content fields and EN/TC image pickers
   - Language fallback: copies from filled language if the other is empty before submit
@@ -1124,7 +1124,7 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 - **`restaurant.dart`**: Added `bool get isOpenNow` computed getter (parses `openingHours` map). Static `_parseTime` helper. Removed duplicate logic from `restaurant_detail_page.dart`
 - **`restaurant_search_card.dart`**: Replaced top-right decorative icon with:
   - Top-left: Open/Closed pill badge (green/red with white text)
-  - Top-right: Star + restaurant icon badge (white pill)
+  - Top-right: `⭐ 4.2` or `⭐ New` pill badge (white, `Icons.star_rounded` + numeric rating or "New" text)
 - **`restaurant_carousel.dart`**: Added matching badges (slightly smaller) to home page carousel cards
 
 **Files created (3)**:
@@ -1233,6 +1233,42 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 ---
 
-**Last Updated**: 2026-04-04
+#### Phase 15 (2026-04-06) - Rating Field & Half-Star Detail Display
+
+**`restaurant.dart` model** — added two new fields:
+- `rating: double?` — API-provided average rating (0 = no reviews, 1 dp); decoded from lowercase `"rating"` JSON key
+- `reviewCount: int?` — total review count (informational; primary stats come from review stats endpoint)
+- `fromJson`: `rating: toDouble(json['rating']), reviewCount: toInt(json['reviewCount'])`
+- `toJson`: included conditionally when non-null
+
+**Card badge update** (both `restaurant_search_card.dart` and `restaurant_carousel.dart`):
+- `_buildRatingBadge()` rewritten: shows `Icons.star_rounded` (amber) + `restaurant.rating!.toStringAsFixed(1)` when rating > 0, or `"New"` (grey) when 0/null
+- Badge always renders (previously hidden when no rating data)
+
+**Detail page — `restaurant_header.dart`**:
+- Added `_buildHalfStarIcons(double rating)` → `List<Widget>`:
+  - Rounds to nearest 0.5 via `(rating * 2).round() / 2`
+  - Returns `Icons.star_rounded` (full), `Icons.star_half_rounded` (half), `Icons.star_outline_rounded` (empty) at 18 px in amber
+- Replaced the single `Icon(Icons.star)` + `Text(rating)` row in `build()` with `..._buildHalfStarIcons(rating)` spread
+- Review count label updated to bilingual: `'(${count} ${isTraditionalChinese ? '評論' : 'reviews'})'`
+
+**Files modified (3)**:
+- `lib/models/restaurant.dart` — `rating` + `reviewCount` fields
+- `lib/widgets/search/restaurant_search_card.dart` — new `_buildRatingBadge()`
+- `lib/widgets/carousel/restaurant_carousel.dart` — new rating badge (same pattern)
+- `lib/widgets/restaurant/restaurant_header.dart` — `_buildHalfStarIcons()` + bilingual review count
+
+---
+
+#### Phase 16 (2026-04-06) - Review Image URL Bug Fix
+
+**`lib/models/review.dart`**:
+- `CreateReviewRequest`: `imageUrl` was accepted as a constructor parameter but was never stored as a field, so it was silently absent from `toJson()`. Fixed by adding `final String? imageUrl` instance variable + `this.imageUrl` named parameter in constructor. `toJson()` now includes `if (imageUrl != null) 'imageUrl': imageUrl`.
+- `UpdateReviewRequest`: Same bug — `imageUrl` was missing from `toJson()`. Fixed with identical pattern: `final String? imageUrl`, `this.imageUrl` constructor param, conditional `toJson()` inclusion.
+- Both fixes ensure review image URLs are correctly sent to `POST /API/Reviews` and `PUT /API/Reviews/:id`. Previously passing `imageUrl` to either request model had no effect.
+
+---
+
+**Last Updated**: 2026-04-06
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

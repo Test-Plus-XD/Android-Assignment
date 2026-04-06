@@ -103,13 +103,14 @@ class CreateReviewRequest {
   final double rating;
   final String? comment;
   final String? dateTime;
+  final String? imageUrl;
 
   CreateReviewRequest({
     required this.restaurantId,
     required this.rating,
     this.comment,
     this.dateTime,
-    String? imageUrl,
+    this.imageUrl,
   });
 
   Map<String, dynamic> toJson() {
@@ -118,6 +119,7 @@ class CreateReviewRequest {
       'rating': rating,
       if (comment != null && comment!.isNotEmpty) 'comment': comment,
       if (dateTime != null) 'dateTime': dateTime,
+      if (imageUrl != null) 'imageUrl': imageUrl,
     };
   }
 }
@@ -128,13 +130,15 @@ class CreateReviewRequest {
 class UpdateReviewRequest {
   final double? rating;
   final String? comment;
+  final String? imageUrl;
 
-  UpdateReviewRequest({this.rating, this.comment, String? imageUrl});
+  UpdateReviewRequest({this.rating, this.comment, this.imageUrl});
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = {};
     if (rating != null) data['rating'] = rating;
     if (comment != null) data['comment'] = comment;
+    if (imageUrl != null) data['imageUrl'] = imageUrl;
     return data;
   }
 }

@@ -181,11 +181,9 @@ class RestaurantSearchListSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonWithLoader(
-      child: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: count,
-        itemBuilder: (_, __) => const RestaurantSearchCardSkeleton(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(count, (_) => const RestaurantSearchCardSkeleton()),
       ),
     );
   }
