@@ -204,7 +204,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       final user = authService.currentUser;
       if (user == null) return null;
 
-      final profile = User(
+      final draftProfile = User(
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
@@ -217,7 +217,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       );
 
       /// Attempt to create via Vercel API
-      final apiSuccess = await userService.createUserProfile(profile);
+      final apiSuccess = await userService.createUserProfile(draftProfile);
 
       if (!apiSuccess) {
         /// Fallback: Create directly in Firestore
@@ -226,7 +226,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         debugPrint('Failed to create profile via API, fallback not implemented');
         return null;
       }
-      return profile;
+
+      // Re-fetch authoritative server profile so normalized preference fields
+      // (e.g. notifications defaults) are respected.
+      return await userService.getUserProfile(user.uid);
     } catch (error) {
       debugPrint('Failed to create user profile: $error');
       return null;
@@ -264,6 +267,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   /// This intentionally uses `preferences.language/theme/notifications`
   /// and does NOT read `preferredLanguage`.
   Future<void> _applyUserPreferencesAfterLogin(User profile) async {
+    if (!mounted) return;
     final appState = context.read<AppState>();
     final notificationService = context.read<NotificationService>();
     final prefs = profile.getPreferences();
