@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_state.dart';
 import '../models.dart' show User;
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 import '../services/user_service.dart';
 
 /// Login Page with Enhanced Aesthetics
@@ -113,7 +115,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     if (success && mounted) {
       /// Step 2: Ensure user profile exists via Vercel API
       if (authService.uid != null) {
-        await _ensureUserProfileViaApi(authService, userService);
+        final profile = await _ensureUserProfileViaApi(authService, userService);
+        if (profile != null) {
+          await _applyUserPreferencesAfterLogin(profile);
+        }
 
         /// Step 3: Navigate back
         /// The main app (MainShell) will detect auth state change
@@ -144,7 +149,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     if (success && mounted) {
       /// Step 2: Create user profile via Vercel API
       if (authService.currentUser != null) {
-        await _createUserProfileViaApi(authService, userService);
+        final profile = await _createUserProfileViaApi(authService, userService);
+        if (profile != null) {
+          await _applyUserPreferencesAfterLogin(profile);
+        }
 
         if (kDebugMode) {
           print('[LoginPage] Profile created, current profile: ${userService.currentProfile?.toJson()}');
@@ -172,7 +180,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
     if (success && mounted && authService.currentUser != null) {
       /// Ensure user profile exists via Vercel API
-      await _ensureUserProfileViaApi(authService, userService);
+      final profile = await _ensureUserProfileViaApi(authService, userService);
+      if (profile != null) {
+        await _applyUserPreferencesAfterLogin(profile);
+      }
 
       /// Navigate back
       if (mounted) {
@@ -188,12 +199,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   /// This method attempts to create the profile through your Vercel API first.
   /// If the API call fails for any reason, it falls back to direct Firestore access.
   /// This ensures profile creation succeeds even if the API is temporarily unavailable.
-  Future<void> _createUserProfileViaApi(AuthService authService, UserService userService) async {
+  Future<User?> _createUserProfileViaApi(AuthService authService, UserService userService) async {
     try {
       final user = authService.currentUser;
-      if (user == null) return;
+      if (user == null) return null;
 
-      final profile = User(
+      final draftProfile = User(
         uid: user.uid,
         email: user.email,
         displayName: user.displayName,
@@ -206,16 +217,22 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       );
 
       /// Attempt to create via Vercel API
-      final apiSuccess = await userService.createUserProfile(profile);
+      final apiSuccess = await userService.createUserProfile(draftProfile);
 
       if (!apiSuccess) {
         /// Fallback: Create directly in Firestore
         /// This would require adding a method to UserService
         /// For now, we just log the failure
         debugPrint('Failed to create profile via API, fallback not implemented');
+        return null;
       }
+
+      // Re-fetch authoritative server profile so normalized preference fields
+      // (e.g. notifications defaults) are respected.
+      return await userService.getUserProfile(user.uid);
     } catch (error) {
       debugPrint('Failed to create user profile: $error');
+      return null;
     }
   }
 
@@ -223,23 +240,55 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   ///
   /// This method checks for profile existence via Vercel API and creates
   /// one if it doesn't exist. It also falls back to Firestore if needed.
-  Future<void> _ensureUserProfileViaApi(AuthService authService, UserService userService) async {
+  Future<User?> _ensureUserProfileViaApi(AuthService authService, UserService userService) async {
     try {
       final user = authService.currentUser;
-      if (user == null) return;
+      if (user == null) return null;
 
       /// Try to load existing profile via Vercel API
       final profile = await userService.getUserProfile(user.uid);
 
       if (profile == null) {
         /// Profile doesn't exist, create it
-        await _createUserProfileViaApi(authService, userService);
+        return await _createUserProfileViaApi(authService, userService);
       } else {
         /// Profile exists, update login metadata
         await userService.updateLoginMetadata(user.uid);
+        return profile;
       }
     } catch (error) {
       debugPrint('Failed to ensure user profile: $error');
+      return null;
+    }
+  }
+
+  /// Applies server-side user preferences to app state right after login.
+  ///
+  /// This intentionally uses `preferences.language/theme/notifications`
+  /// and does NOT read `preferredLanguage`.
+  Future<void> _applyUserPreferencesAfterLogin(User profile) async {
+    if (!mounted) return;
+    final appState = context.read<AppState>();
+    final notificationService = context.read<NotificationService>();
+    final prefs = profile.getPreferences();
+
+    final useDarkMode = prefs.theme.toLowerCase() == 'dark';
+    if (appState.isDarkMode != useDarkMode) {
+      await appState.toggleTheme(useDarkMode);
+    }
+
+    final language = prefs.language.toUpperCase();
+    final useTraditionalChinese = language == 'TC';
+    if (appState.isTraditionalChinese != useTraditionalChinese) {
+      await appState.toggleLanguage(useTraditionalChinese);
+    }
+
+    if (prefs.notifications) {
+      if (!notificationService.notificationsEnabled) {
+        await notificationService.requestPermission();
+      }
+    } else {
+      await notificationService.cancelAllNotifications();
     }
   }
 
