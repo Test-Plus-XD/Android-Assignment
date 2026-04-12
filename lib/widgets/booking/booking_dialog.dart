@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../services/booking_service.dart';
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 
 /// Booking Dialog Widget
 ///
@@ -177,7 +178,7 @@ class _BookingDialogState extends State<BookingDialog> {
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingIndicator.small(),
                 )
               : Text(widget.isTraditionalChinese ? '確認預訂' : 'Confirm'),
         ),

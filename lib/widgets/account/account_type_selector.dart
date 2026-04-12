@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
+import '../common/loading_indicator.dart';
 
 /// Account Type Selector Dialog
 ///
@@ -107,10 +108,7 @@ class _AccountTypeSelectorDialogState extends State<AccountTypeSelectorDialog> {
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                          child: LoadingIndicator.small(),
                         )
                       : Text(
                           isTC ? '繼續' : 'Continue',

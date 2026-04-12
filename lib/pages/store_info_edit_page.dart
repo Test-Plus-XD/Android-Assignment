@@ -4,6 +4,7 @@ import '../services/store_service.dart';
 import '../services/auth_service.dart';
 import '../models.dart';
 import '../constants/districts.dart';
+import '../widgets/common/loading_indicator.dart';
 import '../constants/keywords.dart';
 import '../constants/payments.dart';
 import '../constants/weekdays.dart';
@@ -391,7 +392,7 @@ class _StoreInfoEditPageState extends State<StoreInfoEditPage> {
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: CircularProgressIndicator(),
+                child: LoadingIndicator(),
               ),
             )
           else

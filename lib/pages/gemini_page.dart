@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/gemini_service.dart';
 import '../widgets/ai/suggestion_chips.dart';
+import '../widgets/common/loading_indicator.dart';
 import '../utils/ai_response_processor.dart';
 import '../models.dart';
 
@@ -345,10 +346,7 @@ class _GeminiChatRoomPageState extends State<GeminiChatRoomPage> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
+                      child: LoadingIndicator.small(),
                     )
                   : const Icon(Icons.send, color: Colors.white),
             ),

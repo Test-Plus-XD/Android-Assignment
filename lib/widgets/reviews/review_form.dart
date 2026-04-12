@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models.dart';
 import '../../services/image_service.dart';
+import '../common/loading_indicator.dart';
 import '../images/image_picker_button.dart';
 import '../images/image_preview.dart';
 import '../images/upload_progress_indicator.dart';
@@ -155,7 +156,9 @@ class _ReviewFormState extends State<ReviewForm> {
               children: [
                 // Title
                 Text(
-                  isEditing ? 'Edit Review' : 'Write a Review',
+                  isEditing
+                      ? (widget.isTraditionalChinese ? '編輯評論' : 'Edit Review')
+                      : (widget.isTraditionalChinese ? '撰寫評論' : 'Write a Review'),
                   style: theme.textTheme.headlineSmall,
                   textAlign: TextAlign.center,
                 ),
@@ -229,7 +232,7 @@ class _ReviewFormState extends State<ReviewForm> {
                         onPressed: _isSubmitting
                             ? null
                             : widget.onCancel ?? () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
+                        child: Text(widget.isTraditionalChinese ? '取消' : 'Cancel'),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -240,11 +243,11 @@ class _ReviewFormState extends State<ReviewForm> {
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
+                                child: LoadingIndicator.small(),
                               )
-                            : Text(isEditing ? 'Update' : 'Submit'),
+                            : Text(isEditing
+                                ? (widget.isTraditionalChinese ? '更新' : 'Update')
+                                : (widget.isTraditionalChinese ? '提交' : 'Submit')),
                       ),
                     ),
                   ],

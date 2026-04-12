@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 
 /// Booking Form Widget
 ///
@@ -320,7 +321,7 @@ class _BookingFormState extends State<BookingForm> {
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: LoadingIndicator.small(),
                         )
                       : Text(
                           widget.existingBooking != null

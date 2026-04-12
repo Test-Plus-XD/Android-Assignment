@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../models.dart';
 import 'star_rating.dart';
+import '../common/loading_indicator.dart';
 
 /// Review Card Widget
 ///
@@ -137,9 +138,7 @@ class ReviewCard extends StatelessWidget {
                   placeholder: (context, url) => Container(
                     height: 200,
                     color: theme.colorScheme.surfaceVariant,
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: const CenteredLoadingIndicator(),
                   ),
                   errorWidget: (context, url, error) => Container(
                     height: 200,

@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../../models.dart';
 import '../../config/app_state.dart';
+import '../common/loading_indicator.dart';
 
 /// Card widget displaying a single menu item
 ///
@@ -54,9 +55,7 @@ class MenuItemCard extends StatelessWidget {
                         width: 100,
                         height: 100,
                         color: theme.colorScheme.surfaceContainerHighest,
-                        child: const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                        child: const CenteredLoadingIndicator(),
                       ),
                       errorWidget: (context, url, error) => Container(
                         width: 100,

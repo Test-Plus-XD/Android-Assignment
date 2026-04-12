@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/menu_service.dart';
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 
 /// Menu Item Dialog
 ///
@@ -193,7 +194,7 @@ class _MenuItemDialogState extends State<MenuItemDialog> {
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: LoadingIndicator.small(),
                 )
               : Text(widget.isTraditionalChinese ? '儲存' : 'Save'),
         ),

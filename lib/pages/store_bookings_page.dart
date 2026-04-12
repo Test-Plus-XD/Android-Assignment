@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../services/booking_service.dart';
 import '../models.dart';
+import '../widgets/store/booking_card.dart';
+import '../widgets/common/loading_indicator.dart';
 
 /// Store Bookings Management Page
 ///
@@ -232,7 +233,7 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
         future: _bookingsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const CenteredLoadingIndicator();
           }
 
           if (snapshot.hasError) {
@@ -368,11 +369,11 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                           itemCount: filteredBookings.length,
                           itemBuilder: (context, index) {
                             final booking = filteredBookings[index];
-                            return _StoreBookingCard(
+                            return StoreBookingCard(
                               booking: booking,
                               isTraditionalChinese: widget.isTraditionalChinese,
                               onAccept: () => _acceptBooking(booking),
@@ -427,265 +428,6 @@ class _StoreBookingsPageState extends State<StoreBookingsPage> {
       label: Text(label),
       selected: _selectedStatus == value,
       onSelected: (_) => setState(() => _selectedStatus = value),
-    );
-  }
-}
-
-/// Individual booking card for the restaurant owner view
-///
-/// Shows enriched diner contact info (name, email, phone) when available,
-/// decline reason when present, and contextual action buttons per status.
-class _StoreBookingCard extends StatelessWidget {
-  final Booking booking;
-  final bool isTraditionalChinese;
-  final VoidCallback onAccept;
-  final VoidCallback onDecline;
-  final VoidCallback onComplete;
-
-  const _StoreBookingCard({
-    required this.booking,
-    required this.isTraditionalChinese,
-    required this.onAccept,
-    required this.onDecline,
-    required this.onComplete,
-  });
-
-  Color _getStatusColor() {
-    switch (booking.status) {
-      case 'pending':
-        return Colors.orange;
-      case 'accepted':
-        return Colors.blue;
-      case 'completed':
-        return Colors.green;
-      case 'declined':
-        return Colors.red;
-      case 'cancelled':
-        return Colors.red.shade300;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _getStatusText() {
-    switch (booking.status) {
-      case 'pending':
-        return isTraditionalChinese ? '待處理' : 'Pending';
-      case 'accepted':
-        return isTraditionalChinese ? '已接受' : 'Accepted';
-      case 'completed':
-        return isTraditionalChinese ? '已完成' : 'Completed';
-      case 'declined':
-        return isTraditionalChinese ? '已拒絕' : 'Declined';
-      case 'cancelled':
-        return isTraditionalChinese ? '已取消' : 'Cancelled';
-      default:
-        return booking.status;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
-
-    // Diner display name: prefer enriched diner object, fall back to 'Unknown'
-    final dinerName = booking.diner?.displayName ??
-        (isTraditionalChinese ? '未知用戶' : 'Unknown User');
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Row: diner name + status badge
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    dinerName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor().withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _getStatusColor()),
-                  ),
-                  child: Text(
-                    _getStatusText(),
-                    style: TextStyle(
-                      color: _getStatusColor(),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            // Diner contact info (email + phone) when provided by API
-            if (booking.diner?.email != null || booking.diner?.phoneNumber != null) ...[
-              const SizedBox(height: 8),
-              if (booking.diner?.email != null)
-                Row(
-                  children: [
-                    Icon(Icons.email_outlined, size: 14, color: Colors.grey),
-                    const SizedBox(width: 6),
-                    Text(
-                      booking.diner!.email!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              if (booking.diner?.phoneNumber != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4.0),
-                  child: Row(
-                    children: [
-                      Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Text(
-                        booking.diner!.phoneNumber!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-
-            const SizedBox(height: 12),
-
-            // Date / time
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text(
-                  dateFormat.format(booking.dateTime),
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Party size
-            Row(
-              children: [
-                const Icon(Icons.people, size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text(
-                  '${booking.partySize} ${isTraditionalChinese ? "人" : "guests"}',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-            ),
-
-            // Special requests
-            if (booking.specialRequests != null &&
-                booking.specialRequests!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.note, size: 16, color: Colors.grey),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      booking.specialRequests!,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-
-            // Decline message — displayed when owner previously declined with a reason
-            if (booking.status == 'declined' &&
-                booking.declineMessage != null &&
-                booking.declineMessage!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.info_outline,
-                        size: 14, color: Colors.red.shade700),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${isTraditionalChinese ? "拒絕原因：" : "Reason: "}${booking.declineMessage}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.red.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Action buttons — context-sensitive per status
-            if (booking.status == 'pending') ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onDecline,
-                      icon: const Icon(Icons.close, size: 18),
-                      label: Text(isTraditionalChinese ? '拒絕' : 'Decline'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: onAccept,
-                      icon: const Icon(Icons.check, size: 18),
-                      label: Text(isTraditionalChinese ? '接受' : 'Accept'),
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (booking.status == 'accepted') ...[
-              // Only accepted bookings can be marked as completed
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: onComplete,
-                  icon: const Icon(Icons.done_all, size: 18),
-                  label: Text(
-                    isTraditionalChinese ? '標記為完成' : 'Mark as Completed',
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

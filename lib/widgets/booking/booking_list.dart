@@ -54,7 +54,7 @@ class BookingList extends StatelessWidget {
         await Future.delayed(const Duration(seconds: 1));
       },
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 100), // Added bottom padding to clear nav bar
         itemCount: filteredBookings.length,
         itemBuilder: (context, index) {
           final booking = filteredBookings[index];

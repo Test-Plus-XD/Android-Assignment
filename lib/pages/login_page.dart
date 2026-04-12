@@ -6,6 +6,7 @@ import '../models.dart' show User;
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/user_service.dart';
+import '../widgets/common/loading_indicator.dart';
 
 /// Login Page with Enhanced Aesthetics
 ///
@@ -703,9 +704,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
               if (authService.isLoading)
                 Container(
                   color: Colors.black.withValues(alpha: 0.3),
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  child: const CenteredLoadingIndicator(),
                 ),
             ],
           );

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/store_service.dart';
 import '../../constants/districts.dart';
 import '../../constants/keywords.dart';
+import '../common/loading_indicator.dart';
 import '../../constants/payments.dart';
 import '../../constants/weekdays.dart';
 import 'location_picker_dialog.dart';
@@ -875,8 +876,7 @@ class _AddRestaurantSheetState extends State<AddRestaurantSheet> {
                                   ? const SizedBox(
                                       height: 20,
                                       width: 20,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
+                                      child: LoadingIndicator.small(),
                                     )
                                   : Text(
                                       _isTC ? '新增餐廳' : 'Add Restaurant',

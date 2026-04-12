@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../models.dart';
 import 'login_page.dart';
+import '../widgets/common/loading_indicator.dart';
 
 /// Account Page with Edit Functionality
 //
@@ -627,7 +628,7 @@ class _AccountPageState extends State<AccountPage> {
       builder: (context, userService, _) {
         // Loading state
         if (userService.isLoading && !_hasAttemptedLoad) {
-          return const Center(child: CircularProgressIndicator());
+          return const CenteredLoadingIndicator();
         }
 
         // Error state

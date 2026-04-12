@@ -2,15 +2,6 @@
 <project version="4">
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel>
-      <module name="android.cloud_firestore" target="21" />
-      <module name="android.firebase_auth" target="21" />
-      <module name="android.firebase_core" target="21" />
-      <module name="android.firebase_messaging" target="21" />
-      <module name="android.flutter_plugin_android_lifecycle" target="21" />
-      <module name="android.mobile_scanner" target="21" />
-      <module name="android.path_provider_android" target="21" />
-      <module name="android.sqflite_android" target="21" />
-      <module name="android.url_launcher_android" target="21" />
       <module name="com.baseflow.geolocator.android.geolocator_android" target="21" />
       <module name="com.baseflow.permissionhandler.android.permission_handler_android" target="21" />
       <module name="com.dexterous.flutterlocalnotifications.android.flutter_local_notifications" target="21" />

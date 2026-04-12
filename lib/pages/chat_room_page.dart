@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 import '../services/user_service.dart';
 import '../services/image_service.dart';
+import '../widgets/common/loading_indicator.dart';
 import '../widgets/chat/chat_bubble.dart';
 import '../widgets/chat/chat_input.dart';
 import '../widgets/chat/typing_indicator.dart';
@@ -347,7 +348,7 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
           // Message list
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const CenteredLoadingIndicator()
                 : _messages.isEmpty
                     ? Center(
                         child: Column(

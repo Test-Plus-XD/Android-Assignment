@@ -6,6 +6,7 @@ import '../services/restaurant_service.dart';
 import '../services/location_service.dart';
 import '../services/auth_service.dart';
 import '../services/advertisement_service.dart';
+import '../widgets/common/loading_indicator.dart';
 import '../models.dart';
 import '../widgets/carousel/offer_carousel.dart';
 import '../widgets/skeletons/nearby_restaurant_skeleton.dart';
@@ -479,9 +480,7 @@ class _FrontPageState extends State<FrontPage> {
                                       fit: BoxFit.cover,
                                       placeholder: (context, url) => Container(
                                         color: Colors.grey.shade300,
-                                        child: const Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
+                                        child: const CenteredLoadingIndicator(),
                                       ),
                                       errorWidget: (context, url, error) =>
                                           Container(
@@ -640,9 +639,7 @@ class _FrontPageState extends State<FrontPage> {
                                     fit: BoxFit.cover,
                                     placeholder: (context, url) => Container(
                                       color: Colors.grey.shade300,
-                                      child: const Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
+                                      child: const CenteredLoadingIndicator(),
                                     ),
                                     errorWidget: (context, url, error) =>
                                         Container(

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import '../services/menu_service.dart';
 import '../services/auth_service.dart';
+import '../widgets/common/loading_indicator.dart';
 import '../services/image_service.dart';
 import '../models.dart';
 import '../config.dart';
@@ -136,7 +137,7 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(),
+              const LoadingIndicator(),
               const SizedBox(height: 16),
               Text(
                 widget.isTraditionalChinese ? '正在處理菜單文件...' : 'Processing menu file...',
@@ -243,7 +244,7 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(),
+              const LoadingIndicator(),
               const SizedBox(height: 16),
               Text(
                 widget.isTraditionalChinese
@@ -409,7 +410,7 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
         future: _menuItemsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const CenteredLoadingIndicator();
           }
 
           if (snapshot.hasError) {

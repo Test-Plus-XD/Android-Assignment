@@ -10,9 +10,9 @@ import '../widgets/qr/menu_qr_generator.dart';
 import '../widgets/common/loading_indicator.dart';
 import '../widgets/skeletons/restaurant_detail_skeleton.dart';
 import '../widgets/store/add_restaurant_sheet.dart';
+import '../widgets/store/booking_card.dart';
 import 'store_info_edit_page.dart';
 import 'store_menu_manage_page.dart';
-import 'store_bookings_page.dart';
 import 'store_ad_form_page.dart';
 
 /// Store Dashboard Page
@@ -42,7 +42,7 @@ class _StorePageState extends State<StorePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -58,11 +58,11 @@ class _StorePageState extends State<StorePage>
   }
 
   /// Called whenever the tab changes.
-  /// When the user switches to the Ads tab, check for a pending Stripe session.
+  /// When the user switches to the Ads tab (index 2), check for a pending Stripe session.
   void _onTabChanged() {
     if (!_tabController.indexIsChanging) return;
     final newTab = _tabController.index;
-    if (newTab == 1 && _previousTab != 1) {
+    if (newTab == 2 && _previousTab != 2) {
       _checkPendingStripeSession();
     }
     _previousTab = newTab;
@@ -201,7 +201,7 @@ class _StorePageState extends State<StorePage>
               const SizedBox(height: 8),
               Text(
                 widget.isTraditionalChinese
-                    ? '搜尋並認領您的餐廳，或新增一個'
+                    ? '搵同認領你嘅餐廳，或者新增一間'
                     : 'Claim your existing restaurant or add a new one',
                 style: Theme.of(context).textTheme.bodyMedium,
                 textAlign: TextAlign.center,
@@ -243,7 +243,11 @@ class _StorePageState extends State<StorePage>
               tabs: [
                 Tab(
                   icon: const Icon(Icons.dashboard),
-                  text: widget.isTraditionalChinese ? '儀表板' : 'Dashboard',
+                  text: widget.isTraditionalChinese ? '概覽' : 'Dashboard',
+                ),
+                Tab(
+                  icon: const Icon(Icons.calendar_today),
+                  text: widget.isTraditionalChinese ? '預訂' : 'Bookings',
                 ),
                 Tab(
                   icon: const Icon(Icons.campaign),
@@ -266,7 +270,13 @@ class _StorePageState extends State<StorePage>
                   onRefresh: () => _loadOwnedRestaurant(forceRefresh: true),
                 ),
 
-                // Tab 1 — Advertisements
+                // Tab 1 — Bookings
+                _BookingsTab(
+                  restaurantId: restaurant.id,
+                  isTraditionalChinese: widget.isTraditionalChinese,
+                ),
+
+                // Tab 2 — Advertisements
                 _AdsTab(
                   restaurantId: restaurant.id,
                   isTraditionalChinese: widget.isTraditionalChinese,
@@ -333,6 +343,22 @@ class _DashboardTab extends StatelessWidget {
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          tooltip: _isTC ? '編輯餐廳資訊' : 'Edit restaurant info',
+                          onPressed: () {
+                            Navigator.of(context)
+                                .push(MaterialPageRoute(
+                                  builder: (_) => StoreInfoEditPage(
+                                    restaurant: restaurant,
+                                    isTraditionalChinese: isTraditionalChinese,
+                                  ),
+                                ))
+                                .then((result) {
+                              if (result == true) onRefresh();
+                            });
+                          },
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -389,6 +415,7 @@ class _DashboardTab extends StatelessWidget {
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
               physics: const NeverScrollableScrollPhysics(),
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
@@ -414,20 +441,6 @@ class _DashboardTab extends StatelessWidget {
                 ),
                 _buildActionCard(
                   context: context,
-                  icon: Icons.calendar_today,
-                  title: _isTC ? '預訂管理' : 'Bookings',
-                  subtitle: _isTC ? '查看和管理預訂' : 'View and manage bookings',
-                  onTap: () {
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => StoreBookingsPage(
-                        restaurantId: restaurant.id,
-                        isTraditionalChinese: isTraditionalChinese,
-                      ),
-                    ));
-                  },
-                ),
-                _buildActionCard(
-                  context: context,
                   icon: Icons.star,
                   title: _isTC ? '評價' : 'Reviews',
                   subtitle: _isTC ? '查看顧客評價' : 'View customer reviews',
@@ -441,28 +454,8 @@ class _DashboardTab extends StatelessWidget {
                     );
                   },
                 ),
-                _buildActionCard(
-                  context: context,
-                  icon: Icons.settings,
-                  title: _isTC ? '設定' : 'Settings',
-                  subtitle: _isTC ? '更新餐廳資訊' : 'Update restaurant info',
-                  onTap: () {
-                    Navigator.of(context)
-                        .push(MaterialPageRoute(
-                          builder: (_) => StoreInfoEditPage(
-                            restaurant: restaurant,
-                            isTraditionalChinese: isTraditionalChinese,
-                          ),
-                        ))
-                        .then((result) {
-                      if (result == true) onRefresh();
-                    });
-                  },
-                ),
               ],
             ),
-
-            const SizedBox(height: 24),
 
             // QR Code Section
             Text(
@@ -689,6 +682,376 @@ class _StatisticsSectionState extends State<_StatisticsSection> {
   }
 }
 
+// ── Bookings Tab ──────────────────────────────────────────────────────────────
+
+/// Inline bookings tab — embeds the full booking management UI without
+/// navigating to a separate page.
+class _BookingsTab extends StatefulWidget {
+  final String restaurantId;
+  final bool isTraditionalChinese;
+
+  const _BookingsTab({
+    required this.restaurantId,
+    required this.isTraditionalChinese,
+  });
+
+  @override
+  State<_BookingsTab> createState() => _BookingsTabState();
+}
+
+class _BookingsTabState extends State<_BookingsTab> {
+  Future<List<Booking>>? _bookingsFuture;
+  String _selectedStatus = 'all';
+
+  bool get _isTC => widget.isTraditionalChinese;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadBookings();
+    });
+  }
+
+  void _loadBookings() {
+    if (!mounted) return;
+    setState(() {
+      _bookingsFuture = context
+          .read<BookingService>()
+          .getRestaurantBookings(widget.restaurantId);
+    });
+  }
+
+  Future<void> _refreshBookings() async => _loadBookings();
+
+  List<Booking> _filterBookings(List<Booking> bookings) {
+    if (_selectedStatus == 'all') return bookings;
+    return bookings.where((b) => b.status == _selectedStatus).toList();
+  }
+
+  Future<void> _acceptBooking(Booking booking) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_isTC ? '接受預約' : 'Accept Booking'),
+        content: Text(_isTC ? '確認接受此預約？' : 'Accept this booking?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(_isTC ? '取消' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(_isTC ? '接受' : 'Accept'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _performUpdate(() async {
+        await context.read<BookingService>().acceptBooking(booking.id);
+      });
+    }
+  }
+
+  Future<void> _declineBooking(Booking booking) async {
+    final messageController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_isTC ? '拒絕預約' : 'Decline Booking'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _isTC
+                  ? '確定要拒絕此預約？可提供拒絕原因（選填）。'
+                  : 'Decline this booking? You may provide a reason (optional).',
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: messageController,
+              maxLines: 3,
+              maxLength: 200,
+              decoration: InputDecoration(
+                labelText: _isTC ? '拒絕原因（選填）' : 'Reason (optional)',
+                border: const OutlineInputBorder(),
+                hintText: _isTC ? '例如：已客滿' : 'e.g. Fully booked for that time slot',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(_isTC ? '取消' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(_isTC ? '拒絕' : 'Decline'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final message = messageController.text.trim().isEmpty
+          ? null
+          : messageController.text.trim();
+      await _performUpdate(() async {
+        await context.read<BookingService>().declineBooking(booking.id, message: message);
+      });
+    }
+    messageController.dispose();
+  }
+
+  Future<void> _markCompleted(Booking booking) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_isTC ? '完成預約' : 'Complete Booking'),
+        content: Text(_isTC ? '將此預約標記為完成？' : 'Mark this booking as completed?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(_isTC ? '取消' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(_isTC ? '完成' : 'Complete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _performUpdate(() async {
+        await context.read<BookingService>().completeBooking(booking.id);
+      });
+    }
+  }
+
+  Future<void> _performUpdate(Future<void> Function() action) async {
+    try {
+      await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isTC ? '預約已更新' : 'Booking updated'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadBookings();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isTC ? '更新失敗：$e' : 'Update failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  int _getTodayCount(List<Booking> bookings) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    return bookings.where((b) =>
+        b.dateTime.isAfter(start) &&
+        b.dateTime.isBefore(end) &&
+        b.status != 'cancelled' &&
+        b.status != 'declined').length;
+  }
+
+  int _getPendingCount(List<Booking> bookings) =>
+      bookings.where((b) => b.status == 'pending').length;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Booking>>(
+      future: _bookingsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const CenteredLoadingIndicator();
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  _isTC ? '載入失敗' : 'Failed to load',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text('${snapshot.error}',
+                    style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: _refreshBookings,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(_isTC ? '重試' : 'Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final allBookings = snapshot.data ?? [];
+        final filteredBookings = _filterBookings(allBookings);
+        final todayCount = _getTodayCount(allBookings);
+        final pendingCount = _getPendingCount(allBookings);
+
+        return RefreshIndicator(
+          onRefresh: _refreshBookings,
+          child: Column(
+            children: [
+              // Stats row
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        context: context,
+                        icon: Icons.today,
+                        label: _isTC ? '今日預約' : 'Today',
+                        value: todayCount.toString(),
+                        color: Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildStatCard(
+                        context: context,
+                        icon: Icons.pending_actions,
+                        label: _isTC ? '待處理' : 'Pending',
+                        value: pendingCount.toString(),
+                        color: Colors.orange,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildStatCard(
+                        context: context,
+                        icon: Icons.event_available,
+                        label: _isTC ? '總數' : 'Total',
+                        value: allBookings.length.toString(),
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Filter chips
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildFilterChip(label: _isTC ? '全部' : 'All', value: 'all'),
+                      const SizedBox(width: 8),
+                      _buildFilterChip(label: _isTC ? '待處理' : 'Pending', value: 'pending'),
+                      const SizedBox(width: 8),
+                      _buildFilterChip(label: _isTC ? '已接受' : 'Accepted', value: 'accepted'),
+                      const SizedBox(width: 8),
+                      _buildFilterChip(label: _isTC ? '已完成' : 'Completed', value: 'completed'),
+                      const SizedBox(width: 8),
+                      _buildFilterChip(label: _isTC ? '已拒絕' : 'Declined', value: 'declined'),
+                      const SizedBox(width: 8),
+                      _buildFilterChip(label: _isTC ? '已取消' : 'Cancelled', value: 'cancelled'),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Bookings list
+              Expanded(
+                child: filteredBookings.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.event_busy, size: 64, color: Colors.grey),
+                            const SizedBox(height: 16),
+                            Text(
+                              _isTC ? '沒有預約' : 'No bookings',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        itemCount: filteredBookings.length,
+                        itemBuilder: (context, index) {
+                          final booking = filteredBookings[index];
+                          return StoreBookingCard(
+                            booking: booking,
+                            isTraditionalChinese: _isTC,
+                            onAccept: () => _acceptBooking(booking),
+                            onDecline: () => _declineBooking(booking),
+                            onComplete: () => _markCompleted(booking),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            Icon(icon, size: 24, color: color),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(label,
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({required String label, required String value}) {
+    return FilterChip(
+      label: Text(label),
+      selected: _selectedStatus == value,
+      onSelected: (_) => setState(() => _selectedStatus = value),
+    );
+  }
+}
+
 // ── Advertisements Tab ────────────────────────────────────────────────────────
 
 /// Advertisements tab content.
@@ -871,7 +1234,7 @@ class _AdsTabState extends State<_AdsTab> {
               // Ad list
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 180), // Increased bottom padding to clear the FAB
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -893,7 +1256,7 @@ class _AdsTabState extends State<_AdsTab> {
 
         // "Place New Ad" floating button
         Positioned(
-          bottom: 24,
+          bottom: 100, // Increased from 24 to clear the bottom nav bar
           right: 24,
           child: FloatingActionButton.extended(
             onPressed: adService.isLoading ? null : widget.onStartCheckout,

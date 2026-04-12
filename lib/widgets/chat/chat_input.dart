@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import '../../services/image_service.dart';
+import '../common/loading_indicator.dart';
 import '../images/image_preview.dart';
 
 /// Chat Input Widget
@@ -341,13 +342,10 @@ class _ChatInputState extends State<ChatInput> {
                   // Send button
                   IconButton(
                     icon: _isSending
-                        ? SizedBox(
+                        ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: theme.colorScheme.primary,
-                            ),
+                            child: LoadingIndicator.small(),
                           )
                         : const Icon(Icons.send),
                     onPressed: _canSend && !_isSending && !_isUploading ? _sendMessage : null,

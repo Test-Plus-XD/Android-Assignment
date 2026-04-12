@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 
 /// Chat Bubble Widget
 ///
@@ -173,9 +174,7 @@ class ChatBubble extends StatelessWidget {
                                         width: 200,
                                         height: 150,
                                         color: theme.colorScheme.surfaceContainerHighest,
-                                        child: const Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
+                                        child: const CenteredLoadingIndicator(),
                                       ),
                                       errorWidget: (context, url, error) => Container(
                                         width: 200,
@@ -267,9 +266,7 @@ class ChatBubble extends StatelessWidget {
               child: CachedNetworkImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.contain,
-                placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                placeholder: (context, url) => const CenteredLoadingIndicator(),
                 errorWidget: (context, url, error) => const Center(
                   child: Icon(Icons.broken_image, size: 64, color: Colors.white),
                 ),

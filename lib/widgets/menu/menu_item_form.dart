@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models.dart';
+import '../common/loading_indicator.dart';
 import '../../services/menu_service.dart';
 import '../../services/image_service.dart';
 import '../../config/app_state.dart';
@@ -443,7 +444,7 @@ class _MenuItemFormState extends State<MenuItemForm> {
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: LoadingIndicator.small(),
                               )
                             : Text(
                                 isEdit

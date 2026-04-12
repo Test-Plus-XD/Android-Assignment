@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
@@ -161,8 +163,13 @@ class LocationService with ChangeNotifier {
 
       // Get current position
       // This might take a few seconds as GPS satellites are acquired
+      // The Dart-level timeout guarantees resolution within 15s regardless
+      // of whether the native layer honours LocationSettings.timeLimit.
       final position = await Geolocator.getCurrentPosition(
         locationSettings: locationSettings,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('GPS timed out after 15 seconds'),
       );
 
       _currentPosition = position;
