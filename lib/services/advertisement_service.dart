@@ -337,7 +337,11 @@ class AdvertisementService with ChangeNotifier {
       final response = await http.post(
         Uri.parse('$_stripeApiUrl/create-ad-checkout-session'),
         headers: headers,
-        body: jsonEncode({'restaurantId': restaurantId}),
+        body: jsonEncode({
+          'restaurantId': restaurantId,
+          'successUrl': 'pourrice://payment/success?session_id={CHECKOUT_SESSION_ID}',
+          'cancelUrl': 'pourrice://payment/cancel',
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -348,11 +352,11 @@ class AdvertisementService with ChangeNotifier {
         // Store session info in SharedPreferences for when user returns
         await _storePendingSession(sessionId, restaurantId);
 
-        // Open Stripe checkout URL in the external browser
+        // Open Stripe checkout in a Chrome Custom Tab (stays within the app).
+        // When Stripe redirects to pourrice://payment/success, Android closes
+        // the CCT and resumes the app via the deep link intent filter.
         final uri = Uri.parse(url);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
+        await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
 
         _errorMessage = null;
         _setLoading(false);

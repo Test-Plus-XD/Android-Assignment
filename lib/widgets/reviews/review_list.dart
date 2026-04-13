@@ -4,6 +4,7 @@ import '../../models.dart';
 import '../../services/auth_service.dart';
 import '../../services/review_service.dart';
 import '../../config/app_state.dart';
+import '../common/loading_indicator.dart';
 import 'review_card.dart';
 import 'review_form.dart';
 
@@ -137,9 +138,7 @@ class _ReviewListState extends State<ReviewList> {
     return Consumer2<ReviewService, AuthService>(
       builder: (context, reviewService, authService, child) {
         if (reviewService.isLoading) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const CenteredLoadingIndicator();
         }
 
         if (reviewService.error != null) {

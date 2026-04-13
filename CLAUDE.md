@@ -742,6 +742,7 @@ _socket!.emit('my-event', {
 - Quick action cards for menu, bookings, reviews, and settings
 - Statistics display (menu items count, today's bookings)
 - QR code generator for menu sharing
+- Reviews quick action navigates to `RestaurantReviewsPage` with `readOnly: true` (no write FAB, ordered newest-first via API)
 
 **Restaurant Information Editing** (`store_info_edit_page.dart`):
 - Edit restaurant name (EN/TC), address (EN/TC)
@@ -829,6 +830,13 @@ flutter build apk
 - Ensure `register` event is emitted after connection
 - Check `authToken` is valid Firebase ID token
 - Verify event names use hyphens, not underscores
+
+**Stripe Chrome Custom Tab not returning to app**:
+- `AndroidManifest.xml` must have an `<intent-filter>` for `android:scheme="pourrice"` inside `<activity>` so Android intercepts the `pourrice://payment/success` redirect and closes the CCT
+- `AndroidManifest.xml` `<queries>` block must declare `https` scheme so `url_launcher` can open Stripe URLs on Android 11+ (already added)
+- Use `LaunchMode.inAppBrowserView`, not `externalApplication` — the latter opens a full browser with no deep-link return path
+- `StorePage` uses `WidgetsBindingObserver` to call `_checkPendingStripeSession()` on `AppLifecycleState.resumed`; ensure the observer is registered in `initState` and removed in `dispose`
+- Multiple FABs in the same subtree must each have a unique `heroTag` (home FAB: `'home-fab'`, Gemini FAB: `'gemini-fab'`, Place Ad FAB: `'place-ad-fab'`)
 
 **Gradle "Unable to establish loopback connection" on Windows**:
 
@@ -970,14 +978,14 @@ Occurs when a Flutter/Firebase plugin is compiled with a newer Kotlin than the p
 - **Advertisement model** (`models/advertisement.dart`): bilingual fields (`Title_EN`/`Title_TC`, `Content_EN`/`Content_TC`, `Image_EN`/`Image_TC`), `status`, `restaurantId`
 - **AdvertisementService** (`services/advertisement_service.dart`):
   - Full CRUD: `getAdvertisements()`, `createAdvertisement()`, `updateAdvertisement()`, `deleteAdvertisement()`, `toggleAdvertisementStatus()`
-  - Stripe checkout: `createAdCheckoutSession()` opens Stripe-hosted URL in the **external browser** via `url_launcher` `LaunchMode.externalApplication` (not a Chrome Custom Tab or in-app WebView); `checkPendingSession()` / `clearPendingSession()` for 2-hour session persistence via SharedPreferences
+  - Stripe checkout: `createAdCheckoutSession()` opens Stripe-hosted URL in a **Chrome Custom Tab** via `url_launcher` `LaunchMode.inAppBrowserView` — feels like an in-app sheet, never fully leaves the app. When Stripe completes, it redirects to `pourrice://payment/success?session_id={CHECKOUT_SESSION_ID}`; Android intercepts the deep link (registered in `AndroidManifest.xml`), closes the CCT, and resumes the app automatically. `checkPendingSession()` / `clearPendingSession()` provide 2-hour session persistence via SharedPreferences. The POST body must include `successUrl: 'pourrice://payment/success?session_id={CHECKOUT_SESSION_ID}'` and `cancelUrl: 'pourrice://payment/cancel'` — required by the API; `{CHECKOUT_SESSION_ID}` is Stripe's template placeholder.
 - **StoreAdFormPage** (`pages/store_ad_form_page.dart`):
   - Create/edit advertisement form with bilingual title+content fields and EN/TC image pickers
   - Language fallback: copies from filled language if the other is empty before submit
   - Firebase Storage image upload via `ImageService`
 - **StorePage updated** (`pages/store_page.dart`):
   - Two-tab layout: Dashboard (existing content) + Advertisements (new tab with `Icons.campaign`)
-  - Advertisements tab: lists ads with toggle/delete; FAB launches Stripe checkout; on return detects pending session and opens `StoreAdFormPage`
+  - Advertisements tab: lists ads with toggle/delete; FAB launches Stripe checkout (Chrome Custom Tab); uses `WidgetsBindingObserver.didChangeAppLifecycleState` to auto-detect app resume after CCT closes and immediately opens `StoreAdFormPage` if a pending session exists (tab-change listener kept as fallback)
   - Booking stat fixed: fetches real booking count from `BookingService.getRestaurantBookings()` instead of hardcoded `'0'`
 - **HomePage updated** (`pages/home_page.dart`):
   - "Featured Offers" section added between nearby and featured restaurants
@@ -1269,6 +1277,19 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 ---
 
-**Last Updated**: 2026-04-06
+#### Phase 17 (2026-04-13) - Store Reviews Read-Only View
+
+**`lib/pages/restaurant_reviews_page.dart`**:
+- Added `readOnly` optional parameter (defaults to `false`)
+- FAB ("Write Review") is hidden when `readOnly: true`
+
+**`lib/pages/store_page.dart`**:
+- Added import for `restaurant_reviews_page.dart`
+- Reviews quick action card navigates to `RestaurantReviewsPage(readOnly: true)` instead of showing a "coming soon" snackbar
+- Reviews are displayed ordered newest-first (server-side sort by `dateTime` desc)
+
+---
+
+**Last Updated**: 2026-04-13
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

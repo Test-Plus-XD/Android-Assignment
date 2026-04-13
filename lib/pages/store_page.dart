@@ -11,6 +11,7 @@ import '../widgets/common/loading_indicator.dart';
 import '../widgets/skeletons/restaurant_detail_skeleton.dart';
 import '../widgets/store/add_restaurant_sheet.dart';
 import '../widgets/store/booking_card.dart';
+import 'restaurant_reviews_page.dart';
 import 'store_info_edit_page.dart';
 import 'store_menu_manage_page.dart';
 import 'store_ad_form_page.dart';
@@ -34,7 +35,7 @@ class StorePage extends StatefulWidget {
 }
 
 class _StorePageState extends State<StorePage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final TabController _tabController;
   // Track previous tab to detect when the Ads tab becomes visible
   int _previousTab = 0;
@@ -44,6 +45,7 @@ class _StorePageState extends State<StorePage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_onTabChanged);
+    WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadOwnedRestaurant();
@@ -52,9 +54,19 @@ class _StorePageState extends State<StorePage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Auto-check for a pending Stripe session when the app resumes from background.
+  /// This fires when the Chrome Custom Tab closes after Stripe redirects to pourrice://.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPendingStripeSession();
+    }
   }
 
   /// Called whenever the tab changes.
@@ -445,13 +457,14 @@ class _DashboardTab extends StatelessWidget {
                   title: _isTC ? '評價' : 'Reviews',
                   subtitle: _isTC ? '查看顧客評價' : 'View customer reviews',
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          _isTC ? '評價管理功能開發中' : 'Reviews management coming soon',
-                        ),
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => RestaurantReviewsPage(
+                        restaurantId: restaurant.id,
+                        restaurantName: restaurantName,
+                        isTraditionalChinese: isTraditionalChinese,
+                        readOnly: true,
                       ),
-                    );
+                    ));
                   },
                 ),
               ],
@@ -1259,6 +1272,7 @@ class _AdsTabState extends State<_AdsTab> {
           bottom: 100, // Increased from 24 to clear the bottom nav bar
           right: 24,
           child: FloatingActionButton.extended(
+            heroTag: 'place-ad-fab',
             onPressed: adService.isLoading ? null : widget.onStartCheckout,
             icon: const Icon(Icons.add),
             label: Text(_isTC ? '投放廣告' : 'Place New Ad'),

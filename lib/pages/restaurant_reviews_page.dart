@@ -16,11 +16,13 @@ class RestaurantReviewsPage extends StatelessWidget {
   final String restaurantId;
   final String restaurantName;
   final bool isTraditionalChinese;
+  final bool readOnly;
 
   const RestaurantReviewsPage({
     required this.restaurantId,
     required this.restaurantName,
     required this.isTraditionalChinese,
+    this.readOnly = false,
     super.key,
   });
 
@@ -122,13 +124,15 @@ class RestaurantReviewsPage extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddReviewForm(context),
-        icon: const Icon(Icons.rate_review),
-        label: Text(
-          isTraditionalChinese ? '撰寫評價' : 'Write Review',
-        ),
-      ),
+      floatingActionButton: readOnly
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showAddReviewForm(context),
+              icon: const Icon(Icons.rate_review),
+              label: Text(
+                isTraditionalChinese ? '撰寫評價' : 'Write Review',
+              ),
+            ),
     );
   }
 }

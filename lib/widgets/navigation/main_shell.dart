@@ -580,6 +580,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
             ),
             // The Home FAB in the centre notch
             floatingActionButton: FloatingActionButton(
+              heroTag: 'home-fab',
               onPressed: () {
                 // Navigate directly to Home page index (2 for logged in, 1 for guest)
                 final homePageIndex = isLoggedIn ? 2 : 1;

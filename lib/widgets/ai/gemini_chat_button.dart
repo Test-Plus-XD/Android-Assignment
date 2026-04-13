@@ -67,6 +67,7 @@ class _GeminiChatButtonState extends State<GeminiChatButton>
     return ScaleTransition(
       scale: _scaleAnimation,
       child: FloatingActionButton.extended(
+        heroTag: 'gemini-fab',
         onPressed: _openChat,
         icon: Container(
           padding: const EdgeInsets.all(4),
