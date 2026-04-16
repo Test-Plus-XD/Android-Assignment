@@ -111,8 +111,29 @@ class _StorePageState extends State<StorePage>
   Future<void> _checkPendingStripeSession() async {
     if (!mounted) return;
     final adService = context.read<AdvertisementService>();
-    final restaurantId = await adService.checkPendingSession();
-    if (restaurantId == null || !mounted) return;
+    final pendingSession = await adService.checkPendingSession();
+    if (pendingSession == null || !mounted) return;
+
+    final isPaid = await adService.verifyCheckoutSessionPaid(
+      pendingSession.sessionId,
+    );
+    if (!mounted) return;
+
+    if (!isPaid) {
+      await adService.clearPendingSession();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese
+                ? '付款尚未完成，請完成付款後再建立廣告。'
+                : 'Payment is not completed yet. Please complete payment before creating an ad.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     // Clear the session first so it doesn't trigger again
     await adService.clearPendingSession();
@@ -121,7 +142,7 @@ class _StorePageState extends State<StorePage>
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => StoreAdFormPage(
-          restaurantId: restaurantId,
+          restaurantId: pendingSession.restaurantId,
           isTraditionalChinese: widget.isTraditionalChinese,
           restaurant: context.read<StoreService>().ownedRestaurant,
         ),
