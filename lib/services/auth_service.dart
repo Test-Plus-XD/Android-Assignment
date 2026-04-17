@@ -30,6 +30,9 @@ class AuthService with ChangeNotifier {
   // Holds the last error message encountered. This can be used to display
   // SnackBars or Alert dialogs to the user.
   String? _errorMessage;
+  // Before-logout callbacks let dependent services clean up authenticated
+  // server state, such as registered FCM tokens, before Firebase sign-out.
+  final List<AsyncCallback> _beforeLogoutCallbacks = <AsyncCallback>[];
 
   // --- Getters ---
   // Returns the current [User] object.
@@ -63,17 +66,20 @@ class AuthService with ChangeNotifier {
   }
 
   // Initialises Google Sign-In with the required configuration.
-  // 
+  //
   // In version 7.x, the [serverClientId] must be provided here to allow
   // Firebase to exchange the resulting authorization for a Firebase Credential.
   Future<void> _initializeGoogleSignIn() async {
     try {
       await _googleSignIn.initialize(
-        serverClientId: '937491674619-r1e5di42mi8tdgkqfhe2fubdms7jks9f.apps.googleusercontent.com',
+        serverClientId:
+            '937491674619-r1e5di42mi8tdgkqfhe2fubdms7jks9f.apps.googleusercontent.com',
       );
-      if (kDebugMode) print('AuthService: Google Sign-In initialised successfully.');
+      if (kDebugMode)
+        print('AuthService: Google Sign-In initialised successfully.');
     } catch (e) {
-      if (kDebugMode) print('AuthService: Failed to initialise Google Sign-In: $e');
+      if (kDebugMode)
+        print('AuthService: Failed to initialise Google Sign-In: $e');
     }
   }
 
@@ -99,7 +105,7 @@ class AuthService with ChangeNotifier {
   }
 
   // Signs in the user using the Google OAuth 2.0 flow.
-  // 
+  //
   // THE FULL FLOW (v7.x):
   // 1. [Sign Out]: Clear any existing Google session to ensure account picker appears.
   // 2. [Authenticate]: Launch the native Google Account Picker via [_googleSignIn.authenticate()].
@@ -107,16 +113,16 @@ class AuthService with ChangeNotifier {
   // 4. [Access Token]: Request an OAuth 'accessToken' via [googleUser.authorizationClient.authorizeScopes].
   // 5. [Credential]: Combine tokens into an [OAuthCredential] for Firebase.
   // 6. [Firebase Sign In]: Hand over the credential to Firebase Auth to complete the bridge.
-  // 
+  //
   // Returns [true] if the user successfully signed in.
   Future<bool> signInWithGoogle() async {
     try {
       _setLoading(true);
       if (kDebugMode) print('AuthService: Initiating Google Sign-In flow...');
-      
+
       // Step 1: Sign out to force the account selector
       await _googleSignIn.signOut();
-      
+
       // Step 2: Trigger native account selection/authentication
       final GoogleSignInAccount googleUser;
       try {
@@ -124,39 +130,43 @@ class AuthService with ChangeNotifier {
       } on GoogleSignInException catch (e) {
         // Handle case where user taps 'back' or 'cancel'
         if (e.code == GoogleSignInExceptionCode.canceled) {
-          if (kDebugMode) print('AuthService: User cancelled Google selection.');
+          if (kDebugMode)
+            print('AuthService: User cancelled Google selection.');
           _setLoading(false);
           return false;
         }
         rethrow;
       }
 
-      if (kDebugMode) print('AuthService: User selected account -> ${googleUser.email}');
-      
+      if (kDebugMode)
+        print('AuthService: User selected account -> ${googleUser.email}');
+
       // Step 3 & 4: Retrieve tokens from the account
       // Note: 'authentication' is a synchronous getter in 7.x
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-      
+
       // Access tokens must be requested explicitly via the authorizationClient
-      final GoogleSignInClientAuthorization clientAuth = 
-          await googleUser.authorizationClient.authorizeScopes(['email']);
-      
+      final GoogleSignInClientAuthorization clientAuth = await googleUser
+          .authorizationClient
+          .authorizeScopes(['email']);
+
       // Step 5: Create the Firebase credential package
       final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: clientAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      
+
       // Step 6: Authenticate with Firebase
       await _firebaseAuth.signInWithCredential(credential);
-      
+
       _setLoading(false);
       return true;
     } on FirebaseAuthException catch (error) {
       _handleAuthError(error);
       return false;
     } catch (error) {
-      if (kDebugMode) print('AuthService: Unhandled error in Google flow -> $error');
+      if (kDebugMode)
+        print('AuthService: Unhandled error in Google flow -> $error');
       _errorMessage = 'Google sign-in failed: $error';
       _setLoading(false);
       notifyListeners();
@@ -165,31 +175,31 @@ class AuthService with ChangeNotifier {
   }
 
   // Creates a new user account using Email and Password.
-  // 
+  //
   // - Sends a verification email automatically.
   // - Updates the [displayName] if provided.
   // - Triggers a [reload] to ensure the local user object has the updated name.
   Future<bool> registerWithEmail({
-    required String email, 
-    required String password, 
-    String? displayName
+    required String email,
+    required String password,
+    String? displayName,
   }) async {
     try {
       _setLoading(true);
-      
+
       final credential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email, 
-        password: password
+        email: email,
+        password: password,
       );
-      
+
       if (displayName != null && credential.user != null) {
         await credential.user!.updateDisplayName(displayName);
         await credential.user!.reload();
         _currentUser = _firebaseAuth.currentUser;
       }
-      
+
       await credential.user?.sendEmailVerification();
-      
+
       _setLoading(false);
       return true;
     } on FirebaseAuthException catch (error) {
@@ -204,10 +214,16 @@ class AuthService with ChangeNotifier {
   }
 
   // Standard Email/Password Login.
-  Future<bool> loginWithEmail({required String email, required String password}) async {
+  Future<bool> loginWithEmail({
+    required String email,
+    required String password,
+  }) async {
     try {
       _setLoading(true);
-      await _firebaseAuth.signInWithEmailAndPassword(email: email, password: password);
+      await _firebaseAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       _setLoading(false);
       return true;
     } on FirebaseAuthException catch (error) {
@@ -222,14 +238,15 @@ class AuthService with ChangeNotifier {
   }
 
   // Fully terminates the session.
-  // 
+  //
   // Clears both the Google Sign-In instance cache and the Firebase Auth session.
   Future<void> logout() async {
     try {
       _setLoading(true);
+      await _runBeforeLogoutCallbacks();
       await _googleSignIn.signOut();
       await _firebaseAuth.signOut();
-      
+
       _currentUser = null;
       _errorMessage = null;
       _setLoading(false);
@@ -241,8 +258,23 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  // Registers a cleanup callback that runs before the Firebase session is
+  // terminated.
+  void addBeforeLogoutCallback(AsyncCallback callback) {
+    if (_beforeLogoutCallbacks.contains(callback)) {
+      return;
+    }
+
+    _beforeLogoutCallbacks.add(callback);
+  }
+
+  // Removes a previously registered before-logout callback.
+  void removeBeforeLogoutCallback(AsyncCallback callback) {
+    _beforeLogoutCallbacks.remove(callback);
+  }
+
   // Triggers Firebase's built-in password reset flow.
-  // 
+  //
   // User will receive an email from Firebase with a link to reset their password.
   Future<bool> sendPasswordResetEmail(String email) async {
     try {
@@ -266,12 +298,13 @@ class AuthService with ChangeNotifier {
     if (_currentUser == null) return false;
     try {
       _setLoading(true);
-      if (displayName != null) await _currentUser!.updateDisplayName(displayName);
+      if (displayName != null)
+        await _currentUser!.updateDisplayName(displayName);
       if (photoURL != null) await _currentUser!.updatePhotoURL(photoURL);
-      
+
       await _currentUser!.reload();
       _currentUser = _firebaseAuth.currentUser;
-      
+
       _setLoading(false);
       notifyListeners();
       return true;
@@ -287,7 +320,8 @@ class AuthService with ChangeNotifier {
 
   // Internal handler to translate Firebase error codes into readable messages.
   void _handleAuthError(FirebaseAuthException error) {
-    _errorMessage = error.message ?? 'An unexpected authentication error occurred.';
+    _errorMessage =
+        error.message ?? 'An unexpected authentication error occurred.';
     _setLoading(false);
     notifyListeners();
   }
@@ -302,5 +336,21 @@ class AuthService with ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // Runs all registered cleanup callbacks, but never blocks logout forever if
+  // one of them throws.
+  Future<void> _runBeforeLogoutCallbacks() async {
+    final callbacks = List<AsyncCallback>.from(_beforeLogoutCallbacks);
+
+    for (final callback in callbacks) {
+      try {
+        await callback();
+      } catch (error) {
+        if (kDebugMode) {
+          print('AuthService: Before logout callback failed: $error');
+        }
+      }
+    }
   }
 }

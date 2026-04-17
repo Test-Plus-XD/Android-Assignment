@@ -43,7 +43,7 @@ A Flutter mobile app for discovering vegetarian/vegan restaurants in Hong Kong w
 - **Chat**: Socket.IO (Railway server)
 - **AI**: Google Gemini 2.5
 - **Maps**: Google Maps Flutter
-- **Notifications**: flutter_local_notifications
+- **Notifications**: Firebase Cloud Messaging (`firebase_messaging`) + `flutter_local_notifications`
 - **QR Codes**: qr_flutter 4.1.0 (generation), mobile_scanner 7.1.4 (scanning)
 
 ### Environment
@@ -96,7 +96,9 @@ lib/
 │   ├── image_service.dart                 # Firebase Storage image upload
 │   ├── location_service.dart              # GPS + distance calculations
 │   ├── menu_service.dart                  # Restaurant menu items CRUD
-│   ├── notification_service.dart          # Local notifications
+│   ├── app_navigation_service.dart        # Global navigator + snackbar bridge for notification routing
+│   ├── notification_coordinator_service.dart # Auth-driven FCM lifecycle + tap routing
+│   ├── notification_service.dart          # Local reminder notifications + tap payload bridge
 │   ├── restaurant_service.dart            # Algolia search + REST API
 │   ├── restaurant_service_native.dart     # Native restaurant operations
 │   ├── review_service.dart                # Reviews CRUD
@@ -206,7 +208,7 @@ android/
 - config/: 2 files
 - constants/: 4 files
 - models/: 10 files
-- services/: 14 files
+- services/: 16 files
 - pages/: 16 files
 - widgets/: 50 files (across 12 subdirectories)
 
@@ -1290,6 +1292,56 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 ---
 
-**Last Updated**: 2026-04-13
+#### Phase 18 (2026-04-17) - FCM Notification Pipeline Repair
+
+**`lib/services/notification_coordinator_service.dart` added**:
+- New app-wide coordinator for Firebase Cloud Messaging
+- Registers FCM tokens after auth restore/login instead of relying on startup-only permission timing
+- Re-registers on `FirebaseMessaging.onTokenRefresh`
+- Removes the backend token on logout via `DELETE /API/Messaging/register-token?token=...`
+- Handles foreground pushes, background notification taps, and cold-start opens in one place
+- De-duplicates notification displays with recent message or route keys
+- Suppresses chat banners when the matching chat room is already open
+
+**`lib/services/app_navigation_service.dart` added**:
+- Introduced global `navigatorKey` and `scaffoldMessengerKey`
+- Buffers pending notification routes until `MainShell` is ready
+- Shows foreground snackbars with an `Open` action and hands routing back to the shell
+
+**`lib/utils/notification_route_parser.dart` added**:
+- Normalises the repaired notification payload contract around `route`
+- Supports `/booking` and `/chat/{roomId}`
+- Keeps legacy `url` and `pourrice://...` parsing as migration fallback only
+- Preserves `messageId` for chat de-duplication
+
+**`lib/main.dart` and `lib/widgets/navigation/app_root.dart` updated**:
+- Removed the old startup-only FCM handling from `main.dart`
+- Registered the notification coordinator in Provider
+- Wired `MaterialApp` to the global navigator and scaffold messenger keys
+
+**`lib/widgets/navigation/main_shell.dart` updated**:
+- Main shell now handles notification targets directly
+- `/booking` routes to diner bookings or restaurant store bookings based on the current profile role
+- `/chat/{roomId}` switches to the chat tab and opens the requested room
+
+**`lib/services/auth_service.dart` updated**:
+- Added before-logout callbacks so dependent services can clean up authenticated backend state before Firebase sign-out
+
+**`lib/services/chat_service.dart` and `lib/pages/chat_room_page.dart` updated**:
+- Chat service now tracks `activeRoomId`
+- Outbound messages now include a client-generated `messageId`
+- Recent message IDs are cached so socket and push representations can be de-duplicated
+
+**`lib/pages/restaurant_detail_page.dart` updated**:
+- Restaurant chat creation now requires `restaurant.ownerId`
+- `restaurant-{restaurantId}` rooms are created or repaired with both diner and owner participants before chat opens
+
+**Verification note**:
+- `dart analyze` runs after the notification changes and reports no new hard errors from this work
+- The repo still has a large number of pre-existing warnings and infos unrelated to the repaired notification flow
+
+---
+
+**Last Updated**: 2026-04-17
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

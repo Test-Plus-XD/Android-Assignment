@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_state.dart';
 import '../../config/theme.dart';
+import '../../services/app_navigation_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_coordinator_service.dart';
 import '../../pages/login_page.dart';
 import 'main_shell.dart';
 import '../common/loading_indicator.dart';
@@ -30,6 +32,19 @@ class AppRoot extends StatefulWidget {
 class _AppRootState extends State<AppRoot> {
   bool _isSkipped = false;
 
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      context.read<NotificationCoordinatorService>().initialise();
+    });
+  }
+
   /// Handle Skip Login
   ///
   /// Allows users to browse the app without authentication (guest mode).
@@ -43,13 +58,12 @@ class _AppRootState extends State<AppRoot> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final appNavigationService = context.read<AppNavigationService>();
 
     // Wait for preferences to load before showing anything
     if (!appState.isLoaded) {
       return const MaterialApp(
-        home: Scaffold(
-          body: CenteredLoadingIndicator.large(),
-        ),
+        home: Scaffold(body: CenteredLoadingIndicator.large()),
       );
     }
 
@@ -60,6 +74,8 @@ class _AppRootState extends State<AppRoot> {
     return MaterialApp(
       title: 'PourRice',
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigationService.navigatorKey,
+      scaffoldMessengerKey: appNavigationService.scaffoldMessengerKey,
       theme: AppTheme.buildLightTheme(),
       darkTheme: AppTheme.buildDarkTheme(),
       themeMode: appState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
@@ -74,9 +90,7 @@ class _AppRootState extends State<AppRoot> {
         builder: (context, authService, _) {
           // Show loading while checking authentication state
           if (authService.isLoading) {
-            return const Scaffold(
-              body: CenteredLoadingIndicator.large(),
-            );
+            return const Scaffold(body: CenteredLoadingIndicator.large());
           }
 
           // User is logged in or in guest mode -> show main app

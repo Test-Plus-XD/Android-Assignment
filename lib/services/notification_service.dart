@@ -55,11 +55,18 @@ class NotificationService with ChangeNotifier {
 
   // Error message if something goes wrong
   String? _errorMessage;
+  // The notification tap handler lets higher-level coordinators own routing.
+  void Function(String? payload)? _notificationTapHandler;
 
   // GETTERS
   bool get isInitialised => _isInitialised;
   bool get notificationsEnabled => _notificationsEnabled;
   String? get errorMessage => _errorMessage;
+
+  // Registers a callback for local-notification taps.
+  void setNotificationTapHandler(void Function(String? payload) handler) {
+    _notificationTapHandler = handler;
+  }
 
   /// Initialise the notification system
   ///
@@ -89,13 +96,13 @@ class NotificationService with ChangeNotifier {
       // The AndroidInitializationSettings takes an icon name.
       // '@mipmap/ic_launcher' refers to your app icon in android/app/src/main/res/
       // This icon appears in the notification, so users know which app it's from.
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
 
       // InitializationSettings combines settings for all platforms
       // If you add iOS support later, add iOS settings here too
-      const initSettings = InitializationSettings(
-        android: androidSettings,
-      );
+      const initSettings = InitializationSettings(android: androidSettings);
 
       // Initialise the plugin with these settings
       await _notificationsPlugin.initialize(
@@ -120,12 +127,11 @@ class NotificationService with ChangeNotifier {
       if (kDebugMode) {
         print('NotificationService: Initialised successfully');
       }
-
     } catch (e) {
       _errorMessage = 'Failed to initialise notifications: $e';
       _isInitialised = false;
       notifyListeners();
-      
+
       if (kDebugMode) {
         print('NotificationService: Initialisation error - $e');
       }
@@ -133,28 +139,28 @@ class NotificationService with ChangeNotifier {
   }
 
   /// Create notification channels
-  /// 
+  ///
   /// This sets up different categories of notifications. Each channel has:
   /// - Unique ID (to reference it when sending notifications)
   /// - User-visible name (appears in system settings)
   /// - Description (explains what it's for)
   /// - Importance level (affects sound, vibration, popup behaviour)
-  /// 
+  ///
   /// Think of channels like radio stations - each has a purpose and users
   /// can tune in (enable) or tune out (disable) individual stations.
   Future<void> _createNotificationChannels() async {
     // Channel 1: Booking Reminders
     // High importance because users really need to know about their bookings
     const bookingChannel = AndroidNotificationChannel(
-      'booking_reminders',           // ID - use in code
-      'Booking Reminders',            // Name - user sees in settings
+      'booking_reminders', // ID - use in code
+      'Booking Reminders', // Name - user sees in settings
       description: 'Notifications for upcoming restaurant bookings',
-      importance: Importance.high,    // Shows as pop-up notification
-      enableVibration: true,          // Device vibrates
-      playSound: true,                // Plays default notification sound
+      importance: Importance.high, // Shows as pop-up notification
+      enableVibration: true, // Device vibrates
+      playSound: true, // Plays default notification sound
     );
 
-    // Channel 2: General Notifications  
+    // Channel 2: General Notifications
     // Default importance for less urgent messages
     const generalChannel = AndroidNotificationChannel(
       'general',
@@ -167,46 +173,57 @@ class NotificationService with ChangeNotifier {
 
     // Register channels with Android system
     await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(bookingChannel);
 
     await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(generalChannel);
   }
 
   /// Check notification permission (Android 13+)
-  /// 
+  ///
   /// Android 13 introduced runtime permission for notifications.
   /// Before that, notifications were always allowed unless user disabled
   /// them in settings. Now apps must request permission explicitly.
-  /// 
+  ///
   /// This method checks if we have permission and updates our state.
   Future<void> _checkNotificationPermission() async {
     final androidImplementation = _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
 
     if (androidImplementation != null) {
       // Check current permission status
       final granted = await androidImplementation.areNotificationsEnabled();
       _notificationsEnabled = granted ?? false;
-      
+
       if (kDebugMode) {
-        print('NotificationService: Notifications enabled = $_notificationsEnabled');
+        print(
+          'NotificationService: Notifications enabled = $_notificationsEnabled',
+        );
       }
     }
   }
 
   /// Request notification permission (Android 13+)
-  /// 
+  ///
   /// Shows a system dialog asking user to allow notifications.
   /// Returns true if granted, false if denied.
   Future<bool> requestPermission() async {
     final androidImplementation = _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
 
     if (androidImplementation != null) {
-      final granted = await androidImplementation.requestNotificationsPermission();
+      final granted = await androidImplementation
+          .requestNotificationsPermission();
       _notificationsEnabled = granted ?? false;
       notifyListeners();
       return _notificationsEnabled;
@@ -221,11 +238,13 @@ class NotificationService with ChangeNotifier {
     required int id,
     required String title,
     required String body,
+    String? payload,
   }) async {
     try {
       if (!_isInitialised) {
         throw Exception(
-            'NotificationService not initialised. Call initialise() first.');
+          'NotificationService not initialised. Call initialise() first.',
+        );
       }
 
       // Use the general channel for immediate, in-app messages
@@ -238,49 +257,41 @@ class NotificationService with ChangeNotifier {
         ticker: 'Immediate Notification',
       );
 
-      const notificationDetails = NotificationDetails(
-        android: androidDetails,
-      );
+      const notificationDetails = NotificationDetails(android: androidDetails);
 
-      // Schedule the notification for the current time plus 1 second
-      // This ensures it shows immediately upon receiving the foreground message.
-      final scheduledDate = tz.TZDateTime.now(tz.local).add(
-          const Duration(seconds: 1));
-
-      await _notificationsPlugin.zonedSchedule(
+      await _notificationsPlugin.show(
         id, // Unique ID for this notification
         title, // Notification title
         body, // Notification body
-        scheduledDate, // When to show it (approx. 1 second from now)
         notificationDetails, // How to show it
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: payload,
       );
 
       if (kDebugMode) {
-        print(
-            'NotificationService: Immediately showed notification ID $id at $scheduledDate');
+        print('NotificationService: Immediately showed notification ID $id');
       }
     } catch (e) {
       _errorMessage = 'Failed to show immediate notification: $e';
       notifyListeners();
 
-      if (kDebugMode) print('NotificationService: Error showing immediate notification - $e');
+      if (kDebugMode)
+        print('NotificationService: Error showing immediate notification - $e');
       rethrow;
     }
   }
 
   /// Schedule a booking reminder notification
-  /// 
+  ///
   /// This is the main method you'll use. It creates a notification that
   /// appears before a booking, reminding the user about their reservation.
-  /// 
+  ///
   /// Parameters explained:
   /// - id: Unique number for this notification (use booking ID hash)
   /// - restaurantName: Name of restaurant (in both languages)
   /// - bookingDateTime: When the booking is
   /// - notificationTime: When to show the notification (e.g., 2 hours before)
   /// - isTraditionalChinese: User's language preference
-  /// 
+  ///
   /// How timing works:
   /// If booking is at 7:00 PM and notificationTime is 5:00 PM,
   /// Android will show the notification at exactly 5:00 PM, even if
@@ -296,7 +307,9 @@ class NotificationService with ChangeNotifier {
     try {
       // Verify initialisation
       if (!_isInitialised) {
-        throw Exception('NotificationService not initialised. Call initialise() first.');
+        throw Exception(
+          'NotificationService not initialised. Call initialise() first.',
+        );
       }
 
       // Verify permission
@@ -310,17 +323,17 @@ class NotificationService with ChangeNotifier {
       }
 
       // Choose appropriate language for notification text
-      final restaurantName = isTraditionalChinese ? restaurantNameTc : restaurantNameEn;
-      
+      final restaurantName = isTraditionalChinese
+          ? restaurantNameTc
+          : restaurantNameEn;
+
       // Format booking time for display
       // Example: "7:00 PM" or "下午7:00"
       final timeString = _formatTime(bookingDateTime, isTraditionalChinese);
       _formatDate(bookingDateTime, isTraditionalChinese);
 
       // Build notification title and body based on language
-      final title = isTraditionalChinese
-          ? '預訂提醒'
-          : 'Booking Reminder';
+      final title = isTraditionalChinese ? '預訂提醒' : 'Booking Reminder';
 
       final body = isTraditionalChinese
           ? '您在 $restaurantName 的預訂將於 $timeString 開始'
@@ -328,8 +341,8 @@ class NotificationService with ChangeNotifier {
 
       // Configure notification appearance
       final androidDetails = AndroidNotificationDetails(
-        'booking_reminders',        // Must match channel ID we created
-        'Booking Reminders',        // Must match channel name
+        'booking_reminders', // Must match channel ID we created
+        'Booking Reminders', // Must match channel name
         channelDescription: 'Notifications for upcoming restaurant bookings',
         importance: Importance.high,
         priority: Priority.high,
@@ -339,47 +352,46 @@ class NotificationService with ChangeNotifier {
         ticker: isTraditionalChinese ? '預訂提醒' : 'Booking Reminder',
       );
 
-      final notificationDetails = NotificationDetails(
-        android: androidDetails,
-      );
+      final notificationDetails = NotificationDetails(android: androidDetails);
 
       // Convert notification time to timezone-aware format
       final scheduledDate = tz.TZDateTime.from(notificationTime, tz.local);
 
       // Schedule the notification
       await _notificationsPlugin.zonedSchedule(
-        id,                         // Unique ID for this notification
-        title,                      // Notification title
-        body,                       // Notification body
-        scheduledDate,              // When to show it
-        notificationDetails,        // How to show it
+        id, // Unique ID for this notification
+        title, // Notification title
+        body, // Notification body
+        scheduledDate, // When to show it
+        notificationDetails, // How to show it
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
 
       if (kDebugMode) {
-        print('NotificationService: Scheduled notification ID $id for $scheduledDate');
+        print(
+          'NotificationService: Scheduled notification ID $id for $scheduledDate',
+        );
       }
-
     } catch (e) {
       _errorMessage = 'Failed to schedule notification: $e';
       notifyListeners();
-      
+
       if (kDebugMode) {
         print('NotificationService: Error scheduling notification - $e');
       }
-      
+
       rethrow;
     }
   }
 
   /// Cancel a specific notification
-  /// 
+  ///
   /// Use this when a booking is cancelled or rescheduled.
   /// The notification won't appear anymore.
   Future<void> cancelNotification(int id) async {
     try {
       await _notificationsPlugin.cancel(id);
-      
+
       if (kDebugMode) {
         print('NotificationService: Cancelled notification ID $id');
       }
@@ -391,13 +403,13 @@ class NotificationService with ChangeNotifier {
   }
 
   /// Cancel all notifications
-  /// 
+  ///
   /// Nuclear option - removes all scheduled notifications from this app.
   /// Useful for logout or "clear all" functionality.
   Future<void> cancelAllNotifications() async {
     try {
       await _notificationsPlugin.cancelAll();
-      
+
       if (kDebugMode) {
         print('NotificationService: Cancelled all notifications');
       }
@@ -409,7 +421,7 @@ class NotificationService with ChangeNotifier {
   }
 
   /// Get list of pending notifications
-  /// 
+  ///
   /// Useful for debugging or showing users "you have 3 upcoming reminders".
   /// Returns list of scheduled notifications that haven't fired yet.
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {
@@ -420,7 +432,7 @@ class NotificationService with ChangeNotifier {
   String _formatTime(DateTime dateTime, bool isTraditionalChinese) {
     final hour = dateTime.hour;
     final minute = dateTime.minute.toString().padLeft(2, '0');
-    
+
     if (isTraditionalChinese) {
       // Traditional Chinese uses 12-hour format with 上午/下午
       final period = hour < 12 ? '上午' : '下午';
@@ -437,11 +449,35 @@ class NotificationService with ChangeNotifier {
   /// Format date for notification (language-aware)
   String _formatDate(DateTime dateTime, bool isTraditionalChinese) {
     final months = isTraditionalChinese
-        ? ['一月', '二月', '三月', '四月', '五月', '六月', 
-           '七月', '八月', '九月', '十月', '十一月', '十二月']
-        : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+        ? [
+            '一月',
+            '二月',
+            '三月',
+            '四月',
+            '五月',
+            '六月',
+            '七月',
+            '八月',
+            '九月',
+            '十月',
+            '十一月',
+            '十二月',
+          ]
+        : [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ];
+
     if (isTraditionalChinese) {
       return '${dateTime.year}年${months[dateTime.month - 1]}${dateTime.day}日';
     } else {
@@ -450,22 +486,17 @@ class NotificationService with ChangeNotifier {
   }
 
   /// Callback when user taps a notification
-  /// 
+  ///
   /// This is called when user taps a notification in their notification tray.
   /// You can parse the payload to determine which screen to navigate to.
-  /// 
+  ///
   /// For example, if user taps a booking reminder, navigate to booking details.
   void _onNotificationTapped(NotificationResponse response) {
     if (kDebugMode) {
       print('NotificationService: Notification tapped - ${response.payload}');
     }
 
-    // You can add navigation logic here
-    // For example:
-    // if (response.payload?.startsWith('booking:')) {
-    //   final bookingId = response.payload?.split(':')[1];
-    //   navigatorKey.currentState?.pushNamed('/booking-details', arguments: bookingId);
-    // }
+    _notificationTapHandler?.call(response.payload);
   }
 
   /// Clear error message

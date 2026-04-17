@@ -84,7 +84,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
 
   void _onScroll() {
     // Detect when hero image is collapsed (after scrolling ~180 pixels)
-    final isCollapsed = _scrollController.hasClients && _scrollController.offset > 180;
+    final isCollapsed =
+        _scrollController.hasClients && _scrollController.offset > 180;
     if (isCollapsed != _isCollapsed) {
       setState(() => _isCollapsed = isCollapsed);
     }
@@ -96,7 +97,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     final menuService = context.read<MenuService>();
     setState(() {
       _reviewStatsFuture = reviewService.getReviewStats(widget.restaurant.id);
-      _reviewsFuture = reviewService.getReviews(restaurantId: widget.restaurant.id);
+      _reviewsFuture = reviewService.getReviews(
+        restaurantId: widget.restaurant.id,
+      );
       _menuItemsFuture = menuService.getMenuItems(widget.restaurant.id);
     });
   }
@@ -105,9 +108,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   bool _hasContactInfo() {
     final contacts = widget.restaurant.contacts;
     if (contacts == null) return false;
-    return (contacts['Phone'] != null && contacts['Phone'].toString().isNotEmpty) ||
-        (contacts['Email'] != null && contacts['Email'].toString().isNotEmpty) ||
-        (contacts['Website'] != null && contacts['Website'].toString().isNotEmpty);
+    return (contacts['Phone'] != null &&
+            contacts['Phone'].toString().isNotEmpty) ||
+        (contacts['Email'] != null &&
+            contacts['Email'].toString().isNotEmpty) ||
+        (contacts['Website'] != null &&
+            contacts['Website'].toString().isNotEmpty);
   }
 
   /// Calculate distance from user's location
@@ -116,8 +122,13 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// This helps users understand if the restaurant is convenient.
   String? _getDistanceText() {
     final locationService = context.read<LocationService>();
-    if (widget.restaurant.latitude == null || widget.restaurant.longitude == null) return null;
-    final distance = locationService.calculateDistanceFromCurrent( widget.restaurant.latitude!, widget.restaurant.longitude!, );
+    if (widget.restaurant.latitude == null ||
+        widget.restaurant.longitude == null)
+      return null;
+    final distance = locationService.calculateDistanceFromCurrent(
+      widget.restaurant.latitude!,
+      widget.restaurant.longitude!,
+    );
     if (distance == null) return null;
     return locationService.formatDistance(distance);
   }
@@ -145,10 +156,19 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     try {
       final name = widget.isTraditionalChinese
           ? _getDisplayValue(widget.restaurant.nameTc, widget.restaurant.nameEn)
-          : _getDisplayValue(widget.restaurant.nameEn, widget.restaurant.nameTc);
+          : _getDisplayValue(
+              widget.restaurant.nameEn,
+              widget.restaurant.nameTc,
+            );
       final address = widget.isTraditionalChinese
-          ? _getDisplayValue(widget.restaurant.addressTc, widget.restaurant.addressEn)
-          : _getDisplayValue(widget.restaurant.addressEn, widget.restaurant.addressTc);
+          ? _getDisplayValue(
+              widget.restaurant.addressTc,
+              widget.restaurant.addressEn,
+            )
+          : _getDisplayValue(
+              widget.restaurant.addressEn,
+              widget.restaurant.addressTc,
+            );
 
       // Build share text with restaurant details
       final shareText = widget.isTraditionalChinese
@@ -162,7 +182,11 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.isTraditionalChinese ? '分享失敗' : 'Failed to share')),
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese ? '分享失敗' : 'Failed to share',
+            ),
+          ),
         );
       }
     }
@@ -181,7 +205,11 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       await launchUrl(uri);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isTraditionalChinese ? '無法撥打電話' : 'Could not make call')),
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese ? '無法撥打電話' : 'Could not make call',
+          ),
+        ),
       );
     }
   }
@@ -200,7 +228,11 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開網站' : 'Could not open website')),
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese ? '無法打開網站' : 'Could not open website',
+          ),
+        ),
       );
     }
   }
@@ -212,7 +244,13 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
       await launchUrl(uri);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開郵件應用' : 'Could not open email app')),
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese
+                ? '無法打開郵件應用'
+                : 'Could not open email app',
+          ),
+        ),
       );
     }
   }
@@ -225,23 +263,33 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   /// URL Scheme: geo:0,0?q=22.3964,114.1095(Restaurant Name)
   /// The "0,0" is placeholder, the query param has actual coordinates.
   Future<void> _openInMaps() async {
-    if (widget.restaurant.latitude == null || widget.restaurant.longitude == null) return;
+    if (widget.restaurant.latitude == null ||
+        widget.restaurant.longitude == null)
+      return;
     final name = widget.isTraditionalChinese
         ? _getDisplayValue(widget.restaurant.nameTc, widget.restaurant.nameEn)
         : _getDisplayValue(widget.restaurant.nameEn, widget.restaurant.nameTc);
-    final uri = Uri.parse('geo:0,0?q=${widget.restaurant.latitude},${widget.restaurant.longitude}($name)');
+    final uri = Uri.parse(
+      'geo:0,0?q=${widget.restaurant.latitude},${widget.restaurant.longitude}($name)',
+    );
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isTraditionalChinese ? '無法打開地圖' : 'Could not open maps')),
+        SnackBar(
+          content: Text(
+            widget.isTraditionalChinese ? '無法打開地圖' : 'Could not open maps',
+          ),
+        ),
       );
     }
   }
 
   /// Show in-app directions bottom sheet
   void _showDirectionsSheet() {
-    if (widget.restaurant.latitude == null || widget.restaurant.longitude == null) return;
+    if (widget.restaurant.latitude == null ||
+        widget.restaurant.longitude == null)
+      return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -266,7 +314,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.isTraditionalChinese ? '請先登入以使用聊天功能' : 'Please log in to use chat',
+              widget.isTraditionalChinese
+                  ? '請先登入以使用聊天功能'
+                  : 'Please log in to use chat',
             ),
           ),
         );
@@ -281,30 +331,51 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     // Create room ID in format: restaurant-{restaurantId}
     final roomId = 'restaurant-${widget.restaurant.id}';
     final currentUserId = authService.currentUser!.uid;
+    final restaurantOwnerId = widget.restaurant.ownerId;
 
     try {
       // Try to join existing room or create new one
       final room = await chatService.getChatRoom(roomId);
-      
-      if (room == null) {
-        // Room doesn't exist, create it
+      final roomParticipants = room?.participants ?? <String>[];
+      final hasOwnerParticipant =
+          restaurantOwnerId != null &&
+          restaurantOwnerId.isNotEmpty &&
+          roomParticipants.contains(restaurantOwnerId);
+      final hasCurrentUserParticipant = roomParticipants.contains(
+        currentUserId,
+      );
+
+      if (room == null || !hasOwnerParticipant || !hasCurrentUserParticipant) {
+        if (restaurantOwnerId == null || restaurantOwnerId.isEmpty) {
+          throw Exception(
+            widget.isTraditionalChinese
+                ? '餐廳尚未設定負責人，暫時無法開始聊天'
+                : 'This restaurant does not have an owner assigned yet',
+          );
+        }
+
+        // Room is missing or incomplete, so recreate or repair it with both
+        // participants before the first message is sent.
         final restaurantName = widget.isTraditionalChinese
             ? widget.restaurant.nameTc ?? widget.restaurant.nameEn
             : widget.restaurant.nameEn ?? widget.restaurant.nameTc;
-            
+
         final createdRoomId = await chatService.createChatRoom(
-          [currentUserId], // Start with current user, restaurant owner can join later
+          <String>[currentUserId, restaurantOwnerId],
           roomName: restaurantName,
-          roomId: roomId, // Use specific room ID format
+          roomId: roomId,
         );
-        
+
         if (createdRoomId == null) {
-          throw Exception('Failed to create chat room');
+          throw Exception(
+            widget.isTraditionalChinese
+                ? '無法建立聊天房間'
+                : 'Failed to create chat room',
+          );
         }
-      } else {
-        // Room exists, join it
-        await chatService.joinRoom(roomId);
       }
+
+      await chatService.joinRoom(roomId);
 
       if (mounted) {
         Navigator.push(
@@ -323,8 +394,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           SnackBar(
             content: Text(
               widget.isTraditionalChinese
-                ? '無法開始聊天：$e'
-                : 'Failed to start chat: $e',
+                  ? '無法開始聊天：$e'
+                  : 'Failed to start chat: $e',
             ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
@@ -346,10 +417,19 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           isTraditionalChinese: widget.isTraditionalChinese,
           restaurantName: restaurantName,
           restaurantId: widget.restaurant.id,
-          restaurantCuisine: (widget.isTraditionalChinese ? widget.restaurant.keywordTc : widget.restaurant.keywordEn)?.isNotEmpty == true
-              ? (widget.isTraditionalChinese ? widget.restaurant.keywordTc!.first : widget.restaurant.keywordEn!.first)
+          restaurantCuisine:
+              (widget.isTraditionalChinese
+                          ? widget.restaurant.keywordTc
+                          : widget.restaurant.keywordEn)
+                      ?.isNotEmpty ==
+                  true
+              ? (widget.isTraditionalChinese
+                    ? widget.restaurant.keywordTc!.first
+                    : widget.restaurant.keywordEn!.first)
               : null,
-          restaurantDistrict: widget.isTraditionalChinese ? widget.restaurant.districtTc : widget.restaurant.districtEn,
+          restaurantDistrict: widget.isTraditionalChinese
+              ? widget.restaurant.districtTc
+              : widget.restaurant.districtEn,
         ),
       ),
     );
@@ -371,7 +451,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     final theme = Theme.of(context);
     final authService = context.watch<AuthService>();
     final userService = context.watch<UserService>();
-    final isOwner = authService.isLoggedIn && widget.restaurant.ownerId == authService.currentUser!.uid;
+    final isOwner =
+        authService.isLoggedIn &&
+        widget.restaurant.ownerId == authService.currentUser!.uid;
     final userType = userService.currentProfile?.type;
     final isDiner = authService.isLoggedIn && userType == 'Diner';
 
@@ -402,7 +484,11 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => Container(
                       color: Colors.grey[200],
-                      child: Icon(Icons.restaurant, size: 80, color: Colors.grey[400]),
+                      child: Icon(
+                        Icons.restaurant,
+                        size: 80,
+                        color: Colors.grey[400],
+                      ),
                     ),
                   ),
                   // Gradient overlay to make text readable on any image
@@ -425,7 +511,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                 IconButton(
                   icon: const Icon(Icons.auto_awesome),
                   onPressed: _openGeminiChat,
-                  tooltip: widget.isTraditionalChinese ? 'AI 助手' : 'AI Assistant',
+                  tooltip: widget.isTraditionalChinese
+                      ? 'AI 助手'
+                      : 'AI Assistant',
                 ),
                 // Socket chat (requires login)
                 if (authService.isLoggedIn)
@@ -471,11 +559,13 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     isLoggedIn: authService.isLoggedIn,
                     phoneNumber: widget.restaurant.contacts?['Phone'],
                     website: widget.restaurant.contacts?['Website'],
-                    onCall: () => _makePhoneCall(widget.restaurant.contacts!['Phone']),
+                    onCall: () =>
+                        _makePhoneCall(widget.restaurant.contacts!['Phone']),
                     onChat: _startChatWithRestaurant,
                     onAI: _openGeminiChat,
                     onDirections: _showDirectionsSheet,
-                    onWebsite: () => _openWebsite(widget.restaurant.contacts!['Website']),
+                    onWebsite: () =>
+                        _openWebsite(widget.restaurant.contacts!['Website']),
                   ),
 
                   const SizedBox(height: 24),
@@ -499,7 +589,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                   if (_hasContactInfo()) ...[
                     Text(
                       widget.isTraditionalChinese ? '聯絡方式' : 'Contact',
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     ContactInfoCard(
@@ -515,25 +607,38 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                   // Address Section
                   Text(
                     widget.isTraditionalChinese ? '地址' : 'Address',
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
                   const SizedBox(height: 8),
                   InkWell(
                     onTap: _openInMaps,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.location_on_outlined, color: Colors.grey),
+                        const Icon(
+                          Icons.location_on_outlined,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(restaurantAddress, style: theme.textTheme.bodyLarge),
+                              Text(
+                                restaurantAddress,
+                                style: theme.textTheme.bodyLarge,
+                              ),
                               const SizedBox(height: 4),
                               Text(
-                                widget.isTraditionalChinese ? '查看地圖' : 'View on map',
-                                style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                                widget.isTraditionalChinese
+                                    ? '查看地圖'
+                                    : 'View on map',
+                                style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
@@ -545,13 +650,15 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                   const SizedBox(height: 24),
 
                   // Interactive Map Preview with zoom and satellite toggle
-                  if (widget.restaurant.latitude != null && widget.restaurant.longitude != null)
+                  if (widget.restaurant.latitude != null &&
+                      widget.restaurant.longitude != null)
                     InteractiveMapPreview(
                       latitude: widget.restaurant.latitude!,
                       longitude: widget.restaurant.longitude!,
                       restaurantName: restaurantName,
                       mapType: _mapType,
-                      onMapTypeChanged: (type) => setState(() => _mapType = type),
+                      onMapTypeChanged: (type) =>
+                          setState(() => _mapType = type),
                       onMapCreated: (controller) => _mapController = controller,
                       isTraditionalChinese: widget.isTraditionalChinese,
                     ),
@@ -564,27 +671,38 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     children: [
                       Text(
                         widget.isTraditionalChinese ? '營業時間' : 'Opening Hours',
-                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       // Open/Closed badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: widget.restaurant.isOpenNow
                               ? Colors.green.withValues(alpha: 0.15)
                               : Colors.red.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: widget.restaurant.isOpenNow ? Colors.green : Colors.red,
+                            color: widget.restaurant.isOpenNow
+                                ? Colors.green
+                                : Colors.red,
                             width: 1,
                           ),
                         ),
                         child: Text(
                           widget.restaurant.isOpenNow
                               ? (widget.isTraditionalChinese ? '營業中' : 'Open')
-                              : (widget.isTraditionalChinese ? '休息中' : 'Closed'),
+                              : (widget.isTraditionalChinese
+                                    ? '休息中'
+                                    : 'Closed'),
                           style: TextStyle(
-                            color: widget.restaurant.isOpenNow ? Colors.green[700] : Colors.red[700],
+                            color: widget.restaurant.isOpenNow
+                                ? Colors.green[700]
+                                : Colors.red[700],
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -606,7 +724,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     children: [
                       Text(
                         widget.isTraditionalChinese ? '菜單' : 'Menu',
-                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
@@ -616,12 +736,15 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                               builder: (_) => RestaurantMenuPage(
                                 restaurantId: widget.restaurant.id,
                                 restaurantName: restaurantName,
-                                isTraditionalChinese: widget.isTraditionalChinese,
+                                isTraditionalChinese:
+                                    widget.isTraditionalChinese,
                               ),
                             ),
                           );
                         },
-                        child: Text(widget.isTraditionalChinese ? '查看全部' : 'See all'),
+                        child: Text(
+                          widget.isTraditionalChinese ? '查看全部' : 'See all',
+                        ),
                       ),
                     ],
                   ),
@@ -651,7 +774,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                     children: [
                       Text(
                         widget.isTraditionalChinese ? '用戶評價' : 'User Reviews',
-                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
@@ -661,12 +786,15 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                               builder: (_) => RestaurantReviewsPage(
                                 restaurantId: widget.restaurant.id,
                                 restaurantName: restaurantName,
-                                isTraditionalChinese: widget.isTraditionalChinese,
+                                isTraditionalChinese:
+                                    widget.isTraditionalChinese,
                               ),
                             ),
                           );
                         },
-                        child: Text(widget.isTraditionalChinese ? '查看全部' : 'See all'),
+                        child: Text(
+                          widget.isTraditionalChinese ? '查看全部' : 'See all',
+                        ),
                       ),
                     ],
                   ),
@@ -678,13 +806,20 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                         return const ReviewStatsSkeleton();
                       }
                       if (snapshot.hasError) {
-                        if (kDebugMode) print('Error loading review stats: ${snapshot.error}');
+                        if (kDebugMode)
+                          print(
+                            'Error loading review stats: ${snapshot.error}',
+                          );
                         // Don't show error to user, just show no reviews
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           child: Text(
-                            widget.isTraditionalChinese ? '暫無評論' : 'No reviews yet',
-                            style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                            widget.isTraditionalChinese
+                                ? '暫無評論'
+                                : 'No reviews yet',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey,
+                            ),
                           ),
                         );
                       }
@@ -696,16 +831,23 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                             children: [
                               Text(
                                 stats.averageRating.toStringAsFixed(1),
-                                style: theme.textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
+                                style: theme.textTheme.headlineLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  StarRating(rating: stats.averageRating, size: 20),
+                                  StarRating(
+                                    rating: stats.averageRating,
+                                    size: 20,
+                                  ),
                                   Text(
                                     '${stats.totalReviews} ${widget.isTraditionalChinese ? '則評論' : 'reviews'}',
-                                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: Colors.grey[600],
+                                    ),
                                   ),
                                 ],
                               ),
@@ -716,8 +858,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Text(
-                          widget.isTraditionalChinese ? '暫無評論' : 'No reviews yet',
-                          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                          widget.isTraditionalChinese
+                              ? '暫無評論'
+                              : 'No reviews yet',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey,
+                          ),
                         ),
                       );
                     },
@@ -737,44 +883,46 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
 
       // Bottom Booking Button - Only visible for logged-in Diner users
       bottomSheet: (isOwner || !isDiner)
-      ? null // Owners and non-Diner users shouldn't see booking button
-      : Container(
-          padding: const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, -5),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _showBookingDialog,
-                    child: Text(
-                      widget.isTraditionalChinese ? '立即預訂餐桌' : 'Book a Table',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+          ? null // Owners and non-Diner users shouldn't see booking button
+          : Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
                   ),
+                ],
+              ),
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _showBookingDialog,
+                        child: Text(
+                          widget.isTraditionalChinese
+                              ? '立即預訂餐桌'
+                              : 'Book a Table',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -20,9 +21,12 @@ class ChatService extends ChangeNotifier {
   // TTL timestamp for rooms list cache (1h)
   DateTime? _roomsCachedAt;
   Map<String, List<ChatMessage>> _messagesCache = {};
+  final Set<String> _recentMessageIds = <String>{};
+  final Queue<String> _recentMessageIdOrder = Queue<String>();
   bool _isConnected = false;
   bool _isLoading = false;
   String? _error;
+  String? _activeRoomId;
   // Stream controllers for broadcasting real-time events to UI components
   final _messageController = StreamController<ChatMessage>.broadcast();
   final _typingController = StreamController<TypingIndicator>.broadcast();
@@ -38,6 +42,7 @@ class ChatService extends ChangeNotifier {
   Stream<ChatMessage> get messageStream => _messageController.stream;
   Stream<TypingIndicator> get typingStream => _typingController.stream;
   Stream<bool> get connectionStatusStream => _connectionController.stream;
+  String? get activeRoomId => _activeRoomId;
 
   // Updates the AuthService dependency without recreating the service instance
   // This is called by the Provider when the AuthService changes
@@ -56,6 +61,9 @@ class ChatService extends ChangeNotifier {
         _rooms.clear();
         _roomsCachedAt = null;
         _messagesCache.clear();
+        _recentMessageIds.clear();
+        _recentMessageIdOrder.clear();
+        _activeRoomId = null;
         notifyListeners();
       }
     }
@@ -97,6 +105,21 @@ class ChatService extends ChangeNotifier {
     return _messagesCache[roomId] ?? [];
   }
 
+  // Records which room is currently visible so chat FCM banners can be
+  // suppressed when the socket-driven chat UI is already on screen.
+  void setActiveRoom(String? roomId) {
+    _activeRoomId = roomId;
+  }
+
+  // Exposes recent messageId knowledge to the notification pipeline.
+  bool hasSeenMessageId(String? messageId) {
+    if (messageId == null || messageId.isEmpty) {
+      return false;
+    }
+
+    return _recentMessageIds.contains(messageId);
+  }
+
   @override
   void dispose() {
     disconnect();
@@ -120,7 +143,8 @@ class ChatService extends ChangeNotifier {
     if (_isConnected) return;
 
     try {
-      if (kDebugMode) print('ChatService: Connecting to ${AppConfig.socketIOUrl}...');
+      if (kDebugMode)
+        print('ChatService: Connecting to ${AppConfig.socketIOUrl}...');
 
       // Firebase authentication token is required for server-side user verification
       final authToken = await _authService.getIdToken();
@@ -136,7 +160,10 @@ class ChatService extends ChangeNotifier {
       _socket = IO.io(
         AppConfig.socketIOUrl,
         IO.OptionBuilder()
-            .setTransports(['websocket', 'polling']) // Use websocket first, fallback to polling
+            .setTransports([
+              'websocket',
+              'polling',
+            ]) // Use websocket first, fallback to polling
             .enableAutoConnect() // Enable auto-connect
             .enableReconnection() // Enable reconnection
             .setReconnectionDelay(1000) // 1 second delay
@@ -150,7 +177,8 @@ class ChatService extends ChangeNotifier {
       _setupSocketListeners();
 
       // Auto-connect is enabled, so connection will happen automatically
-      if (kDebugMode) print('ChatService: Socket.IO client initialized for user: $userId');
+      if (kDebugMode)
+        print('ChatService: Socket.IO client initialized for user: $userId');
     } catch (e) {
       if (kDebugMode) print('ChatService: Connection error: $e');
       _error = 'Failed to connect to chat server';
@@ -233,12 +261,14 @@ class ChatService extends ChangeNotifier {
           if (kDebugMode) print('ChatService: User registered successfully');
         } else {
           // Registration failure indicates invalid credentials or server error
-          if (kDebugMode) print('ChatService: Registration failed: ${response['error']}');
+          if (kDebugMode)
+            print('ChatService: Registration failed: ${response['error']}');
           _error = response['error'] as String?;
           notifyListeners();
         }
       } catch (e) {
-        if (kDebugMode) print('ChatService: Error parsing registration response: $e');
+        if (kDebugMode)
+          print('ChatService: Error parsing registration response: $e');
       }
     });
 
@@ -248,16 +278,21 @@ class ChatService extends ChangeNotifier {
       if (kDebugMode) print('ChatService: New message received: $data');
       try {
         final message = ChatMessage.fromJson(data as Map<String, dynamic>);
+        _rememberMessageId(message.messageId);
 
         // Message is added to the local cache for immediate UI display
         if (!_messagesCache.containsKey(message.roomId)) {
           _messagesCache[message.roomId] = [];
         }
-        _messagesCache[message.roomId]!.add(message);
+        if (!_roomHasMessage(message.roomId, message.messageId)) {
+          _messagesCache[message.roomId]!.add(message);
+        }
 
         // Room metadata is updated to reflect the latest message
         // This ensures the room list shows current activity
-        final roomIndex = _rooms.indexWhere((room) => room.roomId == message.roomId);
+        final roomIndex = _rooms.indexWhere(
+          (room) => room.roomId == message.roomId,
+        );
         if (roomIndex != -1) {
           final updatedRoom = ChatRoom(
             roomId: _rooms[roomIndex].roomId,
@@ -287,11 +322,14 @@ class ChatService extends ChangeNotifier {
     _socket!.on('user-typing', (data) {
       if (kDebugMode) print('ChatService: User typing event: $data');
       try {
-        final indicator = TypingIndicator.fromJson(data as Map<String, dynamic>);
+        final indicator = TypingIndicator.fromJson(
+          data as Map<String, dynamic>,
+        );
         // Typing indicator stream allows the UI to show "User is typing..." messages
         _typingController.add(indicator);
       } catch (e) {
-        if (kDebugMode) print('ChatService: Error parsing typing indicator: $e');
+        if (kDebugMode)
+          print('ChatService: Error parsing typing indicator: $e');
       }
     });
 
@@ -372,7 +410,8 @@ class ChatService extends ChangeNotifier {
         final Map<String, dynamic> responseData = json.decode(response.body);
         final List<dynamic> roomsData = responseData['rooms'] ?? [];
 
-        if (kDebugMode) print('ChatService: Received ${roomsData.length} rooms from API');
+        if (kDebugMode)
+          print('ChatService: Received ${roomsData.length} rooms from API');
 
         _rooms = roomsData.map((json) => ChatRoom.fromJson(json)).toList();
 
@@ -388,16 +427,27 @@ class ChatService extends ChangeNotifier {
         for (final room in _rooms) {
           if (room.recentMessages != null && room.recentMessages!.isNotEmpty) {
             _messagesCache[room.roomId] = room.recentMessages!;
+            for (final message in room.recentMessages!) {
+              _rememberMessageId(message.messageId);
+            }
             if (kDebugMode) {
-              print('ChatService: Cached ${room.recentMessages!.length} messages for room ${room.roomId}');
+              print(
+                'ChatService: Cached ${room.recentMessages!.length} messages for room ${room.roomId}',
+              );
             }
           }
         }
 
         _roomsCachedAt = DateTime.now();
-        if (kDebugMode) print('ChatService: Loaded ${_rooms.length} rooms with cached messages');
+        if (kDebugMode)
+          print(
+            'ChatService: Loaded ${_rooms.length} rooms with cached messages',
+          );
       } else {
-        if (kDebugMode) print('ChatService: API error ${response.statusCode}: ${response.body}');
+        if (kDebugMode)
+          print(
+            'ChatService: API error ${response.statusCode}: ${response.body}',
+          );
         _error = 'Failed to load chat rooms (${response.statusCode})';
       }
     } catch (e) {
@@ -436,11 +486,11 @@ class ChatService extends ChangeNotifier {
 
   // Creates a new chat room with the specified participants
   Future<String?> createChatRoom(
-      List<String> participants, {
-        String? roomName,
-        String? roomId, // Add support for custom room ID
-        String type = 'direct',
-      }) async {
+    List<String> participants, {
+    String? roomName,
+    String? roomId, // Add support for custom room ID
+    String type = 'direct',
+  }) async {
     try {
       final token = await _authService.getIdToken();
       // FIXED: Added /API/ prefix to match Express router mounting
@@ -449,7 +499,8 @@ class ChatService extends ChangeNotifier {
       final requestBody = {
         'participants': participants,
         if (roomName != null) 'roomName': roomName,
-        if (roomId != null) 'roomId': roomId, // Include custom room ID if provided
+        if (roomId != null)
+          'roomId': roomId, // Include custom room ID if provided
         'type': type,
       };
 
@@ -496,10 +547,7 @@ class ChatService extends ChangeNotifier {
     if (kDebugMode) print('ChatService: Joining room $roomId');
 
     // The 'join-room' event subscribes this socket to the specified room's broadcast channel
-    _socket!.emit('join-room', {
-      'roomId': roomId,
-      'userId': userId,
-    });
+    _socket!.emit('join-room', {'roomId': roomId, 'userId': userId});
   }
 
   /// Unsubscribes the current user from a chat room's real-time events via Socket.IO
@@ -514,10 +562,7 @@ class ChatService extends ChangeNotifier {
     if (kDebugMode) print('ChatService: Leaving room $roomId');
 
     // The 'leave-room' event unsubscribes this socket from the room's broadcast channel
-    _socket!.emit('leave-room', {
-      'roomId': roomId,
-      'userId': userId,
-    });
+    _socket!.emit('leave-room', {'roomId': roomId, 'userId': userId});
   }
 
   // ============================================================================
@@ -532,9 +577,12 @@ class ChatService extends ChangeNotifier {
     try {
       // Cached messages provide instant display without network delay
       // These are populated by the initial getChatRooms call which includes recent messages
-      if (_messagesCache.containsKey(roomId) && _messagesCache[roomId]!.isNotEmpty) {
+      if (_messagesCache.containsKey(roomId) &&
+          _messagesCache[roomId]!.isNotEmpty) {
         if (kDebugMode) {
-          print('ChatService: Returning ${_messagesCache[roomId]!.length} cached messages for $roomId');
+          print(
+            'ChatService: Returning ${_messagesCache[roomId]!.length} cached messages for $roomId',
+          );
         }
         return _messagesCache[roomId]!;
       }
@@ -542,7 +590,9 @@ class ChatService extends ChangeNotifier {
       // Cache miss: fetch full message history from the API
       final token = await _authService.getIdToken();
       // FIXED: Added /API/ prefix to match Express router mounting
-      final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId/Messages?limit=$limit');
+      final url = AppConfig.getEndpoint(
+        'API/Chat/Rooms/$roomId/Messages?limit=$limit',
+      );
 
       if (kDebugMode) print('ChatService: Fetching messages from $url');
 
@@ -561,14 +611,23 @@ class ChatService extends ChangeNotifier {
         final Map<String, dynamic> responseData = json.decode(response.body);
         final List<dynamic> messagesData = responseData['messages'] ?? [];
 
-        final messages = messagesData.map((json) => ChatMessage.fromJson(json)).toList();
+        final messages = messagesData
+            .map((json) => ChatMessage.fromJson(json))
+            .toList();
         _messagesCache[roomId] = messages;
+        for (final message in messages) {
+          _rememberMessageId(message.messageId);
+        }
         notifyListeners();
 
-        if (kDebugMode) print('ChatService: Loaded ${messages.length} messages from API');
+        if (kDebugMode)
+          print('ChatService: Loaded ${messages.length} messages from API');
         return messages;
       } else {
-        if (kDebugMode) print('ChatService: API error ${response.statusCode}: ${response.body}');
+        if (kDebugMode)
+          print(
+            'ChatService: API error ${response.statusCode}: ${response.body}',
+          );
       }
     } catch (e) {
       if (kDebugMode) print('ChatService: Error loading messages: $e');
@@ -584,7 +643,11 @@ class ChatService extends ChangeNotifier {
   /// Fallback path (Direct API):
   /// - If Socket.IO connection is unavailable, message saves directly to API
   /// - Ensures message delivery even during network issues or reconnection
-  Future<bool> sendMessage(String roomId, String text, {String? imageUrl}) async {
+  Future<bool> sendMessage(
+    String roomId,
+    String text, {
+    String? imageUrl,
+  }) async {
     try {
       final userId = _authService.uid;
       final displayName = _authService.currentUser?.displayName ?? 'User';
@@ -594,12 +657,17 @@ class ChatService extends ChangeNotifier {
         return false;
       }
 
-      if (kDebugMode) print('ChatService: Sending message to room $roomId via Socket.IO');
+      final messageId = _buildMessageId(userId);
+      _rememberMessageId(messageId);
+
+      if (kDebugMode)
+        print('ChatService: Sending message to room $roomId via Socket.IO');
 
       // Primary delivery: Real-time WebSocket transmission
       // The Railway Socket server handles both broadcast and persistence
       if (_socket != null && _isConnected) {
         final messageData = {
+          'messageId': messageId,
           'roomId': roomId,
           'userId': userId,
           'displayName': displayName,
@@ -612,7 +680,8 @@ class ChatService extends ChangeNotifier {
         if (kDebugMode) print('ChatService: Message sent via Socket.IO');
         return true;
       } else {
-        if (kDebugMode) print('ChatService: Socket not connected, using API fallback');
+        if (kDebugMode)
+          print('ChatService: Socket not connected, using API fallback');
 
         // Fallback delivery: Direct API persistence when WebSocket is unavailable
         // This ensures messages are never lost due to connectivity issues
@@ -628,6 +697,7 @@ class ChatService extends ChangeNotifier {
             'Content-Type': 'application/json',
           },
           body: json.encode({
+            'messageId': messageId,
             'message': text,
             'userId': userId,
             'displayName': displayName,
@@ -638,7 +708,17 @@ class ChatService extends ChangeNotifier {
         if (response.statusCode == 201 || response.statusCode == 200) {
           if (kDebugMode) print('ChatService: Message saved via API fallback');
           // Message history is refreshed to include the newly persisted message
-          await getMessages(roomId);
+          _messagesCache.remove(roomId);
+          final refreshedMessages = await getMessages(roomId);
+          final persistedMessage = refreshedMessages
+              .cast<ChatMessage?>()
+              .firstWhere(
+                (message) => message?.messageId == messageId,
+                orElse: () => null,
+              );
+          if (persistedMessage != null) {
+            _messageController.add(persistedMessage);
+          }
           return true;
         }
       }
@@ -652,7 +732,11 @@ class ChatService extends ChangeNotifier {
   /// The API enforces ownership verification by requiring the userId in the request body,
   /// ensuring users can only edit their own messages
   /// Local cache is updated immediately for instant UI feedback
-  Future<bool> editMessage(String roomId, String messageId, String newText) async {
+  Future<bool> editMessage(
+    String roomId,
+    String messageId,
+    String newText,
+  ) async {
     try {
       final token = await _authService.getIdToken();
       final userId = _authService.uid;
@@ -663,7 +747,9 @@ class ChatService extends ChangeNotifier {
       }
 
       // FIXED: Added /API/ prefix to match Express router mounting
-      final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId/Messages/$messageId');
+      final url = AppConfig.getEndpoint(
+        'API/Chat/Rooms/$roomId/Messages/$messageId',
+      );
 
       if (kDebugMode) print('ChatService: Editing message $messageId');
 
@@ -676,29 +762,29 @@ class ChatService extends ChangeNotifier {
         },
         // The API verifies userId matches the message author before allowing edits
         // This prevents users from modifying other participants' messages
-        body: json.encode({
-          'message': newText,
-          'userId': userId,
-        }),
+        body: json.encode({'message': newText, 'userId': userId}),
       );
 
       if (response.statusCode == 200) {
         // Local cache is updated to reflect the edit immediately
         // This provides instant UI feedback without waiting for a server broadcast
         if (_messagesCache.containsKey(roomId)) {
-          final index = _messagesCache[roomId]!.indexWhere((message) => message.messageId == messageId);
+          final index = _messagesCache[roomId]!.indexWhere(
+            (message) => message.messageId == messageId,
+          );
           if (index != -1) {
-            _messagesCache[roomId]![index] = _messagesCache[roomId]![index].copyWith(
-              message: newText,
-              edited: true,
-            );
+            _messagesCache[roomId]![index] = _messagesCache[roomId]![index]
+                .copyWith(message: newText, edited: true);
             notifyListeners();
           }
         }
         if (kDebugMode) print('ChatService: Message edited successfully');
         return true;
       } else {
-        if (kDebugMode) print('ChatService: Edit failed ${response.statusCode}: ${response.body}');
+        if (kDebugMode)
+          print(
+            'ChatService: Edit failed ${response.statusCode}: ${response.body}',
+          );
       }
     } catch (e) {
       if (kDebugMode) print('ChatService: Error editing message: $e');
@@ -716,12 +802,15 @@ class ChatService extends ChangeNotifier {
       final userId = _authService.uid;
 
       if (userId == null) {
-        if (kDebugMode) print('ChatService: Cannot delete message - no user ID');
+        if (kDebugMode)
+          print('ChatService: Cannot delete message - no user ID');
         return false;
       }
 
       // FIXED: Added /API/ prefix to match Express router mounting
-      final url = AppConfig.getEndpoint('API/Chat/Rooms/$roomId/Messages/$messageId');
+      final url = AppConfig.getEndpoint(
+        'API/Chat/Rooms/$roomId/Messages/$messageId',
+      );
 
       if (kDebugMode) print('ChatService: Deleting message $messageId');
 
@@ -743,19 +832,22 @@ class ChatService extends ChangeNotifier {
         // Local cache is updated to show the soft delete immediately
         // The message remains in the list but displays as "[Message deleted]"
         if (_messagesCache.containsKey(roomId)) {
-          final index = _messagesCache[roomId]!.indexWhere((message) => message.messageId == messageId);
+          final index = _messagesCache[roomId]!.indexWhere(
+            (message) => message.messageId == messageId,
+          );
           if (index != -1) {
-            _messagesCache[roomId]![index] = _messagesCache[roomId]![index].copyWith(
-              deleted: true,
-              message: '[Message deleted]',
-            );
+            _messagesCache[roomId]![index] = _messagesCache[roomId]![index]
+                .copyWith(deleted: true, message: '[Message deleted]');
             notifyListeners();
           }
         }
         if (kDebugMode) print('ChatService: Message deleted successfully');
         return true;
       } else {
-        if (kDebugMode) print('ChatService: Delete failed ${response.statusCode}: ${response.body}');
+        if (kDebugMode)
+          print(
+            'ChatService: Delete failed ${response.statusCode}: ${response.body}',
+          );
       }
     } catch (e) {
       if (kDebugMode) print('ChatService: Error deleting message: $e');
@@ -789,5 +881,38 @@ class ChatService extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  // Builds a stable client-side messageId so Socket.IO and REST persistence can
+  // refer to the same logical chat message.
+  String _buildMessageId(String userId) {
+    return '$userId-${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  // Tracks recently seen messageIds for foreground notification suppression.
+  void _rememberMessageId(String? messageId) {
+    if (messageId == null ||
+        messageId.isEmpty ||
+        _recentMessageIds.contains(messageId)) {
+      return;
+    }
+
+    _recentMessageIds.add(messageId);
+    _recentMessageIdOrder.addLast(messageId);
+
+    while (_recentMessageIdOrder.length > 200) {
+      final oldestMessageId = _recentMessageIdOrder.removeFirst();
+      _recentMessageIds.remove(oldestMessageId);
+    }
+  }
+
+  // Checks whether a room cache already contains the messageId.
+  bool _roomHasMessage(String roomId, String messageId) {
+    final roomMessages = _messagesCache[roomId];
+    if (roomMessages == null) {
+      return false;
+    }
+
+    return roomMessages.any((message) => message.messageId == messageId);
   }
 }

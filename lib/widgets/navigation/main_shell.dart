@@ -1,16 +1,23 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:stylish_bottom_bar/stylish_bottom_bar.dart';
+import '../../services/app_navigation_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/chat_service.dart';
+import '../../services/store_service.dart';
 import '../../services/user_service.dart';
 import '../../pages/home_page.dart';
 import '../../pages/search_page.dart';
 import '../../pages/account_page.dart';
 import '../../pages/chat_page.dart';
+import '../../pages/chat_room_page.dart';
 import '../../pages/bookings_page.dart';
 import '../../pages/store_page.dart';
+import '../../pages/store_bookings_page.dart';
 import '../../pages/gemini_page.dart';
+import '../../utils/notification_route_parser.dart';
 import '../drawer.dart';
 import '../account/account_type_selector.dart';
 
@@ -82,6 +89,10 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
   // Track if we just closed any modal pages before showing account type selector
   bool _hasClosedModals = false;
+  bool _routeHandlerRegistered = false;
+  AppNavigationService? _appNavigationService;
+  AuthService? _authService;
+  UserService? _userService;
 
   @override
   void initState() {
@@ -100,7 +111,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       begin: const Offset(-1.0, 0.0),
       end: Offset.zero,
     ).animate(_fabAnimation);
-    
+
     _fabAnimationController.forward();
 
     // Auto-hide FAB after 3 seconds of no interaction
@@ -108,7 +119,46 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_routeHandlerRegistered) {
+      return;
+    }
+
+    _appNavigationService = context.read<AppNavigationService>();
+    _appNavigationService!.registerMainShellRouteHandler(
+      _handleNotificationTarget,
+    );
+
+    _authService = context.read<AuthService>();
+    _userService = context.read<UserService>();
+    _authService!.addListener(_handlePendingRouteRetry);
+    _userService!.addListener(_handlePendingRouteRetry);
+
+    _routeHandlerRegistered = true;
+  }
+
+  // Re-runs any pending notification target when auth or profile state settles.
+  // The handler buffers targets that arrive before login or before the user
+  // profile loads; this listener replaces the previous per-build post-frame
+  // callback, which was rescheduled on every rebuild.
+  void _handlePendingRouteRetry() {
+    if (!mounted || _appNavigationService == null) {
+      return;
+    }
+
+    unawaited(_appNavigationService!.flushPendingTarget());
+  }
+
+  @override
   void dispose() {
+    if (_routeHandlerRegistered) {
+      _authService?.removeListener(_handlePendingRouteRetry);
+      _userService?.removeListener(_handlePendingRouteRetry);
+      _appNavigationService?.unregisterMainShellRouteHandler();
+    }
+
     _pageController.dispose();
     _fabAnimationController.dispose();
     super.dispose();
@@ -135,6 +185,95 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
     _startFabAutoHideTimer();
   }
 
+  // Switches the shell to a specific page and keeps the current page state alive.
+  void _switchToPage(int pageIndex) {
+    setState(() => _currentIndex = pageIndex);
+
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(pageIndex);
+    }
+
+    _showFab();
+  }
+
+  // Routes parsed notification targets into the existing role-aware shell.
+  Future<bool> _handleNotificationTarget(NotificationRouteTarget target) async {
+    final authService = context.read<AuthService>();
+    final userService = context.read<UserService>();
+    if (!authService.isLoggedIn) {
+      return false;
+    }
+
+    if (target.isBooking) {
+      final userType = userService.currentProfile?.type;
+      if (userType == null || userType.isEmpty) {
+        return false;
+      }
+
+      if (userType == 'Restaurant') {
+        _switchToPage(4);
+        return await _openStoreBookingsFromNotification();
+      }
+
+      _switchToPage(4);
+      return true;
+    }
+
+    if (target.isChat && target.roomId != null) {
+      final roomId = target.roomId!;
+      final chatService = context.read<ChatService>();
+      if (chatService.activeRoomId == roomId) {
+        _switchToPage(0);
+        return true;
+      }
+
+      await chatService.ensureConnected();
+      _switchToPage(0);
+
+      if (!mounted) {
+        return false;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ChatRoomPage(
+            roomId: roomId,
+            isTraditionalChinese: widget.isTraditionalChinese,
+          ),
+        ),
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  // Opens the restaurant-owner bookings screen after switching to the Store tab.
+  Future<bool> _openStoreBookingsFromNotification() async {
+    final userService = context.read<UserService>();
+    final storeService = context.read<StoreService>();
+    String? restaurantId = userService.currentProfile?.restaurantId;
+
+    if (restaurantId == null || restaurantId.isEmpty) {
+      final ownedRestaurant = await storeService.getOwnedRestaurant();
+      restaurantId = ownedRestaurant?.id;
+    }
+
+    if (!mounted || restaurantId == null || restaurantId.isEmpty) {
+      return false;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => StoreBookingsPage(
+          restaurantId: restaurantId!,
+          isTraditionalChinese: widget.isTraditionalChinese,
+        ),
+      ),
+    );
+    return true;
+  }
+
   /// Handle Drawer Item Selection
   ///
   /// Updates the current page and closes the drawer.
@@ -151,9 +290,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   void _onNavTapped(int index) {
     final authService = context.read<AuthService>();
     final isLoggedIn = authService.isLoggedIn;
-    
+
     int pageIndex = index;
-    
+
     // For guests, map navigation indices to page indices
     // Nav items: [Search(0), Account(1)] -> Pages: [Search(0), Home(1), Account(2)]
     if (!isLoggedIn) {
@@ -162,7 +301,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       }
       // index 0 (Search) stays as 0
     }
-    
+
     setState(() => _currentIndex = pageIndex);
     _pageController.animateToPage(
       pageIndex,
@@ -366,14 +505,18 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
             !userService.isLoading) {
           if (kDebugMode) {
             print('[MainShell] Detected user needs account type selection');
-            print('[MainShell] Current profile: ${userService.currentProfile?.toJson()}');
+            print(
+              '[MainShell] Current profile: ${userService.currentProfile?.toJson()}',
+            );
           }
 
           // Use post frame callback to avoid setState during build
           // Add a delay to ensure any modal pages (like login) have fully closed
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted && !_showingAccountTypeSelector && userService.needsAccountTypeSelection) {
+              if (mounted &&
+                  !_showingAccountTypeSelector &&
+                  userService.needsAccountTypeSelection) {
                 setState(() => _showingAccountTypeSelector = true);
 
                 if (kDebugMode) {
@@ -407,7 +550,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (mounted && _shouldNavigateToAccountPage) {
                           setState(() {
-                            _currentIndex = 3; // Account page for logged in users
+                            _currentIndex =
+                                3; // Account page for logged in users
                             _shouldNavigateToAccountPage = false;
                           });
 
@@ -425,7 +569,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         }
 
         // Reset account type selector flag when user logs out or type changes
-        if (_lastLoginState != null && _lastLoginState != isLoggedIn && !isLoggedIn) {
+        if (_lastLoginState != null &&
+            _lastLoginState != isLoggedIn &&
+            !isLoggedIn) {
           // User logged out, reset flags
           _showingAccountTypeSelector = false;
           _shouldNavigateToAccountPage = false;
@@ -433,7 +579,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         }
 
         // Also reset the flag if the user now has an account type (selection completed)
-        if (_lastUserType != userType && userType != null && userType.isNotEmpty) {
+        if (_lastUserType != userType &&
+            userType != null &&
+            userType.isNotEmpty) {
           _showingAccountTypeSelector = false;
         }
 
@@ -449,7 +597,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
 
           // Set initial index on first load or when login state changes
           if (!_initialIndexSet || _lastLoginState != isLoggedIn) {
-            _currentIndex = isLoggedIn ? 2 : 1; // Home page for both, different indices
+            _currentIndex = isLoggedIn
+                ? 2
+                : 1; // Home page for both, different indices
             _initialIndexSet = true;
 
             // Jump to Home page without animation on initial load
@@ -459,7 +609,6 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
               }
             });
           }
-
           // Reset index if pages changed and current index is out of bounds
           else if (_currentIndex >= _cachedPages!.length) {
             _currentIndex = isLoggedIn ? 2 : 1;
@@ -488,9 +637,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
           behavior: HitTestBehavior.translucent,
           child: Scaffold(
             extendBody: true, // Required to make the notch look clean
-            appBar: AppBar(
-              title: Text(pageTitles[_currentIndex]),
-            ),
+            appBar: AppBar(title: Text(pageTitles[_currentIndex])),
             drawer: AppNavDrawer(
               isTraditionalChinese: widget.isTraditionalChinese,
               isDarkMode: widget.isDarkMode,
@@ -523,7 +670,9 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
                         child: Container(
                           decoration: BoxDecoration(
                             color: Colors.green.shade600,
-                            borderRadius: BorderRadius.circular(12), // Square with rounded corners
+                            borderRadius: BorderRadius.circular(
+                              12,
+                            ), // Square with rounded corners
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.2),
@@ -541,7 +690,8 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => GeminiChatRoomPage(
-                                      isTraditionalChinese: widget.isTraditionalChinese,
+                                      isTraditionalChinese:
+                                          widget.isTraditionalChinese,
                                     ),
                                   ),
                                 );
@@ -567,16 +717,23 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
             bottomNavigationBar: StylishBottomBar(
               option: AnimatedBarOptions(
                 iconSize: 28,
-                barAnimation: BarAnimation.transform3D, // Changed to transform3D
-                iconStyle: IconStyle.animated,           // Kept animated
+                barAnimation:
+                    BarAnimation.transform3D, // Changed to transform3D
+                iconStyle: IconStyle.animated, // Kept animated
                 opacity: 0.3,
               ),
               items: navItems,
               hasNotch: true, // Enabled notch for centre emphasis
-              fabLocation: StylishBarFabLocation.center, // Aligns items around the centre
-              currentIndex: _getNavIndexFromPageIndex(_currentIndex, isLoggedIn),
+              fabLocation: StylishBarFabLocation
+                  .center, // Aligns items around the centre
+              currentIndex: _getNavIndexFromPageIndex(
+                _currentIndex,
+                isLoggedIn,
+              ),
               onTap: _onNavTapped,
-              backgroundColor: Theme.of(context).bottomNavigationBarTheme.backgroundColor,
+              backgroundColor: Theme.of(
+                context,
+              ).bottomNavigationBarTheme.backgroundColor,
             ),
             // The Home FAB in the centre notch
             floatingActionButton: FloatingActionButton(
@@ -594,14 +751,11 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
               },
               backgroundColor: Theme.of(context).colorScheme.primary,
               shape: const CircleBorder(),
-              child: const Icon(
-                Icons.home,
-                color: Colors.white,
-                size: 30,
-              ),
+              child: const Icon(Icons.home, color: Colors.white, size: 30),
             ),
             // Positions the Home button into the notch
-            floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+            floatingActionButtonLocation:
+                FloatingActionButtonLocation.centerDocked,
           ),
         );
       },

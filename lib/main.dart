@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'config/app_state.dart';
 import 'services/auth_service.dart';
+import 'services/app_navigation_service.dart';
 import 'services/booking_service.dart';
 import 'services/location_service.dart';
+import 'services/notification_coordinator_service.dart';
 import 'services/notification_service.dart';
 import 'services/restaurant_service.dart';
 import 'services/user_service.dart';
@@ -61,9 +63,7 @@ import 'config.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // If you're going to use other Firebase services in the background, such as Firestore,
   // make sure you call `initializeApp` before using other Firebase services.
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   if (kDebugMode) {
     print("Handling a background message: ${message.messageId}");
@@ -103,7 +103,8 @@ void main() async {
     // Handle the duplicate-app error that occurs after hot restart
     // This is expected behavior and Firebase will still function correctly
     if (e.code == 'duplicate-app') {
-      if (kDebugMode) print('Firebase already initialised (hot restart detected)');
+      if (kDebugMode)
+        print('Firebase already initialised (hot restart detected)');
     } else {
       // Log other Firebase errors but don't crash
       if (kDebugMode) print('Firebase Initialization error: $e');
@@ -117,46 +118,18 @@ void main() async {
   // Set the background messaging handler early on, right after Firebase init
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // Get FCM token and handle foreground messages
+  // Initialise local notification plumbing before the widget tree starts.
   final notificationService = NotificationService();
+  final appNavigationService = AppNavigationService();
   try {
-    // Request permission for notifications (iOS only, but harmless on Android)
-    await FirebaseMessaging.instance.requestPermission();
-
-    // Get FCM token and print it for testing
-    final fcmToken = await FirebaseMessaging.instance.getToken();
-    if (kDebugMode) {
-      print('FCM Token: $fcmToken');
-    }
-
-    // Set up foreground message handler
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (kDebugMode) {
-        print('Got a message whilst in the foreground!');
-        print('Message data: ${message.data}');
-        if (message.notification != null) {
-          print('Message also contained a notification: ${message.notification}');
-        }
-      }
-
-      // Check if the message contains a notification payload
-      final notification = message.notification;
-      if (notification != null) {
-        // Use the new method to display it immediately
-        notificationService.showNotification(
-          id: notification.hashCode, // Use a unique ID (hash code is usually fine for quick testing)
-          title: notification.title ?? 'Foreground FCM Received',
-          body: notification.body ?? 'Check the app logs for details.',
-        );
-      }
-    });
-
-    // Initialise NotificationService with error handling
-    // This sets up notification channels and timezone data
+    // This sets up notification channels, local reminder support, and Android
+    // runtime permission handling for POST_NOTIFICATIONS.
     await notificationService.initialise();
-    print('Notification service initialised successfully');
+    if (kDebugMode) {
+      print('Notification service initialised successfully');
+    }
   } catch (e) {
-    print('FCM/Notification setup error: $e');
+    print('Notification setup error: $e');
     // App can still run without notifications, so we continue
   }
 
@@ -166,7 +139,12 @@ void main() async {
   if (kDebugMode) print('Timeago locales initialised (zh, en)');
 
   // Start the app, passing notification service instance
-  runApp(PourRiceApp(notificationService: notificationService));
+  runApp(
+    PourRiceApp(
+      notificationService: notificationService,
+      appNavigationService: appNavigationService,
+    ),
+  );
 }
 
 /// Root App Widget
@@ -190,9 +168,11 @@ void main() async {
 /// - StoreService: Depends on AuthService (needs auth tokens)
 class PourRiceApp extends StatelessWidget {
   final NotificationService notificationService;
+  final AppNavigationService appNavigationService;
 
   const PourRiceApp({
     required this.notificationService,
+    required this.appNavigationService,
     super.key,
   });
 
@@ -213,31 +193,24 @@ class PourRiceApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         // AppState - handles global UI preferences (theme, language)
-        ChangeNotifierProvider(
-          create: (_) => AppState(),
-        ),
+        ChangeNotifierProvider(create: (_) => AppState()),
 
         // NotificationService - already initialised in main()
-        ChangeNotifierProvider.value(
-          value: notificationService,
-        ),
+        ChangeNotifierProvider.value(value: notificationService),
+
+        // AppNavigationService - owns the global navigator and snackbar keys
+        Provider<AppNavigationService>.value(value: appNavigationService),
 
         // LocationService - handles GPS and distance calculations
-        ChangeNotifierProvider(
-          create: (_) => LocationService(),
-        ),
+        ChangeNotifierProvider(create: (_) => LocationService()),
 
         // AuthService - handles authentication
-        ChangeNotifierProvider(
-          create: (_) => AuthService(),
-        ),
+        ChangeNotifierProvider(create: (_) => AuthService()),
 
         // UserService - needs AuthService for tokens
         // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, UserService>(
-          create: (context) => UserService(
-            context.read<AuthService>(),
-          ),
+          create: (context) => UserService(context.read<AuthService>()),
           update: (context, authService, previous) {
             if (previous != null) {
               previous.updateAuth(authService);
@@ -248,16 +221,12 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // RestaurantService - independent
-        ChangeNotifierProvider(
-          create: (_) => RestaurantService(),
-        ),
+        ChangeNotifierProvider(create: (_) => RestaurantService()),
 
         // BookingService - needs AuthService for tokens
         // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, BookingService>(
-          create: (context) => BookingService(
-            context.read<AuthService>(),
-          ),
+          create: (context) => BookingService(context.read<AuthService>()),
           update: (context, authService, previous) {
             if (previous != null) {
               previous.updateAuth(authService);
@@ -270,9 +239,7 @@ class PourRiceApp extends StatelessWidget {
         // ReviewService - needs AuthService for tokens
         // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, ReviewService>(
-          create: (context) => ReviewService(
-            context.read<AuthService>(),
-          ),
+          create: (context) => ReviewService(context.read<AuthService>()),
           update: (context, authService, previous) {
             if (previous != null) {
               previous.updateAuth(authService);
@@ -287,12 +254,12 @@ class PourRiceApp extends StatelessWidget {
         // The update function preserves existing instance and updates AuthService reference
         // This maintains the menu cache while ensuring auth tokens stay current
         ChangeNotifierProxyProvider<AuthService, MenuService>(
-          create: (context) => MenuService(
-            context.read<AuthService>(),
-          ),
+          create: (context) => MenuService(context.read<AuthService>()),
           update: (context, authService, previous) {
             if (previous != null) {
-              previous.updateAuth(authService);  // Update auth without losing cached menus
+              previous.updateAuth(
+                authService,
+              ); // Update auth without losing cached menus
               return previous;
             }
             return MenuService(authService);
@@ -300,16 +267,12 @@ class PourRiceApp extends StatelessWidget {
         ),
 
         // ImageService - independent (no auth required for image operations)
-        ChangeNotifierProvider(
-          create: (_) => ImageService(),
-        ),
+        ChangeNotifierProvider(create: (_) => ImageService()),
 
         // ChatService - needs AuthService for tokens (real-time chat)
         // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, ChatService>(
-          create: (context) => ChatService(
-            context.read<AuthService>(),
-          ),
+          create: (context) => ChatService(context.read<AuthService>()),
           update: (context, authService, previous) {
             if (previous != null) {
               previous.updateAuth(authService);
@@ -319,17 +282,60 @@ class PourRiceApp extends StatelessWidget {
           },
         ),
 
-        // GeminiService - AI assistant (no auth required)
-        ChangeNotifierProvider(
-          create: (_) => GeminiService(),
+        // NotificationCoordinatorService - auth-driven FCM registration and routing
+        ChangeNotifierProxyProvider5<
+          AuthService,
+          UserService,
+          ChatService,
+          NotificationService,
+          AppNavigationService,
+          NotificationCoordinatorService
+        >(
+          create: (context) => NotificationCoordinatorService(
+            context.read<AuthService>(),
+            context.read<UserService>(),
+            context.read<ChatService>(),
+            context.read<NotificationService>(),
+            context.read<AppNavigationService>(),
+          ),
+          update:
+              (
+                context,
+                authService,
+                userService,
+                chatService,
+                notificationService,
+                appNavigationService,
+                previous,
+              ) {
+                if (previous != null) {
+                  previous.updateDependencies(
+                    authService,
+                    userService,
+                    chatService,
+                    notificationService,
+                    appNavigationService,
+                  );
+                  return previous;
+                }
+
+                return NotificationCoordinatorService(
+                  authService,
+                  userService,
+                  chatService,
+                  notificationService,
+                  appNavigationService,
+                );
+              },
         ),
+
+        // GeminiService - AI assistant (no auth required)
+        ChangeNotifierProvider(create: (_) => GeminiService()),
 
         // StoreService - restaurant owner management (needs AuthService)
         // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, StoreService>(
-          create: (context) => StoreService(
-            context.read<AuthService>(),
-          ),
+          create: (context) => StoreService(context.read<AuthService>()),
           update: (context, authService, previous) {
             if (previous != null) {
               previous.updateAuth(authService);
@@ -342,9 +348,8 @@ class PourRiceApp extends StatelessWidget {
         // AdvertisementService - ad CRUD and Stripe checkout (needs AuthService)
         // Preserves instance (and cache) across auth changes via updateAuth
         ChangeNotifierProxyProvider<AuthService, AdvertisementService>(
-          create: (context) => AdvertisementService(
-            context.read<AuthService>(),
-          ),
+          create: (context) =>
+              AdvertisementService(context.read<AuthService>()),
           update: (context, authService, previous) {
             if (previous != null) {
               previous.updateAuth(authService);

@@ -60,10 +60,13 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
   StreamSubscription<ChatMessage>? _messageSubscription;
   StreamSubscription<TypingIndicator>? _typingSubscription;
   bool _isLoading = false;
+  ChatService? _chatService;
 
   @override
   void initState() {
     super.initState();
+    _chatService = context.read<ChatService>();
+    _chatService!.setActiveRoom(widget.roomId);
     _loadData();
     _setupListeners();
   }
@@ -74,12 +77,14 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
     _typingSubscription?.cancel();
     _scrollController.dispose();
 
-    // Leave room on dispose
-    try {
-      final chatService = context.read<ChatService>();
+    // Use the ChatService reference captured in initState so dispose never
+    // relies on context.read, which can fail after the element is deactivated.
+    final chatService = _chatService;
+    if (chatService != null) {
+      if (chatService.activeRoomId == widget.roomId) {
+        chatService.setActiveRoom(null);
+      }
       chatService.leaveRoom(widget.roomId);
-    } catch (e) {
-      // Context might not be available
     }
 
     super.dispose();
@@ -140,7 +145,8 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
 
     // Listen for typing indicators
     _typingSubscription = chatService.typingStream.listen((indicator) {
-      if (indicator.roomId == widget.roomId && indicator.userId != currentUserId) {
+      if (indicator.roomId == widget.roomId &&
+          indicator.userId != currentUserId) {
         if (mounted) {
           setState(() {
             _typingUsers[indicator.userId] = indicator.isTyping;
@@ -187,7 +193,7 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
   Future<void> _handleEditMessage(ChatMessage message) async {
     final chatService = context.read<ChatService>();
     final controller = TextEditingController(text: message.message);
-    
+
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -197,7 +203,9 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
           autofocus: true,
           maxLines: null,
           decoration: InputDecoration(
-            hintText: widget.isTraditionalChinese ? '輸入訊息...' : 'Type a message...',
+            hintText: widget.isTraditionalChinese
+                ? '輸入訊息...'
+                : 'Type a message...',
           ),
         ),
         actions: [
@@ -213,13 +221,17 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
       ),
     );
 
-    if (result != null && result.trim().isNotEmpty && result != message.message) {
+    if (result != null &&
+        result.trim().isNotEmpty &&
+        result != message.message) {
       await chatService.editMessage(widget.roomId, message.messageId, result);
 
       if (mounted) {
         // Update local message
         setState(() {
-          final index = _messages.indexWhere((m) => m.messageId == message.messageId);
+          final index = _messages.indexWhere(
+            (m) => m.messageId == message.messageId,
+          );
           if (index != -1) {
             _messages[index] = _messages[index].copyWith(
               message: result,
@@ -233,7 +245,7 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
 
   Future<void> _handleDeleteMessage(ChatMessage message) async {
     final chatService = context.read<ChatService>();
-    
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -281,7 +293,8 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
     final userType = userService.currentProfile?.type ?? 'Diner';
 
     // Get room title
-    final roomTitle = _room?.getDisplayName(currentUserId, widget.isTraditionalChinese) ??
+    final roomTitle =
+        _room?.getDisplayName(currentUserId, widget.isTraditionalChinese) ??
         (widget.isTraditionalChinese ? '聊天' : 'Chat');
 
     // Role-based placeholder messages
@@ -289,15 +302,15 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
       if (widget.isTraditionalChinese) {
         return userType == 'Restaurant' ? '沒有顧客訊息' : '沒有訊息';
       } else {
-        return userType == 'Restaurant' ? 'No customer messages' : 'No messages yet';
+        return userType == 'Restaurant'
+            ? 'No customer messages'
+            : 'No messages yet';
       }
     }
 
     String getEmptyStateSubtitle() {
       if (widget.isTraditionalChinese) {
-        return userType == 'Restaurant'
-            ? '當顧客向您發送查詢時，訊息將會顯示在這裡'
-            : '開始對話吧！';
+        return userType == 'Restaurant' ? '當顧客向您發送查詢時，訊息將會顯示在這裡' : '開始對話吧！';
       } else {
         return userType == 'Restaurant'
             ? 'Messages from customers will appear here'
@@ -319,7 +332,9 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
                 emailVerified: false,
               ),
             );
-            return user.displayName ?? user.email ?? (widget.isTraditionalChinese ? '用戶' : 'User');
+            return user.displayName ??
+                user.email ??
+                (widget.isTraditionalChinese ? '用戶' : 'User');
           }
           return widget.isTraditionalChinese ? '用戶' : 'User';
         })
@@ -350,75 +365,84 @@ class _ChatRoomPageContentState extends State<_ChatRoomPageContent> {
             child: _isLoading
                 ? const CenteredLoadingIndicator()
                 : _messages.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              userType == 'Restaurant' ? Icons.storefront : Icons.chat_bubble_outline,
-                              size: 64,
-                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              getEmptyStateTitle(),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              getEmptyStateSubtitle(),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          userType == 'Restaurant'
+                              ? Icons.storefront
+                              : Icons.chat_bubble_outline,
+                          size: 64,
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
                         ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _messages.length + (typingUsersList.isNotEmpty ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          // Show typing indicators at the end
-                          if (index == _messages.length && typingUsersList.isNotEmpty) {
-                            return TypingIndicatorWidget(
-                              displayName: typingUsersList.first,
-                              isTraditionalChinese: widget.isTraditionalChinese,
-                            );
-                          }
+                        const SizedBox(height: 16),
+                        Text(
+                          getEmptyStateTitle(),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          getEmptyStateSubtitle(),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount:
+                        _messages.length + (typingUsersList.isNotEmpty ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      // Show typing indicators at the end
+                      if (index == _messages.length &&
+                          typingUsersList.isNotEmpty) {
+                        return TypingIndicatorWidget(
+                          displayName: typingUsersList.first,
+                          isTraditionalChinese: widget.isTraditionalChinese,
+                        );
+                      }
 
-                          final message = _messages[index];
-                          final isCurrentUser = message.userId == currentUserId;
+                      final message = _messages[index];
+                      final isCurrentUser = message.userId == currentUserId;
 
-                          // Get photoURL from participantsData for this message's sender
-                          String? photoUrl;
-                          if (_room?.participantsData != null) {
-                            final sender = _room!.participantsData!.firstWhere(
-                              (u) => u.uid == message.userId,
-                              orElse: () => User(
-                                uid: message.userId,
-                                displayName: message.displayName,
-                                emailVerified: false,
-                              ),
-                            );
-                            photoUrl = sender.photoURL;
-                          }
+                      // Get photoURL from participantsData for this message's sender
+                      String? photoUrl;
+                      if (_room?.participantsData != null) {
+                        final sender = _room!.participantsData!.firstWhere(
+                          (u) => u.uid == message.userId,
+                          orElse: () => User(
+                            uid: message.userId,
+                            displayName: message.displayName,
+                            emailVerified: false,
+                          ),
+                        );
+                        photoUrl = sender.photoURL;
+                      }
 
-                          return ChatBubble(
-                            message: message,
-                            isCurrentUser: isCurrentUser,
-                            isTraditionalChinese: widget.isTraditionalChinese,
-                            onEdit: isCurrentUser && !message.deleted
-                                ? () => _handleEditMessage(message)
-                                : null,
-                            onDelete: isCurrentUser ? () => _handleDeleteMessage(message) : null,
-                            userPhotoUrl: photoUrl, // Pass Firebase Auth photoURL
-                          );
-                        },
-                      ),
+                      return ChatBubble(
+                        message: message,
+                        isCurrentUser: isCurrentUser,
+                        isTraditionalChinese: widget.isTraditionalChinese,
+                        onEdit: isCurrentUser && !message.deleted
+                            ? () => _handleEditMessage(message)
+                            : null,
+                        onDelete: isCurrentUser
+                            ? () => _handleDeleteMessage(message)
+                            : null,
+                        userPhotoUrl: photoUrl, // Pass Firebase Auth photoURL
+                      );
+                    },
+                  ),
           ),
 
           // Message input
