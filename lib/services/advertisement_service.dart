@@ -479,19 +479,19 @@ class AdvertisementService with ChangeNotifier {
       payload['isPaid'],
       payload['paymentSuccess'],
       payload['isPaymentSuccessful'],
-      payload.containsKey('status')
-          ? payload['status'] == 'paid'
-          : payload.containsKey('paymentStatus')
-              ? payload['paymentStatus'] == 'paid'
+      payload.containsKey('paymentStatus')
+          ? payload['paymentStatus'] == 'paid'
+          : payload.containsKey('payment_status')
+              ? payload['payment_status'] == 'paid'
               : null,
       payload['session'] is Map<String, dynamic>
-          ? (payload['session']['payment_status'] == 'paid' ||
-              payload['session']['status'] == 'complete')
+          ? (payload['session']['payment_status'] == 'paid')
           : null,
       payload['data'] is Map<String, dynamic>
           ? ((payload['data']['paid'] as bool?) ??
               (payload['data']['isPaid'] as bool?) ??
-              (payload['data']['paymentStatus'] == 'paid'))
+              (payload['data']['paymentStatus'] == 'paid') ??
+              (payload['data']['payment_status'] == 'paid'))
           : null,
     ];
 
