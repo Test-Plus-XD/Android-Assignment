@@ -418,44 +418,41 @@ class AdvertisementService with ChangeNotifier {
   Future<bool> verifyCheckoutSessionPaid(String sessionId) async {
     final headers = await _getHeaders();
 
-    final requests = <Future<http.Response>>[
-      http.get(
-        Uri.parse('$_stripeApiUrl/checkout-session-status')
-            .replace(queryParameters: {'sessionId': sessionId}),
-        headers: headers,
-      ),
-      http.post(
-        Uri.parse('$_stripeApiUrl/check-session-status'),
-        headers: headers,
-        body: jsonEncode({
-          'sessionId': sessionId,
-          'paymentType': 'advertisement',
-        }),
-      ),
-      http.post(
-        Uri.parse('$_stripeApiUrl/verify-checkout-session'),
-        headers: headers,
-        body: jsonEncode({
-          'sessionId': sessionId,
-          'paymentType': 'advertisement',
-        }),
-      ),
+    final requests = <Future<http.Response> Function()>[
+      () => http.get(
+            Uri.parse('$_stripeApiUrl/checkout-session-status')
+                .replace(queryParameters: {'sessionId': sessionId}),
+            headers: headers,
+          ),
+      () => http.post(
+            Uri.parse('$_stripeApiUrl/check-session-status'),
+            headers: headers,
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'paymentType': 'advertisement',
+            }),
+          ),
+      () => http.post(
+            Uri.parse('$_stripeApiUrl/verify-checkout-session'),
+            headers: headers,
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'paymentType': 'advertisement',
+            }),
+          ),
     ];
 
     for (final request in requests) {
       try {
-        final response = await request;
-        if (response.statusCode == 404) {
+        final response = await request();
+        if (response.statusCode < 200 || response.statusCode >= 300) {
           // Try next endpoint variant.
           continue;
         }
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          final payload = jsonDecode(response.body);
-          final paid = _parsePaidStatus(payload);
-          if (paid != null) return paid;
-        } else {
-          return false;
-        }
+
+        final payload = jsonDecode(response.body);
+        final paid = _parsePaidStatus(payload);
+        if (paid != null) return paid;
       } catch (_) {
         // Keep trying fallback endpoints.
       }
@@ -473,7 +470,11 @@ class AdvertisementService with ChangeNotifier {
       payload['success'],
       payload['paymentSuccess'],
       payload['isPaymentSuccessful'],
-      payload['status'] == 'paid' || payload['paymentStatus'] == 'paid',
+      payload.containsKey('status')
+          ? payload['status'] == 'paid'
+          : payload.containsKey('paymentStatus')
+              ? payload['paymentStatus'] == 'paid'
+              : null,
       payload['session'] is Map<String, dynamic>
           ? (payload['session']['payment_status'] == 'paid' ||
               payload['session']['status'] == 'complete')

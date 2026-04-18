@@ -110,50 +110,68 @@ class _StorePageState extends State<StorePage>
   /// If found, navigates to the ad form so the owner can fill content.
   Future<void> _checkPendingStripeSession() async {
     if (!mounted) return;
-    final adService = context.read<AdvertisementService>();
-    final pendingSession = await adService.checkPendingSession();
-    if (pendingSession == null || !mounted) return;
+    try {
+      final adService = context.read<AdvertisementService>();
+      final pendingSession = await adService.checkPendingSession();
+      if (pendingSession == null || !mounted) return;
 
-    final isPaid = await adService.verifyCheckoutSessionPaid(
-      pendingSession.sessionId,
-    );
-    if (!mounted) return;
+      final isPaid = await adService.verifyCheckoutSessionPaid(
+        pendingSession.sessionId,
+      );
+      if (!mounted) return;
 
-    if (!isPaid) {
+      if (!isPaid) {
+        await adService.clearPendingSession();
+        if (!mounted) return;
+        final colorScheme = Theme.of(context).colorScheme;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese
+                  ? '付款尚未完成，請完成付款後再建立廣告。'
+                  : 'Payment is not completed yet. Please complete payment before creating an ad.',
+            ),
+            backgroundColor: colorScheme.tertiaryContainer,
+          ),
+        );
+        return;
+      }
+
+      // Clear the session first so it doesn't trigger again
       await adService.clearPendingSession();
       if (!mounted) return;
+
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => StoreAdFormPage(
+            restaurantId: pendingSession.restaurantId,
+            isTraditionalChinese: widget.isTraditionalChinese,
+            restaurant: context.read<StoreService>().ownedRestaurant,
+          ),
+        ),
+      );
+
+      if (result == true && mounted) {
+        final storeService = context.read<StoreService>();
+        if (storeService.hasOwnedRestaurant) {
+          _loadAds(storeService.ownedRestaurant!.id);
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('StorePage: failed to validate pending Stripe session - $e');
+      debugPrint('$stackTrace');
+      if (!mounted) return;
+      final colorScheme = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             widget.isTraditionalChinese
-                ? '付款尚未完成，請完成付款後再建立廣告。'
-                : 'Payment is not completed yet. Please complete payment before creating an ad.',
+                ? '暫時無法驗證付款狀態，請稍後再試。'
+                : 'Unable to verify payment status right now. Please try again shortly.',
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: colorScheme.errorContainer,
         ),
       );
-      return;
-    }
-
-    // Clear the session first so it doesn't trigger again
-    await adService.clearPendingSession();
-    if (!mounted) return;
-
-    final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => StoreAdFormPage(
-          restaurantId: pendingSession.restaurantId,
-          isTraditionalChinese: widget.isTraditionalChinese,
-          restaurant: context.read<StoreService>().ownedRestaurant,
-        ),
-      ),
-    );
-
-    if (result == true && mounted) {
-      final storeService = context.read<StoreService>();
-      if (storeService.hasOwnedRestaurant) {
-        _loadAds(storeService.ownedRestaurant!.id);
-      }
     }
   }
 
