@@ -115,12 +115,12 @@ class _StorePageState extends State<StorePage>
       final pendingSession = await adService.checkPendingSession();
       if (pendingSession == null || !mounted) return;
 
-      final isPaid = await adService.verifyCheckoutSessionPaid(
+      final verificationStatus = await adService.verifyCheckoutSessionPaid(
         pendingSession.sessionId,
       );
       if (!mounted) return;
 
-      if (!isPaid) {
+      if (verificationStatus == CheckoutSessionVerificationStatus.unpaid) {
         await adService.clearPendingSession();
         if (!mounted) return;
         final colorScheme = Theme.of(context).colorScheme;
@@ -132,6 +132,21 @@ class _StorePageState extends State<StorePage>
                   : 'Payment is not completed yet. Please complete payment before creating an ad.',
             ),
             backgroundColor: colorScheme.tertiaryContainer,
+          ),
+        );
+        return;
+      }
+
+      if (verificationStatus != CheckoutSessionVerificationStatus.paid) {
+        final colorScheme = Theme.of(context).colorScheme;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isTraditionalChinese
+                  ? '暫時無法驗證付款狀態，請稍後再試。'
+                  : 'Unable to verify payment status right now. Please try again shortly.',
+            ),
+            backgroundColor: colorScheme.errorContainer,
           ),
         );
         return;

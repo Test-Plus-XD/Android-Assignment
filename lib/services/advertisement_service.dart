@@ -415,8 +415,12 @@ class AdvertisementService with ChangeNotifier {
 
   /// Verifies whether a Stripe checkout session was paid successfully.
   /// Uses a few endpoint variants for backend compatibility.
-  Future<bool> verifyCheckoutSessionPaid(String sessionId) async {
+  Future<CheckoutSessionVerificationStatus> verifyCheckoutSessionPaid(
+    String sessionId,
+  ) async {
     final headers = await _getHeaders();
+    var hadVerificationFailure = false;
+    var hadSuccessfulResponse = false;
 
     final requests = <Future<http.Response> Function()>[
       () => http.get(
@@ -447,18 +451,24 @@ class AdvertisementService with ChangeNotifier {
         final response = await request();
         if (response.statusCode < 200 || response.statusCode >= 300) {
           // Try next endpoint variant.
+          hadVerificationFailure = true;
           continue;
         }
 
+        hadSuccessfulResponse = true;
         final payload = jsonDecode(response.body);
         final paid = _parsePaidStatus(payload);
-        if (paid != null) return paid;
+        if (paid == true) return CheckoutSessionVerificationStatus.paid;
+        if (paid == false) return CheckoutSessionVerificationStatus.unpaid;
       } catch (_) {
         // Keep trying fallback endpoints.
+        hadVerificationFailure = true;
       }
     }
 
-    return false;
+    if (hadSuccessfulResponse) return CheckoutSessionVerificationStatus.unknown;
+    if (hadVerificationFailure) return CheckoutSessionVerificationStatus.verificationFailed;
+    return CheckoutSessionVerificationStatus.unknown;
   }
 
   bool? _parsePaidStatus(dynamic payload) {
@@ -467,7 +477,6 @@ class AdvertisementService with ChangeNotifier {
     final candidates = <dynamic>[
       payload['paid'],
       payload['isPaid'],
-      payload['success'],
       payload['paymentSuccess'],
       payload['isPaymentSuccessful'],
       payload.containsKey('status')
@@ -532,4 +541,11 @@ class PendingAdSession {
     required this.sessionId,
     required this.restaurantId,
   });
+}
+
+enum CheckoutSessionVerificationStatus {
+  paid,
+  unpaid,
+  unknown,
+  verificationFailed,
 }
