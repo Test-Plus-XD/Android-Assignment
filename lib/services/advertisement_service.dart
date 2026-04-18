@@ -387,27 +387,149 @@ class AdvertisementService with ChangeNotifier {
   }
 
   /// Check for a pending Stripe session in SharedPreferences.
-  /// Returns the restaurant ID if a valid (non-expired) session exists,
+  /// Returns the pending session if a valid (non-expired) session exists,
   /// or null if no session or session has expired (2hr TTL).
-  Future<String?> checkPendingSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final sessionId = prefs.getString(_pendingSessionKey);
-    final timestamp = prefs.getInt(_pendingSessionTimestampKey);
-    final restaurantId = prefs.getString(_pendingSessionRestaurantKey);
+  Future<PendingAdSession?> checkPendingSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final sessionId = prefs.getString(_pendingSessionKey);
+      final timestamp = prefs.getInt(_pendingSessionTimestampKey);
+      final restaurantId = prefs.getString(_pendingSessionRestaurantKey);
 
-    if (sessionId == null || timestamp == null || restaurantId == null) {
+      if (sessionId == null || timestamp == null || restaurantId == null) {
+        return null;
+      }
+
+      // Check if session has expired (2-hour TTL)
+      final elapsed = DateTime.now().millisecondsSinceEpoch - timestamp;
+      if (elapsed > _sessionTtlMs) {
+        // Session expired, clean up
+        await clearPendingSession();
+        return null;
+      }
+
+      return PendingAdSession(
+        sessionId: sessionId,
+        restaurantId: restaurantId,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('AdvertisementService: Error reading pending Stripe session - $e');
+      }
+      try {
+        await clearPendingSession();
+      } catch (_) {
+        // Ignore cleanup errors; return null to avoid bubbling exceptions.
+      }
       return null;
     }
+  }
 
-    // Check if session has expired (2-hour TTL)
-    final elapsed = DateTime.now().millisecondsSinceEpoch - timestamp;
-    if (elapsed > _sessionTtlMs) {
-      // Session expired, clean up
-      await clearPendingSession();
-      return null;
+  /// Verifies whether a Stripe checkout session was paid successfully.
+  /// Uses a few endpoint variants for backend compatibility.
+  Future<CheckoutSessionVerificationStatus> verifyCheckoutSessionPaid(
+    String sessionId,
+  ) async {
+    var hadVerificationFailure = false;
+    var hadSuccessfulResponse = false;
+    late final Map<String, String> headers;
+
+    try {
+      headers = await _getHeaders();
+    } catch (_) {
+      return CheckoutSessionVerificationStatus.verificationFailed;
     }
 
-    return restaurantId;
+    final requests = <Future<http.Response> Function()>[
+      () => http.get(
+            Uri.parse('$_stripeApiUrl/checkout-session-status')
+                .replace(queryParameters: {'sessionId': sessionId}),
+            headers: headers,
+          ),
+      () => http.post(
+            Uri.parse('$_stripeApiUrl/check-session-status'),
+            headers: headers,
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'paymentType': 'advertisement',
+            }),
+          ),
+      () => http.post(
+            Uri.parse('$_stripeApiUrl/verify-checkout-session'),
+            headers: headers,
+            body: jsonEncode({
+              'sessionId': sessionId,
+              'paymentType': 'advertisement',
+            }),
+          ),
+    ];
+
+    for (final request in requests) {
+      try {
+        final response = await request();
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          // Try next endpoint variant.
+          hadVerificationFailure = true;
+          continue;
+        }
+
+        hadSuccessfulResponse = true;
+        final payload = jsonDecode(response.body);
+        final paid = _parsePaidStatus(payload);
+        if (paid == true) return CheckoutSessionVerificationStatus.paid;
+        if (paid == false) return CheckoutSessionVerificationStatus.unpaid;
+      } catch (_) {
+        // Keep trying fallback endpoints.
+        hadVerificationFailure = true;
+      }
+    }
+
+    if (hadSuccessfulResponse) return CheckoutSessionVerificationStatus.unknown;
+    if (hadVerificationFailure) return CheckoutSessionVerificationStatus.verificationFailed;
+    return CheckoutSessionVerificationStatus.unknown;
+  }
+
+  bool? _parsePaidStatus(dynamic payload) {
+    if (payload is! Map<String, dynamic>) return null;
+
+    final candidates = <dynamic>[
+      payload['paid'],
+      payload['isPaid'],
+      payload['paymentSuccess'],
+      payload['isPaymentSuccessful'],
+      payload.containsKey('paymentStatus')
+          ? (payload['paymentStatus'] as String?) == 'paid'
+          : payload.containsKey('payment_status')
+              ? (payload['payment_status'] as String?) == 'paid'
+              : null,
+      payload['object'] == 'payment_intent' && payload.containsKey('status')
+          ? (payload['status'] as String?) == 'succeeded'
+          : null,
+      payload['session'] is Map<String, dynamic>
+          ? ((payload['session'] as Map<String, dynamic>).containsKey('payment_status')
+              ? (payload['session']['payment_status'] as String?) == 'paid'
+              : null)
+          : null,
+      payload['data'] is Map<String, dynamic>
+          ? (() {
+              final data = payload['data'] as Map<String, dynamic>;
+              return (data['paid'] as bool?) ??
+                  (data['isPaid'] as bool?) ??
+                  (data.containsKey('paymentStatus')
+                      ? (data['paymentStatus'] as String?) == 'paid'
+                      : null) ??
+                  (data.containsKey('payment_status')
+                      ? (data['payment_status'] as String?) == 'paid'
+                      : null);
+            })()
+          : null,
+    ];
+
+    for (final value in candidates) {
+      if (value is bool) return value;
+    }
+
+    return null;
   }
 
   /// Clear the pending Stripe session from SharedPreferences.
@@ -438,4 +560,22 @@ class AdvertisementService with ChangeNotifier {
     _isLoading = loading;
     notifyListeners();
   }
+}
+
+/// Pending Stripe checkout session data for advertisement placement.
+class PendingAdSession {
+  final String sessionId;
+  final String restaurantId;
+
+  const PendingAdSession({
+    required this.sessionId,
+    required this.restaurantId,
+  });
+}
+
+enum CheckoutSessionVerificationStatus {
+  paid,
+  unpaid,
+  unknown,
+  verificationFailed,
 }
