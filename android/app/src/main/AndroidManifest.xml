@@ -23,7 +23,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <application
-        android:label="android_assignment"
+        android:label="Pour Rice"
         android:name="android.app.Application"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -67,6 +67,15 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyAun6GtoyZqdkzO55Cbc5DHIO-xL2oYlRI" />
+        <!-- FCM default channel for pushes that arrive without an explicit channel -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="pourrice_default_notifications" />
+        <!-- FCM default monochrome small icon used across locally rendered and
+             server-rendered notifications -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_pourrice_notification" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

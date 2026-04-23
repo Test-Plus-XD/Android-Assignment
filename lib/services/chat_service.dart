@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config.dart';
@@ -13,7 +14,7 @@ import 'auth_service.dart';
 // Manages real-time chat functionality using Socket.IO for real-time events
 // and REST API for message persistence via the Vercel backend.
 // All API endpoints require the /API/ prefix to match the Express router mounting.
-class ChatService extends ChangeNotifier {
+class ChatService extends ChangeNotifier with WidgetsBindingObserver {
   AuthService _authService;
   IO.Socket? _socket;
   // State variables for managing chat data and connection status
@@ -27,12 +28,17 @@ class ChatService extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   String? _activeRoomId;
+  final Set<String> _joinedRoomIds = <String>{};
+  bool _shouldReconnectOnResume = false;
+  bool _isHandlingResume = false;
   // Stream controllers for broadcasting real-time events to UI components
   final _messageController = StreamController<ChatMessage>.broadcast();
   final _typingController = StreamController<TypingIndicator>.broadcast();
   final _connectionController = StreamController<bool>.broadcast();
 
-  ChatService(this._authService);
+  ChatService(this._authService) {
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   // Public getters for accessing service state
   List<ChatRoom> get rooms => _rooms;
@@ -63,7 +69,9 @@ class ChatService extends ChangeNotifier {
         _messagesCache.clear();
         _recentMessageIds.clear();
         _recentMessageIdOrder.clear();
+        _joinedRoomIds.clear();
         _activeRoomId = null;
+        _shouldReconnectOnResume = false;
         notifyListeners();
       }
     }
@@ -80,6 +88,8 @@ class ChatService extends ChangeNotifier {
       _error = 'Not authenticated';
       return false;
     }
+
+    _shouldReconnectOnResume = true;
 
     final userId = _authService.uid;
     if (userId == null) {
@@ -122,6 +132,7 @@ class ChatService extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     disconnect();
     _messageController.close();
     _typingController.close();
@@ -145,6 +156,8 @@ class ChatService extends ChangeNotifier {
     try {
       if (kDebugMode)
         print('ChatService: Connecting to ${AppConfig.socketIOUrl}...');
+
+      _disposeSocket();
 
       // Firebase authentication token is required for server-side user verification
       final authToken = await _authService.getIdToken();
@@ -190,9 +203,7 @@ class ChatService extends ChangeNotifier {
   void disconnect() {
     if (_socket != null) {
       if (kDebugMode) print('ChatService: Disconnecting...');
-      _socket!.disconnect();
-      _socket!.dispose();
-      _socket = null;
+      _disposeSocket();
       _isConnected = false;
       _connectionController.add(false);
       notifyListeners();
@@ -259,6 +270,7 @@ class ChatService extends ChangeNotifier {
         final response = data as Map<String, dynamic>;
         if (response['success'] == true) {
           if (kDebugMode) print('ChatService: User registered successfully');
+          unawaited(_rejoinTrackedRooms());
         } else {
           // Registration failure indicates invalid credentials or server error
           if (kDebugMode)
@@ -533,10 +545,7 @@ class ChatService extends ChangeNotifier {
   /// - User join/leave notifications
   /// The server acknowledges the join with a 'joined-room' event
   Future<void> joinRoom(String roomId) async {
-    if (!_isConnected || _socket == null) {
-      if (kDebugMode) print('ChatService: Cannot join room - not connected');
-      return;
-    }
+    _joinedRoomIds.add(roomId);
 
     final userId = _authService.uid;
     if (userId == null) {
@@ -544,16 +553,27 @@ class ChatService extends ChangeNotifier {
       return;
     }
 
-    if (kDebugMode) print('ChatService: Joining room $roomId');
+    if (!_isConnected || _socket == null) {
+      if (kDebugMode) {
+        print('ChatService: joinRoom requested while disconnected, reconnecting');
+      }
 
-    // The 'join-room' event subscribes this socket to the specified room's broadcast channel
-    _socket!.emit('join-room', {'roomId': roomId, 'userId': userId});
+      final connected = await ensureConnected();
+      if (!connected || !_isConnected || _socket == null) {
+        if (kDebugMode) print('ChatService: Cannot join room - reconnect failed');
+        return;
+      }
+    }
+
+    _emitJoinRoom(roomId, userId);
   }
 
   /// Unsubscribes the current user from a chat room's real-time events via Socket.IO
   /// After leaving, the client will no longer receive messages or notifications
   /// from this room. This is called automatically when navigating away from a chat page
   Future<void> leaveRoom(String roomId) async {
+    _joinedRoomIds.remove(roomId);
+
     if (!_isConnected || _socket == null) return;
 
     final userId = _authService.uid;
@@ -883,6 +903,15 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      return;
+    }
+
+    unawaited(_handleAppResumed());
+  }
+
   // Builds a stable client-side messageId so Socket.IO and REST persistence can
   // refer to the same logical chat message.
   String _buildMessageId(String userId) {
@@ -914,5 +943,72 @@ class ChatService extends ChangeNotifier {
     }
 
     return roomMessages.any((message) => message.messageId == messageId);
+  }
+
+  // Reconnects chat after Android returns the app to the foreground.
+  // Socket.IO can exhaust its retry budget while the app is backgrounded,
+  // especially when the emulator temporarily loses DNS access to Railway.
+  Future<void> _handleAppResumed() async {
+    if (!_shouldReconnectOnResume ||
+        !_authService.isLoggedIn ||
+        _isHandlingResume) {
+      return;
+    }
+
+    _isHandlingResume = true;
+
+    try {
+      final connected = await ensureConnected();
+      if (!connected) {
+        return;
+      }
+
+      await _rejoinTrackedRooms();
+
+      if (_rooms.isNotEmpty) {
+        await getChatRooms(forceRefresh: true);
+      }
+    } finally {
+      _isHandlingResume = false;
+    }
+  }
+
+  // Emits the room subscription event once the socket is available.
+  void _emitJoinRoom(String roomId, String userId) {
+    if (_socket == null) {
+      return;
+    }
+
+    if (kDebugMode) print('ChatService: Joining room $roomId');
+    _socket!.emit('join-room', {'roomId': roomId, 'userId': userId});
+  }
+
+  // Re-subscribes the current socket to rooms that were already open before a
+  // disconnect so room broadcasts resume after the next successful connect.
+  Future<void> _rejoinTrackedRooms() async {
+    if (!_isConnected || _socket == null) {
+      return;
+    }
+
+    final userId = _authService.uid;
+    if (userId == null) {
+      return;
+    }
+
+    final roomIdsToRejoin = <String>{
+      ..._joinedRoomIds,
+      if (_activeRoomId != null && _activeRoomId!.isNotEmpty) _activeRoomId!,
+    };
+
+    for (final roomId in roomIdsToRejoin) {
+      _emitJoinRoom(roomId, userId);
+    }
+  }
+
+  // Cleans up the current socket before a fresh connection attempt replaces it.
+  void _disposeSocket() {
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
   }
 }

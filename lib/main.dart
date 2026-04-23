@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -63,7 +64,11 @@ import 'config.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // If you're going to use other Firebase services in the background, such as Firestore,
   // make sure you call `initializeApp` before using other Firebase services.
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _initialiseFirebaseSafely(
+    duplicateAppDebugMessage:
+        'Firebase already initialised in background isolate',
+  );
+  DartPluginRegistrant.ensureInitialized();
 
   if (kDebugMode) {
     print("Handling a background message: ${message.messageId}");
@@ -71,6 +76,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     print('Message notification: ${message.notification?.title}');
     print('Message notification: ${message.notification?.body}');
   }
+
+  await showBackgroundFcmNotification(message);
 }
 
 /// Main Entry Point
@@ -94,26 +101,10 @@ void main() async {
   // Note: We always try to initialize Firebase. The duplicate-app error
   // is expected after hot restart since the native SDK retains state.
   // This is safe to catch and ignore - Firebase will still work correctly.
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    if (kDebugMode) print('Firebase initialised successfully');
-  } on FirebaseException catch (e) {
-    // Handle the duplicate-app error that occurs after hot restart
-    // This is expected behavior and Firebase will still function correctly
-    if (e.code == 'duplicate-app') {
-      if (kDebugMode)
-        print('Firebase already initialised (hot restart detected)');
-    } else {
-      // Log other Firebase errors but don't crash
-      if (kDebugMode) print('Firebase Initialization error: $e');
-    }
-  } catch (e) {
-    // If initialisation fails for other reasons, log the error but don't crash
-    if (kDebugMode) print('Firebase Initialization error: $e');
-    // In production, show an error screen here
-  }
+  await _initialiseFirebaseSafely(
+    duplicateAppDebugMessage:
+        'Firebase already initialised (hot restart detected)',
+  );
 
   // Set the background messaging handler early on, right after Firebase init
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -145,6 +136,33 @@ void main() async {
       appNavigationService: appNavigationService,
     ),
   );
+}
+
+Future<void> _initialiseFirebaseSafely({
+  required String duplicateAppDebugMessage,
+}) async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    if (kDebugMode) {
+      print('Firebase initialised successfully');
+    }
+  } on FirebaseException catch (error) {
+    if (error.code == 'duplicate-app') {
+      if (kDebugMode) {
+        print(duplicateAppDebugMessage);
+      }
+    } else {
+      if (kDebugMode) {
+        print('Firebase Initialization error: $error');
+      }
+    }
+  } catch (error) {
+    if (kDebugMode) {
+      print('Firebase Initialization error: $error');
+    }
+  }
 }
 
 /// Root App Widget

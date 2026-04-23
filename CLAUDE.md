@@ -1342,6 +1342,44 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 ---
 
-**Last Updated**: 2026-04-17
+#### Phase 19 (2026-04-23 to 2026-04-24) - Shared Messaging Backend Compatibility and Chat Resume Recovery
+
+**`lib/config.dart` updated**:
+- Added `notificationPlatform = 'android-native'` and `nativeAndroidAppId = 'com.example.android_assignment'` so the shared Vercel messaging API can store Flutter tokens as tagged native Android records.
+
+**`lib/services/notification_coordinator_service.dart` updated**:
+- `POST /API/Messaging/register-token` now sends `{ token, platform, appId }`, matching the repaired backend contract used by the Capacitor app.
+- Foreground notification title/body resolution now reads `message.data.title` and `message.data.body` after `message.notification`, which is required for high-priority data-only Android chat/booking pushes.
+
+**`lib/services/notification_service.dart` and `lib/main.dart` updated**:
+- The FCM background handler now calls `showBackgroundFcmNotification(message)` so Android data-only pushes are rendered through `flutter_local_notifications`.
+- Data-only notifications use the backend `notificationTag`/`messageId` as a stable Android tag/id source, use the `pourrice_default_notifications` channel, and carry the route/url payload into the existing tap-routing pipeline.
+- Local-notification launch payloads are buffered if the app was cold-started before `NotificationCoordinatorService` registers its tap handler.
+- Foreground tray notifications now go through the already-initialised `NotificationService` plugin instance instead of re-running `initialize(...)` during `onMessage`, which preserves the shared tap callback used for notification routing.
+- The background FCM handler now uses the same safe Firebase initialisation path as app startup instead of calling `Firebase.initializeApp(...)` unconditionally.
+- Duplicate `[DEFAULT]` app initialisation errors are now treated as harmless in the background isolate, which prevents later Android data-only pushes from aborting after the first notification.
+- This follow-up was driven by runtime evidence: Vercel messaging logs showed repeated successful chat pushes to `In3p3IVlDxMuZeurqcKUzZmZmml2`, while the Flutter log showed the background handler failing on later deliveries with `[core/duplicate-app]`.
+
+**`lib/utils/notification_route_parser.dart` updated**:
+- Local-notification payload parsing now treats a payload as both a modern route and a legacy `pourrice://...` URL fallback, so locally rendered data-only pushes and older payloads both route correctly.
+
+**`lib/services/chat_service.dart` updated**:
+- `ChatService` now implements `WidgetsBindingObserver` so it can react when the app resumes from the background.
+- Once chat has been used in a session, `ensureConnected()` marks the service for resume-time reconnection.
+- On `AppLifecycleState.resumed`, the service now explicitly re-runs the chat connection flow instead of relying only on Socket.IO's limited retry budget.
+- Joined room IDs are now tracked, so room subscriptions survive disconnects and are re-sent after the socket registers again.
+- `joinRoom()` no longer fails silently when the socket is down; it first attempts to reconnect, then emits the room join.
+- Fresh connection attempts now dispose the previous socket instance before creating a new one, avoiding stale failed sockets lingering after background DNS errors.
+
+**Why the chat follow-up was needed**:
+- Runtime logs showed the app backgrounding, then `ChatService` losing DNS access to `railway-socket-production.up.railway.app` and exhausting reconnect attempts.
+- After that, the app could remain disconnected even after returning to the foreground, and the active chat room would not automatically rejoin.
+
+**Important distinction from the Capacitor app**:
+- This Flutter app does **not** need a custom native `FirebaseMessagingService` or a separate app-module `com.google.firebase:firebase-messaging` dependency for this fix. FlutterFire's `firebase_messaging` plugin still owns the native Android service; the app-level repair is Dart-side token metadata, data-only background rendering, and local-notification tap routing.
+
+---
+
+**Last Updated**: 2026-04-24
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant

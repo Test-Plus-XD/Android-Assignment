@@ -167,6 +167,12 @@ class NotificationCoordinatorService with ChangeNotifier {
     final title = _resolveNotificationTitle(message, target);
     final body = _resolveNotificationBody(message, target);
 
+    // Render a tray entry even when the app is in the foreground, because the
+    // Phase 19 backend sends data-only pushes for android-native tokens and
+    // FCM therefore never auto-renders one. Use the already-initialised local
+    // notifications singleton so tap callbacks remain wired for later opens.
+    await _notificationService.showForegroundFcmNotification(message);
+
     _appNavigationService.showForegroundBanner(
       title: title,
       body: body,
@@ -260,7 +266,11 @@ class NotificationCoordinatorService with ChangeNotifier {
           'x-api-passcode': AppConfig.apiPasscode,
           'Content-Type': 'application/json',
         },
-        body: json.encode({'token': deviceToken}),
+        body: json.encode({
+          'token': deviceToken,
+          'platform': AppConfig.notificationPlatform,
+          'appId': AppConfig.nativeAndroidAppId,
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -400,10 +410,14 @@ class NotificationCoordinatorService with ChangeNotifier {
       return title;
     }
 
+    final dataTitle = message.data['title']?.toString().trim();
+    if (dataTitle != null && dataTitle.isNotEmpty) {
+      return dataTitle;
+    }
+
     if (target.isChat) {
       return 'New message';
     }
-
     return 'Booking update';
   }
 
@@ -415,6 +429,11 @@ class NotificationCoordinatorService with ChangeNotifier {
     final body = message.notification?.body?.trim();
     if (body != null && body.isNotEmpty) {
       return body;
+    }
+
+    final dataBody = message.data['body']?.toString().trim();
+    if (dataBody != null && dataBody.isNotEmpty) {
+      return dataBody;
     }
 
     if (target.isChat) {
@@ -434,7 +453,9 @@ class NotificationCoordinatorService with ChangeNotifier {
   // possible after auth restore or notification tap.
   Future<void> _primeUserProfileIfNeeded() async {
     final userId = _authService.uid;
-    if (userId == null || _userService.currentProfile != null || _userService.isLoading) {
+    if (userId == null ||
+        _userService.currentProfile != null ||
+        _userService.isLoading) {
       return;
     }
 

@@ -1,7 +1,159 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart';
+
+// Monochrome small icon used for every locally rendered notification. Matches
+// the default_notification_icon meta-data declared in AndroidManifest.xml and
+// the icon name the backend sends for standard notification pushes.
+const String _pushNotificationIcon = 'ic_stat_pourrice_notification';
+// Brand tint applied to the monochrome icon by Android's notification surface.
+// Matches the backend's buildAndroidNotificationConfig color (#A4E092).
+const Color _pushNotificationColor = Color(0xFFA4E092);
+
+const String _pushNotificationChannelId = 'pourrice_default_notifications';
+const String _pushNotificationChannelName = 'PourRice Alerts';
+const String _pushNotificationChannelDescription =
+    'Chat messages, bookings, and app activity';
+const String _generalNotificationChannelId = 'general';
+const String _generalNotificationChannelName = 'General Notifications';
+const String _generalNotificationChannelDescription =
+    'General app notifications and updates';
+
+// Shows a local notification for Android data-only FCM messages received while
+// the Flutter UI is in the background or the process is being cold-started.
+@pragma('vm:entry-point')
+Future<void> showBackgroundFcmNotification(RemoteMessage message) async {
+  // Android already renders normal FCM notification payloads in the
+  // background, so this helper is only for the backend's data-only path.
+  final notificationContent = _buildPushNotificationContent(message);
+  if (notificationContent == null) {
+    return;
+  }
+  final notificationsPlugin = FlutterLocalNotificationsPlugin();
+  const androidSettings = AndroidInitializationSettings(_pushNotificationIcon);
+  const initSettings = InitializationSettings(android: androidSettings);
+
+  await notificationsPlugin.initialize(initSettings);
+  await _createPushNotificationChannel(notificationsPlugin);
+  await _showPushNotification(
+    notificationsPlugin,
+    notificationContent,
+  );
+}
+
+Future<void> _createPushNotificationChannel(
+  FlutterLocalNotificationsPlugin notificationsPlugin,
+) async {
+  const pushChannel = AndroidNotificationChannel(
+    _pushNotificationChannelId,
+    _pushNotificationChannelName,
+    description: _pushNotificationChannelDescription,
+    importance: Importance.high,
+    enableVibration: true,
+    playSound: true,
+  );
+
+  await notificationsPlugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
+      ?.createNotificationChannel(pushChannel);
+}
+
+String? _normaliseNotificationText(Object? value) {
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) {
+    return null;
+  }
+
+  return text;
+}
+
+String _resolveNotificationTag(Map<String, dynamic> data, String? messageId) {
+  final explicitTag = _normaliseNotificationText(data['notificationTag']);
+  if (explicitTag != null) {
+    return explicitTag;
+  }
+
+  final explicitMessageId = _normaliseNotificationText(data['messageId']);
+  if (explicitMessageId != null) {
+    return explicitMessageId;
+  }
+
+  final firebaseMessageId = _normaliseNotificationText(messageId);
+  if (firebaseMessageId != null) {
+    return firebaseMessageId;
+  }
+
+  return DateTime.now().microsecondsSinceEpoch.toString();
+}
+
+String? _resolveNotificationPayload(Map<String, dynamic> data) {
+  return _normaliseNotificationText(data['route']) ??
+      _normaliseNotificationText(data['url']);
+}
+
+_PushNotificationContent? _buildPushNotificationContent(RemoteMessage message) {
+  if (message.notification != null) {
+    return null;
+  }
+
+  final data = message.data;
+  final title = _normaliseNotificationText(data['title']);
+  final body = _normaliseNotificationText(data['body']);
+
+  if (title == null && body == null) {
+    return null;
+  }
+
+  final notificationTag = _resolveNotificationTag(data, message.messageId);
+  return _PushNotificationContent(
+    title: title ?? 'PourRice',
+    body: body ?? '',
+    notificationTag: notificationTag,
+    notificationId: _stableNotificationId(notificationTag),
+    payload: _resolveNotificationPayload(data),
+  );
+}
+
+Future<void> _showPushNotification(
+  FlutterLocalNotificationsPlugin notificationsPlugin,
+  _PushNotificationContent notificationContent,
+) async {
+  final androidDetails = AndroidNotificationDetails(
+    _pushNotificationChannelId,
+    _pushNotificationChannelName,
+    channelDescription: _pushNotificationChannelDescription,
+    importance: Importance.high,
+    priority: Priority.high,
+    category: AndroidNotificationCategory.message,
+    icon: _pushNotificationIcon,
+    color: _pushNotificationColor,
+    styleInformation: BigTextStyleInformation(notificationContent.body),
+    tag: notificationContent.notificationTag,
+  );
+  final notificationDetails = NotificationDetails(android: androidDetails);
+
+  await notificationsPlugin.show(
+    notificationContent.notificationId,
+    notificationContent.title,
+    notificationContent.body,
+    notificationDetails,
+    payload: notificationContent.payload,
+  );
+}
+
+int _stableNotificationId(String value) {
+  var hash = 0;
+  for (final codeUnit in value.codeUnits) {
+    hash = (hash * 31 + codeUnit) & 0x7fffffff;
+  }
+
+  return hash == 0 ? 1 : hash;
+}
 
 /// This function is designed to be run in a separate isolate to avoid blocking the UI thread.
 /// It initializes the timezone database, which can be a time-consuming operation.
@@ -57,15 +209,41 @@ class NotificationService with ChangeNotifier {
   String? _errorMessage;
   // The notification tap handler lets higher-level coordinators own routing.
   void Function(String? payload)? _notificationTapHandler;
+  String? _pendingLaunchPayload;
 
   // GETTERS
   bool get isInitialised => _isInitialised;
   bool get notificationsEnabled => _notificationsEnabled;
   String? get errorMessage => _errorMessage;
 
+  // Shows a tray notification for a foreground FCM message without
+  // reinitialising the singleton plugin and clearing its tap callback.
+  Future<void> showForegroundFcmNotification(RemoteMessage message) async {
+    if (!_isInitialised) {
+      throw StateError(
+        'NotificationService not initialised. Call initialise() first.',
+      );
+    }
+
+    final notificationContent = _buildPushNotificationContent(message);
+    if (notificationContent == null) {
+      return;
+    }
+
+    await _createPushNotificationChannel(_notificationsPlugin);
+    await _showPushNotification(_notificationsPlugin, notificationContent);
+  }
+
   // Registers a callback for local-notification taps.
   void setNotificationTapHandler(void Function(String? payload) handler) {
     _notificationTapHandler = handler;
+    final pendingLaunchPayload = _pendingLaunchPayload;
+    if (pendingLaunchPayload == null) {
+      return;
+    }
+
+    _pendingLaunchPayload = null;
+    handler(pendingLaunchPayload);
   }
 
   /// Initialise the notification system
@@ -93,11 +271,12 @@ class NotificationService with ChangeNotifier {
       await compute(_initializeTimezones, null);
 
       // Step 2: Configure Android-specific settings
-      // The AndroidInitializationSettings takes an icon name.
-      // '@mipmap/ic_launcher' refers to your app icon in android/app/src/main/res/
-      // This icon appears in the notification, so users know which app it's from.
+      // The AndroidInitializationSettings takes a drawable resource name.
+      // We use the monochrome 'ic_stat_pourrice_notification' vector drawable
+      // under android/app/src/main/res/drawable/ so small icons render as a
+      // proper silhouette on Android 5+ instead of a blank white square.
       const androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
+        _pushNotificationIcon,
       );
 
       // InitializationSettings combines settings for all platforms
@@ -111,6 +290,8 @@ class NotificationService with ChangeNotifier {
         // You can use it to navigate to specific screens
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
+
+      await _captureLaunchPayloadIfNeeded();
 
       // Step 3: Create notification channels
       // Android requires channels, but it's actually helpful UX
@@ -163,9 +344,9 @@ class NotificationService with ChangeNotifier {
     // Channel 2: General Notifications
     // Default importance for less urgent messages
     const generalChannel = AndroidNotificationChannel(
-      'general',
-      'General Notifications',
-      description: 'General app notifications and updates',
+      _generalNotificationChannelId,
+      _generalNotificationChannelName,
+      description: _generalNotificationChannelDescription,
       importance: Importance.defaultImportance,
       enableVibration: false,
       playSound: true,
@@ -183,6 +364,8 @@ class NotificationService with ChangeNotifier {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.createNotificationChannel(generalChannel);
+
+    await _createPushNotificationChannel(_notificationsPlugin);
   }
 
   /// Check notification permission (Android 13+)
@@ -249,11 +432,13 @@ class NotificationService with ChangeNotifier {
 
       // Use the general channel for immediate, in-app messages
       const androidDetails = AndroidNotificationDetails(
-        'general', // Must match channel ID we created
-        'General Notifications', // Channel name
-        channelDescription: 'General app notifications and updates',
+        _generalNotificationChannelId, // Must match channel ID we created
+        _generalNotificationChannelName, // Channel name
+        channelDescription: _generalNotificationChannelDescription,
         importance: Importance.high,
         priority: Priority.high,
+        icon: _pushNotificationIcon,
+        color: _pushNotificationColor,
         ticker: 'Immediate Notification',
       );
 
@@ -346,6 +531,8 @@ class NotificationService with ChangeNotifier {
         channelDescription: 'Notifications for upcoming restaurant bookings',
         importance: Importance.high,
         priority: Priority.high,
+        icon: _pushNotificationIcon,
+        color: _pushNotificationColor,
         // Show date/time in notification
         when: bookingDateTime.millisecondsSinceEpoch,
         // Enable alert (pop-up banner on screen)
@@ -485,6 +672,26 @@ class NotificationService with ChangeNotifier {
     }
   }
 
+  /// Captures a local-notification payload that launched the app from a
+  /// terminated state before the notification coordinator has been constructed.
+  Future<void> _captureLaunchPayloadIfNeeded() async {
+    final launchDetails = await _notificationsPlugin
+        .getNotificationAppLaunchDetails();
+    final payload = launchDetails?.didNotificationLaunchApp == true
+        ? launchDetails?.notificationResponse?.payload
+        : null;
+    if (payload == null || payload.trim().isEmpty) {
+      return;
+    }
+
+    final handler = _notificationTapHandler;
+    if (handler != null) {
+      handler(payload);
+      return;
+    }
+    _pendingLaunchPayload = payload;
+  }
+
   /// Callback when user taps a notification
   ///
   /// This is called when user taps a notification in their notification tray.
@@ -504,4 +711,20 @@ class NotificationService with ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
+}
+
+class _PushNotificationContent {
+  final String title;
+  final String body;
+  final String notificationTag;
+  final int notificationId;
+  final String? payload;
+
+  const _PushNotificationContent({
+    required this.title,
+    required this.body,
+    required this.notificationTag,
+    required this.notificationId,
+    required this.payload,
+  });
 }

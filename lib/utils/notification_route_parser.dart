@@ -86,7 +86,7 @@ class NotificationRouteParser {
       return null;
     }
 
-    return fromData({'route': routeValue});
+    return fromData({'route': routeValue, 'url': routeValue});
   }
 
   // Normalises the modern route field first, then the legacy custom scheme.
