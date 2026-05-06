@@ -47,7 +47,10 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
   void _loadMenuItems() {
     setState(() {
       // Always fetch fresh menu items (forceRefresh: true)
-      _menuItemsFuture = context.read<MenuService>().getMenuItems(widget.restaurantId, forceRefresh: true);
+      _menuItemsFuture = context.read<MenuService>().getMenuItems(
+        widget.restaurantId,
+        forceRefresh: true,
+      );
     });
   }
 
@@ -60,13 +63,19 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
     final source = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(widget.isTraditionalChinese ? '選擇文件來源' : 'Select File Source'),
+        title: Text(
+          widget.isTraditionalChinese ? '選擇文件來源' : 'Select File Source',
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: const Icon(Icons.image),
-              title: Text(widget.isTraditionalChinese ? '從相冊選擇圖片' : 'Select Image from Gallery'),
+              title: Text(
+                widget.isTraditionalChinese
+                    ? '從相冊選擇圖片'
+                    : 'Select Image from Gallery',
+              ),
               onTap: () => Navigator.of(context).pop('image'),
             ),
             ListTile(
@@ -76,7 +85,11 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
             ),
             ListTile(
               leading: const Icon(Icons.file_present),
-              title: Text(widget.isTraditionalChinese ? '選擇文件(PDF/JSON/文本)' : 'Select File (PDF/JSON/Text)'),
+              title: Text(
+                widget.isTraditionalChinese
+                    ? '選擇文件(PDF/JSON/文本)'
+                    : 'Select File (PDF/JSON/Text)',
+              ),
               onTap: () => Navigator.of(context).pop('file'),
             ),
           ],
@@ -84,7 +97,7 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
       ),
     );
 
-    if (source == null) return;
+    if (source == null || !mounted) return;
 
     try {
       List<int>? fileBytes;
@@ -115,7 +128,9 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(widget.isTraditionalChinese ? '無法讀取文件' : 'Could not read file'),
+              content: Text(
+                widget.isTraditionalChinese ? '無法讀取文件' : 'Could not read file',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -125,6 +140,9 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
         fileBytes = file.bytes;
         fileName = file.name;
       }
+
+      final uploadFileBytes = fileBytes!;
+      final uploadFileName = fileName;
 
       setState(() => _isImporting = true);
 
@@ -140,7 +158,9 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
               const LoadingIndicator(),
               const SizedBox(height: 16),
               Text(
-                widget.isTraditionalChinese ? '正在處理菜單文件...' : 'Processing menu file...',
+                widget.isTraditionalChinese
+                    ? '正在處理菜單文件...'
+                    : 'Processing menu file...',
                 textAlign: TextAlign.center,
               ),
             ],
@@ -167,11 +187,13 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
         'Authorization': 'Bearer $token',
       });
 
-      request.files.add(http.MultipartFile.fromBytes(
-        'file',
-        fileBytes!,
-        filename: fileName!,
-      ));
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          uploadFileBytes,
+          filename: uploadFileName,
+        ),
+      );
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
@@ -186,7 +208,9 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
         final menuItems = data['menu_items'] as List?;
 
         if (menuItems == null || menuItems.isEmpty) {
-          throw Exception(widget.isTraditionalChinese ? '未找到菜單項目' : 'No menu items found');
+          throw Exception(
+            widget.isTraditionalChinese ? '未找到菜單項目' : 'No menu items found',
+          );
         }
 
         // Show confirmation dialog with extracted items
@@ -264,9 +288,11 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
             nameTc: item['Name_TC'] ?? item['nameTc'],
             descriptionEn: item['Description_EN'] ?? item['descriptionEn'],
             descriptionTc: item['Description_TC'] ?? item['descriptionTc'],
-            price: item['price'] != null ? (item['price'] as num).toDouble() : null,
+            price: item['price'] != null
+                ? (item['price'] as num).toDouble()
+                : null,
             category: item['category'],
-            image: item['image'],
+            image: item['imageUrl'] ?? item['image'],
           );
 
           await menuService.createMenuItem(widget.restaurantId, request);
@@ -305,7 +331,9 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.isTraditionalChinese ? '儲存失敗：$e' : 'Save failed: $e'),
+          content: Text(
+            widget.isTraditionalChinese ? '儲存失敗：$e' : 'Save failed: $e',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -375,7 +403,9 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.isTraditionalChinese ? '刪除成功' : 'Deleted successfully'),
+          content: Text(
+            widget.isTraditionalChinese ? '刪除成功' : 'Deleted successfully',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -386,7 +416,9 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.isTraditionalChinese ? '刪除失敗：$e' : 'Delete failed: $e'),
+          content: Text(
+            widget.isTraditionalChinese ? '刪除失敗：$e' : 'Delete failed: $e',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -450,12 +482,16 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
                   Icon(Icons.restaurant_menu, size: 64, color: Colors.grey),
                   const SizedBox(height: 16),
                   Text(
-                    widget.isTraditionalChinese ? '尚無菜單項目' : 'No menu items yet',
+                    widget.isTraditionalChinese
+                        ? '尚無菜單項目'
+                        : 'No menu items yet',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.isTraditionalChinese ? '點擊下方按鈕新增' : 'Tap below to add one',
+                    widget.isTraditionalChinese
+                        ? '點擊下方按鈕新增'
+                        : 'Tap below to add one',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
@@ -491,11 +527,11 @@ class _StoreMenuManagePageState extends State<StoreMenuManagePage> {
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Container(
-                                width: 60,
-                                height: 60,
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.restaurant),
-                              ),
+                                    width: 60,
+                                    height: 60,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.restaurant),
+                                  ),
                             ),
                           )
                         : Container(

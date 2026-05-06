@@ -49,11 +49,13 @@ class MenuItem {
     }
 
     String? getDescriptionEn() {
-      return json['descriptionEn'] as String? ?? json['Description_EN'] as String?;
+      return json['descriptionEn'] as String? ??
+          json['Description_EN'] as String?;
     }
 
     String? getDescriptionTc() {
-      return json['descriptionTc'] as String? ?? json['Description_TC'] as String?;
+      return json['descriptionTc'] as String? ??
+          json['Description_TC'] as String?;
     }
 
     return MenuItem(
@@ -64,7 +66,7 @@ class MenuItem {
       descriptionTc: getDescriptionTc(),
       price: json['price'] != null ? (json['price'] as num).toDouble() : null,
       category: json['category'] as String?,
-      image: json['image'] as String?,
+      image: json['imageUrl'] as String? ?? json['image'] as String?,
       available: json['available'] as bool? ?? true,
       createdAt: parseDateTime(json['createdAt']),
       modifiedAt: parseDateTime(json['modifiedAt']),
@@ -81,7 +83,7 @@ class MenuItem {
       if (descriptionTc != null) 'descriptionTc': descriptionTc,
       if (price != null) 'price': price,
       if (category != null) 'category': category,
-      if (image != null) 'image': image,
+      if (image != null) 'imageUrl': image,
       if (available != null) 'available': available,
     };
   }
@@ -136,11 +138,13 @@ class CreateMenuItemRequest {
     return {
       if (nameEn != null && nameEn!.isNotEmpty) 'Name_EN': nameEn,
       if (nameTc != null && nameTc!.isNotEmpty) 'Name_TC': nameTc,
-      if (descriptionEn != null && descriptionEn!.isNotEmpty) 'Description_EN': descriptionEn,
-      if (descriptionTc != null && descriptionTc!.isNotEmpty) 'Description_TC': descriptionTc,
+      if (descriptionEn != null && descriptionEn!.isNotEmpty)
+        'Description_EN': descriptionEn,
+      if (descriptionTc != null && descriptionTc!.isNotEmpty)
+        'Description_TC': descriptionTc,
       if (price != null) 'price': price,
       if (category != null && category!.isNotEmpty) 'category': category,
-      if (image != null && image!.isNotEmpty) 'image': image,
+      if (image != null && image!.isNotEmpty) 'imageUrl': image,
       if (available != null) 'available': available,
     };
   }
@@ -179,7 +183,7 @@ class UpdateMenuItemRequest {
     if (descriptionTc != null) data['Description_TC'] = descriptionTc;
     if (price != null) data['price'] = price;
     if (category != null) data['category'] = category;
-    if (image != null) data['image'] = image;
+    if (image != null) data['imageUrl'] = image;
     if (available != null) data['available'] = available;
     return data;
   }

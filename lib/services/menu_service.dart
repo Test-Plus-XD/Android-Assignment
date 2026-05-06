@@ -28,7 +28,8 @@ class MenuService extends ChangeNotifier {
   // Getters for backward compatibility (returns empty if no current restaurant)
   List<MenuItem> get menuItems => [];
   bool get isLoading => _loadingStates.values.any((loading) => loading);
-  String? get error => _errorStates.values.firstWhere((e) => e != null, orElse: () => null);
+  String? get error =>
+      _errorStates.values.firstWhere((e) => e != null, orElse: () => null);
 
   // Restaurant-specific getters - use these to access menu data for a specific restaurant
   // This prevents state clashes when multiple pages load different restaurants
@@ -67,7 +68,10 @@ class MenuService extends ChangeNotifier {
   /// // Force refresh after adding a new item
   /// await menuService.getMenuItems('restaurant123', forceRefresh: true);
   /// ```
-  Future<List<MenuItem>> getMenuItems(String restaurantId, {bool forceRefresh = false}) async {
+  Future<List<MenuItem>> getMenuItems(
+    String restaurantId, {
+    bool forceRefresh = false,
+  }) async {
     // Return cached data if available and not forcing refresh
     if (!forceRefresh && _menuItemsCache.containsKey(restaurantId)) {
       return _menuItemsCache[restaurantId]!;
@@ -79,7 +83,9 @@ class MenuService extends ChangeNotifier {
     _errorStates[restaurantId] = null;
 
     try {
-      final url = Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu');
+      final url = Uri.parse(
+        '${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu',
+      );
       final response = await http.get(
         url,
         headers: {
@@ -97,14 +103,17 @@ class MenuService extends ChangeNotifier {
         // 2. Object with data array: {count: number, data: [...]}
         if (responseData is List) {
           data = responseData;
-        } else if (responseData is Map<String, dynamic> && responseData['data'] != null) {
+        } else if (responseData is Map<String, dynamic> &&
+            responseData['data'] != null) {
           data = responseData['data'] as List;
         } else {
           data = [];
         }
 
         final menuItems = data.map((json) => MenuItem.fromJson(json)).toList();
-        menuItems.sort((a, b) => (a.category ?? '').compareTo(b.category ?? ''));
+        menuItems.sort(
+          (a, b) => (a.category ?? '').compareTo(b.category ?? ''),
+        );
         _menuItemsCache[restaurantId] = menuItems;
       } else if (response.statusCode == 404) {
         _menuItemsCache[restaurantId] = [];
@@ -123,7 +132,9 @@ class MenuService extends ChangeNotifier {
 
   Future<MenuItem?> getMenuItem(String restaurantId, String menuItemId) async {
     try {
-      final url = Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu/$menuItemId');
+      final url = Uri.parse(
+        '${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu/$menuItemId',
+      );
       final response = await http.get(
         url,
         headers: {
@@ -140,7 +151,10 @@ class MenuService extends ChangeNotifier {
     return null;
   }
 
-  Future<String> createMenuItem(String restaurantId, CreateMenuItemRequest request) async {
+  Future<String> createMenuItem(
+    String restaurantId,
+    CreateMenuItemRequest request,
+  ) async {
     _loadingStates[restaurantId] = true;
     _errorStates[restaurantId] = null;
     notifyListeners();
@@ -149,7 +163,9 @@ class MenuService extends ChangeNotifier {
       final token = await _authService.getIdToken(forceRefresh: false);
       if (token == null) throw Exception('Authentication required');
 
-      final url = Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu');
+      final url = Uri.parse(
+        '${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu',
+      );
       final response = await http.post(
         url,
         headers: {
@@ -179,7 +195,11 @@ class MenuService extends ChangeNotifier {
     }
   }
 
-  Future<void> updateMenuItem(String restaurantId, String menuItemId, UpdateMenuItemRequest request) async {
+  Future<void> updateMenuItem(
+    String restaurantId,
+    String menuItemId,
+    UpdateMenuItemRequest request,
+  ) async {
     _loadingStates[restaurantId] = true;
     _errorStates[restaurantId] = null;
     notifyListeners();
@@ -188,7 +208,9 @@ class MenuService extends ChangeNotifier {
       final token = await _authService.getIdToken(forceRefresh: false);
       if (token == null) throw Exception('Authentication required');
 
-      final url = Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu/$menuItemId');
+      final url = Uri.parse(
+        '${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu/$menuItemId',
+      );
       final response = await http.put(
         url,
         headers: {
@@ -225,6 +247,109 @@ class MenuService extends ChangeNotifier {
     }
   }
 
+  Future<String> uploadMenuItemImage(
+    String restaurantId,
+    String menuItemId,
+    String imagePath,
+  ) async {
+    _loadingStates[restaurantId] = true;
+    _errorStates[restaurantId] = null;
+    notifyListeners();
+
+    try {
+      final token = await _authService.getIdToken(forceRefresh: false);
+      if (token == null) throw Exception('Authentication required');
+      final encodedRestaurantId = Uri.encodeComponent(restaurantId);
+      final encodedMenuItemId = Uri.encodeComponent(menuItemId);
+      final url = Uri.parse(
+        '${AppConfig.apiBaseUrl}/API/Restaurants/$encodedRestaurantId/menu/$encodedMenuItemId/image',
+      );
+      final request = http.MultipartRequest('PUT', url);
+      request.headers.addAll({
+        'x-api-passcode': AppConfig.apiPasscode,
+        'Authorization': 'Bearer $token',
+      });
+      request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+      final response = await http.Response.fromStream(await request.send());
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final imageUrl = data['imageUrl'] as String?;
+        if (imageUrl == null || imageUrl.isEmpty) {
+          throw Exception('Upload response did not include imageUrl');
+        }
+        await getMenuItems(restaurantId, forceRefresh: true);
+        return imageUrl;
+      }
+
+      String errorMessage = 'Failed to upload menu item image';
+      if (response.body.isNotEmpty) {
+        try {
+          final errorData = json.decode(response.body) as Map<String, dynamic>;
+          errorMessage = errorData['error']?.toString() ?? errorMessage;
+        } catch (e) {
+          // Keep the generic server error when the response body is not JSON.
+        }
+      }
+      throw Exception(errorMessage);
+    } catch (e) {
+      _errorStates[restaurantId] = e.toString();
+      rethrow;
+    } finally {
+      _loadingStates[restaurantId] = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteMenuItemImage(
+    String restaurantId,
+    String menuItemId,
+  ) async {
+    _loadingStates[restaurantId] = true;
+    _errorStates[restaurantId] = null;
+    notifyListeners();
+
+    try {
+      final token = await _authService.getIdToken(forceRefresh: false);
+      if (token == null) throw Exception('Authentication required');
+      final encodedRestaurantId = Uri.encodeComponent(restaurantId);
+      final encodedMenuItemId = Uri.encodeComponent(menuItemId);
+      final url = Uri.parse(
+        '${AppConfig.apiBaseUrl}/API/Restaurants/$encodedRestaurantId/menu/$encodedMenuItemId/image',
+      );
+      final response = await http.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-passcode': AppConfig.apiPasscode,
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        await getMenuItems(restaurantId, forceRefresh: true);
+      } else {
+        String errorMessage = 'Failed to delete menu item image';
+        if (response.body.isNotEmpty) {
+          try {
+            final errorData =
+                json.decode(response.body) as Map<String, dynamic>;
+            errorMessage = errorData['error']?.toString() ?? errorMessage;
+          } catch (e) {
+            // Keep the generic server error when the response body is not JSON.
+          }
+        }
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      _errorStates[restaurantId] = e.toString();
+      rethrow;
+    } finally {
+      _loadingStates[restaurantId] = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> deleteMenuItem(String restaurantId, String menuItemId) async {
     _loadingStates[restaurantId] = true;
     _errorStates[restaurantId] = null;
@@ -234,7 +359,9 @@ class MenuService extends ChangeNotifier {
       final token = await _authService.getIdToken(forceRefresh: false);
       if (token == null) throw Exception('Authentication required');
 
-      final url = Uri.parse('${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu/$menuItemId');
+      final url = Uri.parse(
+        '${AppConfig.apiBaseUrl}/API/Restaurants/$restaurantId/menu/$menuItemId',
+      );
       final response = await http.delete(
         url,
         headers: {
@@ -248,7 +375,9 @@ class MenuService extends ChangeNotifier {
       if (response.statusCode == 200 || response.statusCode == 204) {
         // Update cache by removing the deleted item
         if (_menuItemsCache.containsKey(restaurantId)) {
-          _menuItemsCache[restaurantId]!.removeWhere((item) => item.id == menuItemId);
+          _menuItemsCache[restaurantId]!.removeWhere(
+            (item) => item.id == menuItemId,
+          );
         }
         notifyListeners();
       } else {

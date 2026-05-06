@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../models.dart';
 import '../common/loading_indicator.dart';
 import '../../services/menu_service.dart';
-import '../../services/image_service.dart';
 import '../../config/app_state.dart';
 import '../images/image_picker_button.dart';
 import '../images/image_preview.dart';
@@ -24,11 +23,7 @@ class MenuItemForm extends StatefulWidget {
   final String restaurantId;
   final MenuItem? menuItem; // Null for create, populated for edit
 
-  const MenuItemForm({
-    super.key,
-    required this.restaurantId,
-    this.menuItem,
-  });
+  const MenuItemForm({super.key, required this.restaurantId, this.menuItem});
 
   @override
   State<MenuItemForm> createState() => _MenuItemFormState();
@@ -68,8 +63,12 @@ class _MenuItemFormState extends State<MenuItemForm> {
     final item = widget.menuItem;
     _nameEnController = TextEditingController(text: item?.nameEn ?? '');
     _nameTcController = TextEditingController(text: item?.nameTc ?? '');
-    _descriptionEnController = TextEditingController(text: item?.descriptionEn ?? '');
-    _descriptionTcController = TextEditingController(text: item?.descriptionTc ?? '');
+    _descriptionEnController = TextEditingController(
+      text: item?.descriptionEn ?? '',
+    );
+    _descriptionTcController = TextEditingController(
+      text: item?.descriptionTc ?? '',
+    );
     _priceController = TextEditingController(
       text: item?.price != null ? item!.price.toString() : '',
     );
@@ -113,24 +112,16 @@ class _MenuItemFormState extends State<MenuItemForm> {
     final appState = context.read<AppState>();
     final isTC = appState.isTraditionalChinese;
     final menuService = context.read<MenuService>();
-    final imageService = context.read<ImageService>();
 
     try {
       final price = double.tryParse(_priceController.text);
-      String? imageUrl = _uploadedImageUrl;
-
-      // Upload image if one was selected
-      if (_selectedImage != null) {
-        imageUrl = (await imageService.uploadImage(
-          imageFile: _selectedImage!,
-          folder: 'Menu/${widget.restaurantId}',
-          compress: true,
-        )) as String?;
-
-        if (imageUrl == null) {
-          throw Exception(isTC ? '圖片上傳失敗' : 'Image upload failed');
-        }
-      }
+      final selectedImagePath = _selectedImage?.path;
+      final existingImageUrl = widget.menuItem?.image;
+      final isRemovingExistingImage =
+          existingImageUrl != null &&
+          existingImageUrl.isNotEmpty &&
+          _uploadedImageUrl == null &&
+          selectedImagePath == null;
 
       if (widget.menuItem == null) {
         // Create new menu item
@@ -141,11 +132,21 @@ class _MenuItemFormState extends State<MenuItemForm> {
           descriptionTc: _descriptionTcController.text.trim(),
           price: price,
           category: _categoryController.text.trim(),
-          image: imageUrl,
+          image: selectedImagePath == null ? _uploadedImageUrl : null,
           available: _available,
         );
 
-        await menuService.createMenuItem(widget.restaurantId, request);
+        final menuItemId = await menuService.createMenuItem(
+          widget.restaurantId,
+          request,
+        );
+        if (selectedImagePath != null) {
+          await menuService.uploadMenuItemImage(
+            widget.restaurantId,
+            menuItemId,
+            selectedImagePath,
+          );
+        }
 
         if (mounted) {
           Navigator.pop(context);
@@ -165,7 +166,7 @@ class _MenuItemFormState extends State<MenuItemForm> {
           descriptionTc: _descriptionTcController.text.trim(),
           price: price,
           category: _categoryController.text.trim(),
-          image: imageUrl,
+          image: selectedImagePath == null ? _uploadedImageUrl : null,
           available: _available,
         );
 
@@ -174,6 +175,18 @@ class _MenuItemFormState extends State<MenuItemForm> {
           widget.menuItem!.id,
           request,
         );
+        if (selectedImagePath != null) {
+          await menuService.uploadMenuItemImage(
+            widget.restaurantId,
+            widget.menuItem!.id,
+            selectedImagePath,
+          );
+        } else if (isRemovingExistingImage) {
+          await menuService.deleteMenuItemImage(
+            widget.restaurantId,
+            widget.menuItem!.id,
+          );
+        }
 
         if (mounted) {
           Navigator.pop(context);
@@ -188,10 +201,7 @@ class _MenuItemFormState extends State<MenuItemForm> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -232,7 +242,9 @@ class _MenuItemFormState extends State<MenuItemForm> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.4,
+                  ),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -280,7 +292,9 @@ class _MenuItemFormState extends State<MenuItemForm> {
                         validator: (value) {
                           if ((value == null || value.trim().isEmpty) &&
                               _nameTcController.text.trim().isEmpty) {
-                            return isTC ? '請輸入英文或中文名稱' : 'Enter name in English or Chinese';
+                            return isTC
+                                ? '請輸入英文或中文名稱'
+                                : 'Enter name in English or Chinese';
                           }
                           return null;
                         },
@@ -292,7 +306,9 @@ class _MenuItemFormState extends State<MenuItemForm> {
                       TextFormField(
                         controller: _nameTcController,
                         decoration: InputDecoration(
-                          labelText: isTC ? '名稱 (繁體中文)' : 'Name (Traditional Chinese)',
+                          labelText: isTC
+                              ? '名稱 (繁體中文)'
+                              : 'Name (Traditional Chinese)',
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.restaurant_menu),
                         ),
@@ -317,7 +333,9 @@ class _MenuItemFormState extends State<MenuItemForm> {
                       TextFormField(
                         controller: _descriptionTcController,
                         decoration: InputDecoration(
-                          labelText: isTC ? '描述 (繁體中文)' : 'Description (Traditional Chinese)',
+                          labelText: isTC
+                              ? '描述 (繁體中文)'
+                              : 'Description (Traditional Chinese)',
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.description),
                         ),
@@ -334,9 +352,13 @@ class _MenuItemFormState extends State<MenuItemForm> {
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.attach_money),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}'),
+                          ),
                         ],
                         validator: (value) {
                           if (value != null && value.isNotEmpty) {
@@ -353,32 +375,40 @@ class _MenuItemFormState extends State<MenuItemForm> {
 
                       // Category (with dropdown)
                       Autocomplete<String>(
-                        initialValue: TextEditingValue(text: _categoryController.text),
+                        initialValue: TextEditingValue(
+                          text: _categoryController.text,
+                        ),
                         optionsBuilder: (TextEditingValue textEditingValue) {
                           if (textEditingValue.text.isEmpty) {
                             return _commonCategories;
                           }
                           return _commonCategories.where((String option) {
-                            return option
-                                .toLowerCase()
-                                .contains(textEditingValue.text.toLowerCase());
+                            return option.toLowerCase().contains(
+                              textEditingValue.text.toLowerCase(),
+                            );
                           });
                         },
                         onSelected: (String selection) {
                           _categoryController.text = selection;
                         },
-                        fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                          _categoryController.text = controller.text;
-                          return TextFormField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            decoration: InputDecoration(
-                              labelText: isTC ? '類別' : 'Category',
-                              border: const OutlineInputBorder(),
-                              prefixIcon: const Icon(Icons.category),
-                            ),
-                          );
-                        },
+                        fieldViewBuilder:
+                            (
+                              context,
+                              controller,
+                              focusNode,
+                              onEditingComplete,
+                            ) {
+                              _categoryController.text = controller.text;
+                              return TextFormField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                decoration: InputDecoration(
+                                  labelText: isTC ? '類別' : 'Category',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.category),
+                                ),
+                              );
+                            },
                       ),
 
                       const SizedBox(height: 16),
@@ -389,7 +419,8 @@ class _MenuItemFormState extends State<MenuItemForm> {
                         style: theme.textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
-                      if (_selectedImage != null || _uploadedImageUrl != null) ...[
+                      if (_selectedImage != null ||
+                          _uploadedImageUrl != null) ...[
                         WideImagePreview(
                           image: _selectedImage ?? _uploadedImageUrl!,
                           aspectRatio: 16 / 9,
@@ -418,7 +449,9 @@ class _MenuItemFormState extends State<MenuItemForm> {
                         subtitle: Text(
                           isTC
                               ? (_available ? '此項目可供應' : '此項目暫不可供應')
-                              : (_available ? 'Item is available' : 'Item is sold out'),
+                              : (_available
+                                    ? 'Item is available'
+                                    : 'Item is sold out'),
                         ),
                         value: _available,
                         onChanged: (value) {

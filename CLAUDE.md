@@ -1380,6 +1380,22 @@ Gradle 9.4.1 and AGP 9.1.0 were tested but are **not compatible** with Flutter 3
 
 ---
 
-**Last Updated**: 2026-04-24
+#### Phase 20 (2026-05-06) - Menu Item Image Endpoint Alignment
+
+**Menu image field and upload path**:
+- `lib/models/menu.dart` now reads menu image URLs from `imageUrl` first and falls back to legacy `image`; create/update request serialisation now writes `imageUrl`.
+- `lib/services/menu_service.dart` now has `uploadMenuItemImage(...)` and `deleteMenuItemImage(...)` methods that call the dedicated shared API endpoints: `PUT /API/Restaurants/:restaurantId/menu/:menuItemId/image` and `DELETE /API/Restaurants/:restaurantId/menu/:menuItemId/image`.
+- `lib/widgets/menu/menu_item_form.dart` now creates or updates the menu item first, then uploads a selected image through the dedicated menu-image endpoint once a `menuItemId` exists. Removing an existing image calls the dedicated delete endpoint.
+- `lib/pages/store_menu_manage_page.dart` bulk import now accepts either `imageUrl` or legacy `image` from extracted menu data.
+
+**Compatibility note**:
+- Existing menu UI can continue using `item.image` as the local Dart property, but API traffic now stores menu image URLs in Firestore as `imageUrl` and new uploaded binaries are expected under `Menus/{restaurantId}/` after the shared API deployment.
+
+**Verification**:
+- Ran `dart format lib\models\menu.dart lib\services\menu_service.dart lib\widgets\menu\menu_item_form.dart lib\pages\store_menu_manage_page.dart`.
+- Ran `dart analyze lib\models\menu.dart lib\services\menu_service.dart lib\widgets\menu\menu_item_form.dart lib\pages\store_menu_manage_page.dart`; no issues found.
+
+---
+**Last Updated**: 2026-05-06
 **Version**: 1.0.0+1
 **Maintained By**: Development Team & Claude AI Assistant
